@@ -1,0 +1,6 @@
+{
+  "name": "Co-Op Direct Mail Platform & Curation Engine",
+  "description": "Enterprise platform for shared direct mail operations, 12x9 co-op postcard slot management, algorithmic audience propensity curation, and postal export in the Inland Empire, CA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

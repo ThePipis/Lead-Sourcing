@@ -1,0 +1,108 @@
+{
+  "header": {
+    "moduleTag": "MÓDULO C • MOTOR VECTORIAL DE AFINIDAD CONJUNTA",
+    "title": "Algorithmic Audience Curation & Propensity Engine",
+    "description": "Sustituye los filtros booleanos rígidos de SQL por una matriz de ponderación demográfica multivariable. Calcula la afinidad conjunta acumulada con los 14 comercios y corta exactamente los 5,000 hogares con mayor probabilidad de respuesta.",
+    "mockEngineBtn": "Mock Engine (15k Hogares IE)",
+    "dataAxleBtn": "Data Axle API (Sandbox)",
+    "runCuration": "Ejecutar Curación (5,000)",
+    "processing": "Procesando Matriz 15k…"
+  },
+  "math": {
+    "title": "Fundamento Matemático del Motor de Propensión",
+    "individualScore": "Score individual por giro",
+    "individualFormula": "score_i = Σ (w_ij × x_j)  para j = 1..7 atributos",
+    "individualNote": "Producto punto entre el vector de pesos del giro y el vector demográfico normalizado del hogar.",
+    "compositeScore": "Score compuesto del hogar",
+    "compositeFormula": "score_total = Σ score_i / 14  ·  normalizado a [0, 100]",
+    "compositeNote": "Afinidad conjunta acumulada frente a los 14 comercios. El corte toma los 5,000 valores más altos."
+  },
+  "stats": {
+    "totalAnalyzed": "Hogares Analizados",
+    "totalAnalyzedSub": "Pool sintético de la microzona",
+    "totalSelected": "Hogares Curados",
+    "totalSelectedSub": "Corte exacto al 100% de la tirada postal",
+    "avgScore": "Score Promedio",
+    "avgScoreRange": "Rango {{min}} – {{max}}",
+    "carrierRoutes": "Rutas CRRT Cubiertas",
+    "carrierRoutesSub": "Rutas de reparto USPS alcanzadas",
+    "histogramTitle": "Distribución de Scores de Propensión",
+    "histogramSub": "Hogares por tramo de score",
+    "histogramBarTitle": "{{range}}: {{count}} hogares"
+  },
+  "comparison": {
+    "eddmTitle": "EDDM tradicional",
+    "eddm1": "Reparto por ruta postal completa, sin selección.",
+    "eddm2": "Filtros booleanos rígidos sobre SQL.",
+    "eddm3": "Desperdicio alto en hogares fuera de perfil.",
+    "curationTitle": "Curación algorítmica",
+    "curation1": "Ponderación demográfica multivariable por giro.",
+    "curation2": "Afinidad conjunta acumulada con los 14 comercios.",
+    "curation3": "Corte exacto a los 5,000 hogares de mayor propensión.",
+    "continueExport": "Exportar Manifiesto Postal →"
+  },
+  "matrix": {
+    "title": "Matriz de Pesos Demográficos por Giro",
+    "scale": "Escala 0.0 – 1.0",
+    "colCategory": "Giro",
+    "colIncome": "Ingreso Familiar",
+    "colHomeOwnership": "Propietario",
+    "colHomeAge": "Antigüedad Vivienda",
+    "colChildren": "Presencia Hijos",
+    "colVehicles": "Vehículos (+2)",
+    "colPets": "Mascotas",
+    "colHomeValue": "Valor Vivienda"
+  },
+  "records": {
+    "searchPlaceholder": "Buscar por nombre, calle o ruta CRRT…",
+    "showing": "Mostrando {{filtered}} de {{total}} registros curados",
+    "colId": "ID",
+    "colRecipient": "Residente",
+    "colAddress": "Dirección Postal",
+    "colCrrt": "Ruta CRRT",
+    "colSequence": "Secuencia",
+    "colScore": "Score Afinidad"
+  },
+  "tabs": {
+    "overview": "Resumen Ejecutivo",
+    "matrix": "Matriz de Pesos (14 Giros)",
+    "records": "5,000 Hogares Curados",
+    "routes": "Rutas Postales (CRRT)"
+  },
+  "empty": {
+    "title": "El motor de propensión aún no se ha ejecutado",
+    "description": "Ejecuta la curación para analizar 15,000 hogares y seleccionar los 5,000 de mayor propensión de esta microzona.",
+    "persistedTitle": "{{count}} hogares ya curados y persistidos",
+    "persistedDescription": "Esta campaña ya tiene su audiencia en SQLite. Vuelve a ejecutar el motor solo si cambiaron los precios o los pesos demográficos; se reemplazará la selección actual."
+  },
+  "routeEngine": {
+    "title": "Motor de rutas · a quién llega la tirada",
+    "intro": "Una tirada cooperativa se entrega por saturación: el cartero la deja en todos los buzones de la ruta, dirigida a «Postal Customer». Por eso aquí se elige por RUTAS, no por hogares, y no hace falta comprar ninguna lista. El USPS publica cada ruta con su conteo oficial e ingreso medio; el Census añade propietarios, vivienda unifamiliar, vehículos y valor.",
+    "zip": "ZIP objetivo",
+    "target": "Hogares objetivo",
+    "plan": "Calcular rutas",
+    "planning": "Consultando USPS y Census…",
+    "manifest": "Manifiesto CSV",
+    "covered": "Hogares cubiertos",
+    "selectedRoutes": "Rutas en la tirada",
+    "available": "Disponibles en el ZIP",
+    "enrichment": "Datos del score",
+    "hybrid": "USPS + Census",
+    "uspsOnly": "Solo USPS",
+    "hybridNote": "Score híbrido: ingreso, edad y tamaño de hogar del USPS por ruta, más propietarios, vivienda unifamiliar, vehículos y valor de vivienda del ACS, cruzados por los block groups que atraviesa cada ruta y ponderados por hogares.",
+    "uspsOnlyNote": "Score con lo que publica el USPS por ruta. El enriquecimiento del Census no respondió esta vez; los pesos se renormalizan solos para que las rutas sigan siendo comparables.",
+    "inDrop": "En la tirada",
+    "route": "Ruta",
+    "households": "Hogares",
+    "income": "Ingreso medio",
+    "size": "Tam. hogar",
+    "score": "Score",
+    "in": "Sí",
+    "out": "No"
+  },
+  "routes": {
+    "title": "Distribución por ruta de cartero",
+    "total": "{{count}} hogares en total",
+    "households": "hogares"
+  }
+}

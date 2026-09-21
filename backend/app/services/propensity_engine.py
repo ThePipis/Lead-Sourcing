@@ -1,6 +1,10 @@
+import datetime
+
 import numpy as np
 import pandas as pd
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Optional, Tuple
+
+CURRENT_YEAR = datetime.date.today().year
 
 # Demographic Weights Matrix W_{j, k} for the 14 closed niches
 # Attributes: [income, home_ownership, home_age, children, vehicles, pet_owner, home_value]
@@ -33,9 +37,37 @@ class PropensityEngine:
     def __init__(self, weights_matrix: np.ndarray = DEMOGRAPHIC_WEIGHTS_MATRIX):
         self.W = weights_matrix # shape: (14, 7)
 
-    def generate_synthetic_pool(self, city: str = "Eastvale", zip_code: str = "92880", n: int = 15000) -> pd.DataFrame:
-        """Generates synthetic dataset of 15,000 households for the Inland Empire."""
+    def generate_synthetic_pool(
+        self,
+        city: str = "Eastvale",
+        zip_code: str = "92880",
+        n: int = 15000,
+        id_scope: str = "",
+        profile: Optional[dict] = None,
+    ) -> pd.DataFrame:
+        """
+        Builds a household pool for one microzone.
+
+        The addresses are invented — a real mailing list is licensed, not
+        generated. The *distribution* they are drawn from does not have to be
+        invented: when `profile` carries an ACS profile for the ZIP (see
+        services/census_service.py), ownership, income, home age and children
+        come from the real survey for that neighbourhood instead of from the
+        Eastvale constants below. Without a profile the constants stand and the
+        pool is clearly labelled synthetic.
+        """
         np.random.seed(42)
+
+        # Eastvale defaults, used only where the survey says nothing.
+        ownership_rate = 0.82
+        children_rate = 0.55
+        vehicle_rate = 1.0
+        median_year_built = None
+        if profile:
+            ownership_rate = profile.get("home_ownership_rate") or ownership_rate
+            children_rate = profile.get("children_rate") or children_rate
+            vehicle_rate = profile.get("vehicle_rate") or vehicle_rate
+            median_year_built = profile.get("median_year_built")
 
         carrier_routes = [f"C{str(i).zfill(3)}" for i in range(1, 25)] + ["R001", "R002", "R003"]
         streets = [
@@ -52,12 +84,30 @@ class PropensityEngine:
         zip4s = [str(np.random.randint(1000, 9999)) for _ in range(n)]
 
         # Demographic Vectors (7 features)
+        # Income keeps its beta shape — the survey publishes a median, not a
+        # distribution — but it is centred on the real median where we have one.
         income_score = np.clip(np.random.beta(a=3.0, b=2.2, size=n), 0.1, 1.0)
-        home_ownership = (np.random.rand(n) > 0.18).astype(float) # 82% homeowners in Eastvale
-        home_age_years = np.random.randint(3, 40, size=n)
+        median_income = (profile or {}).get("median_household_income")
+        if median_income:
+            # $180k at the top of the scale: above that the score saturates.
+            target = min(max(median_income / 180000.0, 0.15), 0.95)
+            income_score = np.clip(income_score * (target / income_score.mean()), 0.05, 1.0)
+
+        home_ownership = (np.random.rand(n) < ownership_rate).astype(float)
+        if median_year_built:
+            # Age spread around the survey's median year of construction.
+            age_center = max(CURRENT_YEAR - median_year_built, 1)
+            home_age_years = np.clip(
+                np.random.normal(age_center, max(age_center * 0.35, 4), size=n), 1, 80
+            ).astype(int)
+        else:
+            home_age_years = np.random.randint(3, 40, size=n)
         home_age_score = np.clip(home_age_years / 30.0, 0.0, 1.0)
-        children_present = (np.random.rand(n) > 0.45).astype(float)
+        children_present = (np.random.rand(n) < children_rate).astype(float)
         vehicles_count = np.random.choice([1, 2, 3, 4], p=[0.15, 0.40, 0.30, 0.15], size=n)
+        if vehicle_rate < 1.0:
+            # Households the survey counts as having no vehicle at all.
+            vehicles_count = np.where(np.random.rand(n) < vehicle_rate, vehicles_count, 0)
         vehicles_score = vehicles_count / 4.0
         pet_owner = (np.random.rand(n) > 0.38).astype(float)
         home_value_score = np.clip(0.6 * income_score + 0.4 * home_ownership + np.random.normal(0, 0.05, n), 0.1, 1.0)
@@ -72,7 +122,10 @@ class PropensityEngine:
             "children_present_score", "vehicles_score", "pet_owner_score", "home_value_score"
         ])
 
-        df["household_id"] = [f"HH-{zip_code}-{str(i+1).zfill(5)}" for i in range(n)]
+        # `id_scope` keeps ids unique across campaigns that share a ZIP;
+        # households.id is the primary key.
+        prefix = f"HH-{id_scope}-" if id_scope else f"HH-{zip_code}-"
+        df["household_id"] = [f"{prefix}{str(i+1).zfill(5)}" for i in range(n)]
         df["resident_name"] = names
         df["street_address"] = addrs
         df["city"] = city

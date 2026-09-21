@@ -10,3 +10,4 @@ duckdb==1.1.1
 qrcode==8.0
 pillow==10.4.0
 python-dotenv==1.0.1
+python-multipart==0.0.32

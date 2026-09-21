@@ -15,32 +15,41 @@ export interface CategoryDefinition {
   description: string;
   defaultHeadline: string;
   demographicWeights: {
-    income: number;          // 0 to 1
-    homeOwnership: number;   // 0 to 1
-    homeAgeYears: number;    // 0 to 1 (importance of older homes needing maintenance)
+    income: number; // 0 to 1
+    homeOwnership: number; // 0 to 1
+    homeAgeYears: number; // 0 to 1 (importance of older homes needing maintenance)
     childrenPresent: number; // 0 to 1
-    vehiclesCount: number;   // 0 to 1
-    petOwner: number;        // 0 to 1
-    homeValue: number;       // 0 to 1
+    vehiclesCount: number; // 0 to 1
+    petOwner: number; // 0 to 1
+    homeValue: number; // 0 to 1
   };
 }
 
 export interface SlotState {
   slotNumber: number;
   categoryId: number;
+  /** The niche this box is sold as; it travels with the advertiser, not the box. */
+  categoryName?: string;
   businessName?: string;
   contactPerson?: string;
   phone?: string;
   email?: string;
   website?: string;
+  /** Street and city of the advertiser, as the source reported them. */
+  businessAddress?: string;
   status: SlotStatus;
   priceUsd: number;
+  avgTicketUsd?: number;
   logoUrl?: string;
   offerHeadline?: string;
   qrCodeUrl?: string;
   qrRedirectUrl?: string;
   scanCount: number;
   paymentRef?: string;
+  /** Recorded when the transfer is registered; the money moves outside the app. */
+  paidAt?: string;
+  /** What was actually collected, which can differ from priceUsd after negotiation. */
+  amountCollectedUsd?: number;
   notes?: string;
 }
 
@@ -48,14 +57,19 @@ export interface LeadProspect {
   id: string;
   categoryId: number;
   businessName: string;
+  name?: string;
   categoryName: string;
+  category?: string;
   address: string;
   city: string;
   zip: string;
+  zipCode?: string;
   phone: string;
-  rating: number;
-  reviewCount: number;
-  source: 'Yelp Fusion' | 'Geoapify Places' | 'Firecrawl Scraping';
+  /** Absent when the source has no ratings (OpenStreetMap does not). */
+  rating?: number;
+  reviewCount?: number;
+  websiteUrl?: string;
+  source: 'Yelp Fusion' | 'Geoapify Places' | 'Firecrawl Scraping' | string;
   decisionMaker: string;
   decisionMakerTitle: string;
   avgTicketEstimated: number;
@@ -79,18 +93,18 @@ export interface Household {
   carrierRoute: string; // e.g., C001, C014, R002
   walkSequence: number;
   // Demographic vector attributes (normalized 0.0 - 1.0 or natural units)
-  incomeScore: number;       // estimated household income scale
+  incomeScore: number; // estimated household income scale
   homeOwnershipScore: number; // 1 = homeowner, 0 = renter
-  homeAgeYears: number;      // years since build
-  homeAgeScore: number;      // normalized home age need
+  homeAgeYears: number; // years since build
+  homeAgeScore: number; // normalized home age need
   childrenPresentScore: number; // 1 = kids present, 0 = no kids
-  vehiclesCount: number;     // 1 to 4+
+  vehiclesCount: number; // 1 to 4+
   vehiclesScore: number;
-  petOwnerScore: number;     // 1 = pets, 0 = no pets
-  homeValueScore: number;    // relative home value
+  petOwnerScore: number; // 1 = pets, 0 = no pets
+  homeValueScore: number; // relative home value
   // Calculated Propensity
   matchScores: Record<number, number>; // categoryId -> individual score
-  compositeScore: number;    // sum of 14 matches
+  compositeScore: number; // sum of 14 matches
   selectedForDrop: boolean;
 }
 
@@ -102,13 +116,30 @@ export interface Campaign {
   targetZip: string;
   radiusMiles: number;
   totalTargetHouseholds: number; // 5,000
-  targetGrossRevenue: number;    // $7,264
-  operatingCostEst: number;      // $3,000
-  netMarginEst: number;          // $4,264
+  targetGrossRevenue: number; // $7,264
+  operatingCostEst: number; // $3,000
+  netMarginEst: number; // $4,264
   status: 'PROSPECTING' | 'LOCKED_READY' | 'CURATING' | 'CURATED' | 'IN_PRODUCTION' | 'MAILED';
   slots: SlotState[];
   paidCount: number;
   totalCollectedUsd: number;
+  /** Print plus postage per piece; the drop cost is this times the count. */
+  unitCostUsd?: number;
+  /** Setup, prepress and delivery: charged once per drop, not per piece. */
+  fixedCostUsd?: number;
+  /** Margin the suggested prices are grossed up to. */
+  targetMargin?: number;
+  /** Set when the campaign has been filed away out of the drawer's index. */
+  archivedAt?: string;
+  /** Households covered by the selected carrier routes; 0 before the engine runs. */
+  coveredHouseholds?: number;
+  selectedRoutes?: number;
+  /** DEMO carries seeded practice data; LIVE is real business. */
+  mode: 'DEMO' | 'LIVE';
+  /** Households persisted by the propensity engine for this campaign. */
+  curatedCount?: number;
+  productionAt?: string;
+  mailedAt?: string;
   curationCompletedAt?: string;
 }
 

@@ -1,294 +1,1196 @@
-import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header.tsx';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { MessageCircleQuestion, Moon, SlidersHorizontal, Sun } from 'lucide-react';
+import { CampaignFile } from './components/CampaignFile.tsx';
+import { FormShell } from './components/FormShell.tsx';
+import { PaymentStamp } from './components/PaymentStamp.tsx';
+import { ProductionSection } from './components/ProductionSection.tsx';
 import { FinancialMetrics } from './components/FinancialMetrics.tsx';
+import { ReachControl } from './components/ReachControl.tsx';
+import { CostPanel } from './components/CostPanel.tsx';
 import { PostalCanvas } from './components/PostalCanvas.tsx';
-import { ProspectingView } from './components/ProspectingView.tsx';
+import { SlotInspector } from './components/SlotInspector.tsx';
 import { CurationStudio } from './components/CurationStudio.tsx';
 import { PostalExportView } from './components/PostalExportView.tsx';
 import { ArchitectureViewer } from './components/ArchitectureViewer.tsx';
-import { CLOSED_CATEGORIES, DEFAULT_CAMPAIGN_PARAMS } from './data/categories.ts';
-import { Campaign, SlotState, SlotStatus, LeadProspect, Household, CurationSummary } from './types.ts';
-import { generateSyntheticHouseholds, executePropensityCuration } from './services/propensityEngine.ts';
+import { GuidedTour, FILE_TOUR, FORM_TOUR, hasSeenTour } from './components/GuidedTour.tsx';
+import { CLOSED_CATEGORIES } from './data/categories.ts';
+import {
+  Campaign,
+  SlotState,
+  SlotStatus,
+  LeadProspect,
+  Household,
+  CurationSummary,
+} from './types.ts';
+import {
+  billableHouseholds,
+  computeProgress,
+  dropCostUsd,
+  PhaseId,
+  scaleCampaignToReach,
+} from './workflow.ts';
+import type { AppMode } from './hooks/useAppMode.ts';
+import {
+  generateSyntheticHouseholds,
+  executePropensityCuration,
+} from './services/propensityEngine.ts';
+import {
+  listCampaigns,
+  createCampaign,
+  updateCampaignSlot,
+  updateCampaignStatus,
+  resizeCampaign,
+  resetSlotLayout,
+  setCampaignArchived,
+  deleteCampaign,
+  batchUpdateCampaignSlots,
+  executeBackendCuration,
+} from './services/campaignService.ts';
+import { useTheme } from './hooks/useTheme.ts';
+import { useExpertMode } from './hooks/useExpertMode.ts';
+import { useAppMode } from './hooks/useAppMode.ts';
+import { ModeSwitch } from './components/ModeSwitch.tsx';
+import { Assistant } from './components/Assistant.tsx';
+import { Settings } from './components/Settings.tsx';
+import {
+  AutofillResult,
+  autofillSlots,
+  markAllPaid,
+  nextCandidate,
+} from './services/slotFillService.ts';
+
+const LAST_OPENED_KEY = 'coop.lastOpenedCampaign';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<
-    'canvas' | 'prospecting' | 'curation' | 'export' | 'architecture'
-  >('canvas');
+  const { t, i18n } = useTranslation(['common']);
+  const { theme, toggleTheme } = useTheme();
+  const { expertMode } = useExpertMode();
+  const { mode, setAppMode, mockMode } = useAppMode();
 
-  // Initialize slots with 14 closed niches
-  const initialSlots: SlotState[] = CLOSED_CATEGORIES.map((cat, idx) => {
-    // Give 5 initial slots realistic starting statuses to show operational workflow
-    const initialStatus: SlotStatus = 
-      idx === 0 ? 'PAID' :        // Hero Dental
-      idx === 1 ? 'PAID' :        // HVAC
-      idx === 2 ? 'PAID' :        // Vet
-      idx === 7 ? 'RESERVED' :    // Roofing
-      idx === 12 ? 'PROSPECTING' :// Mexican Restaurant
-      'VACANT';
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [openCampaignId, setOpenCampaignId] = useState<string | null>(null);
+  const [activePhase, setActivePhase] = useState<PhaseId>('slots');
 
-    const defaultNames: Record<number, string> = {
-      1: 'Eastvale Premier Family Dentistry',
-      2: 'Inland Air Pro Heating & Cooling',
-      3: 'Eastvale Animal Hospital & Urgent Pet Care',
-      8: 'Inland Solar & Roofing Dynamics',
-      13: 'Taquería El Tapatío & Cantina Familiar',
-    };
+  const [isLoadingFile, setIsLoadingFile] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [showSpec, setShowSpec] = useState(false);
+  // Counts for the other world, so the switch says what it will reveal.
+  const [otherModeCount, setOtherModeCount] = useState(0);
 
-    return {
-      slotNumber: cat.id,
-      categoryId: cat.id,
-      businessName: defaultNames[cat.id] || '',
-      status: initialStatus,
-      priceUsd: cat.priceUsd,
-      offerHeadline: cat.defaultHeadline,
-      scanCount: idx === 0 ? 12 : idx === 1 ? 8 : 0,
-    };
+  // The walkthrough runs once per surface and can be replayed from the drawer.
+  // It waits for the file to load: pointing at a row that is not painted yet
+  // would highlight empty space.
+  const [tour, setTour] = useState<'file' | 'form' | null>(null);
+
+  // Slot the operator is recording a payment for.
+  const [pendingPaymentSlot, setPendingPaymentSlot] = useState<number | null>(null);
+  /** The box open in the inspector beside the card, if any. */
+  const [inspectedSlot, setInspectedSlot] = useState<number | null>(null);
+  /**
+   * Drawn or not. Kept apart from the box itself so the curtain has something
+   * to move: the panel mounts closed, opens on the next frame, and on the way
+   * out it closes first and unmounts when the movement is over.
+   */
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const closingInspector = useRef<number | undefined>(undefined);
+
+  const openInspector = useCallback((slotNumber: number) => {
+    window.clearTimeout(closingInspector.current);
+    setInspectedSlot(slotNumber);
+    // A timer, not requestAnimationFrame: rAF does not fire in a tab that is
+    // not painting, and a panel that never opens because the window was in the
+    // background is worse than one that opens without its curtain.
+    window.setTimeout(() => setInspectorOpen(true), 20);
+  }, []);
+
+  const closeInspector = useCallback(() => {
+    setInspectorOpen(false);
+    closingInspector.current = window.setTimeout(() => setInspectedSlot(null), 420);
+  }, []);
+  /**
+   * When the last write landed in SQLite. Every mutation in this file runs
+   * through `isSaving`, so watching it settle stamps them all without each
+   * handler having to remember to.
+   */
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const wasSaving = useRef(false);
+  useEffect(() => {
+    if (wasSaving.current && !isSaving) setLastSavedAt(new Date());
+    wasSaving.current = isSaving;
+  }, [isSaving]);
+  // Reach being typed right now. Section 1 shows its consequences before the
+  // write lands, which is why there is no Apply button.
+  const [draftReach, setDraftReach] = useState<number | null>(null);
+  // Archiving or deleting from the drawer's index.
+  const [isFiling, setIsFiling] = useState(false);
+  // The operating assistant, reachable from every surface.
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Bumped when the cost model changes outside the panel, so section 1 refetches.
+  const [costsVersion, setCostsVersion] = useState(0);
+  // Filling the card with candidates, and swapping one that said no.
+  const [isFilling, setIsFilling] = useState(false);
+  const [fillReport, setFillReport] = useState<AutofillResult | null>(null);
+  const [busySlot, setBusySlot] = useState<number | null>(null);
+  /**
+   * The campaign this operator last opened, which is what the drawer means by
+   * "in hand". It lives in the browser rather than in the database on purpose:
+   * two people share this file, and what the partner opened is their business,
+   * not a reason to move what is in front of you.
+   */
+  const [lastOpenedId, setLastOpenedId] = useState<string | null>(() => {
+    try {
+      return window.localStorage.getItem(LAST_OPENED_KEY);
+    } catch {
+      return null; // private windows and locked-down browsers
+    }
   });
 
-  const [campaign, setCampaign] = useState<Campaign>({
-    id: 'camp_ie_eastvale_2026_q1',
-    code: 'IE-EASTVALE-92880-Q1',
-    name: 'Co-Op Direct Mail - Eastvale Spring Run',
-    targetCity: 'Eastvale',
-    targetZip: '92880',
-    radiusMiles: 5.0,
-    totalTargetHouseholds: DEFAULT_CAMPAIGN_PARAMS.targetHouseholds,
-    targetGrossRevenue: DEFAULT_CAMPAIGN_PARAMS.grossTargetRevenue,
-    operatingCostEst: DEFAULT_CAMPAIGN_PARAMS.operatingCostEst,
-    netMarginEst: DEFAULT_CAMPAIGN_PARAMS.netMarginEst,
-    status: 'PROSPECTING',
-    slots: initialSlots,
-    paidCount: 3,
-    totalCollectedUsd: 850 + 497 + 497, // Hero + 2 standard
-  });
-
-  // Audience Curation State
   const [curatedHouseholds, setCuratedHouseholds] = useState<Household[]>([]);
   const [curationSummary, setCurationSummary] = useState<CurationSummary | null>(null);
-  const [isCurating, setIsCurating] = useState<boolean>(false);
+  const [isCurating, setIsCurating] = useState(false);
 
-  // Auto-recalculate financial metrics when slots change
+  const campaign = useMemo(
+    () => campaigns.find((c) => String(c.id) === String(openCampaignId)) ?? null,
+    [campaigns, openCampaignId],
+  );
+
+  const curatedCount = campaign
+    ? Math.max(campaign.curatedCount ?? 0, curatedHouseholds.length)
+    : 0;
+
+  const progress = useMemo(
+    () => (campaign ? computeProgress(campaign, curatedCount) : null),
+    [campaign, curatedCount],
+  );
+
+  const loadFile = useCallback(async () => {
+    setIsLoadingFile(true);
+    try {
+      const [list, other] = await Promise.all([
+        listCampaigns(mode),
+        listCampaigns(mode === 'LIVE' ? 'DEMO' : 'LIVE'),
+      ]);
+      setCampaigns(list);
+      setOtherModeCount(other.length);
+      setLoadError(null);
+    } catch (err) {
+      console.error('Failed to load the campaign file:', err);
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoadingFile(false);
+    }
+  }, [mode]);
+
   useEffect(() => {
-    const paidSlots = campaign.slots.filter((s) => s.status === 'PAID');
-    const totalCollected = paidSlots.reduce((acc, s) => acc + s.priceUsd, 0);
-    const paidCount = paidSlots.length;
+    loadFile();
+  }, [loadFile]);
 
-    setCampaign((prev) => ({
-      ...prev,
-      paidCount,
-      totalCollectedUsd: totalCollected,
-      status:
-        prev.status === 'CURATED'
-          ? 'CURATED'
-          : paidCount === 14
-          ? 'LOCKED_READY'
-          : 'PROSPECTING',
-    }));
-  }, [campaign.slots]);
+  useEffect(() => {
+    if (isLoadingFile || campaigns.length === 0) return;
+    if (openCampaignId === null && !hasSeenTour('file')) setTour('file');
+  }, [isLoadingFile, campaigns.length, openCampaignId]);
 
-  // Handle Microzone change
-  const handleZoneChange = (city: string, zip: string) => {
-    setCampaign((prev) => ({
-      ...prev,
-      targetCity: city,
-      targetZip: zip,
-      code: `IE-${city.slice(0, 4).toUpperCase()}-${zip}`,
-      name: `Co-Op Direct Mail - ${city} Spring Run`,
-    }));
+  useEffect(() => {
+    if (openCampaignId !== null && !hasSeenTour('form')) {
+      const id = window.setTimeout(() => setTour('form'), 600);
+      return () => window.clearTimeout(id);
+    }
+  }, [openCampaignId]);
+
+  /** Replace one campaign in the file without refetching the rest. */
+  const patchCampaign = useCallback((id: string, update: (prev: Campaign) => Campaign) => {
+    setCampaigns((prev) => prev.map((c) => (String(c.id) === String(id) ? update(c) : c)));
+  }, []);
+
+  const patchSlots = useCallback(
+    (id: string, update: (slots: SlotState[]) => SlotState[]) => {
+      patchCampaign(id, (c) => ({ ...c, slots: update(c.slots) }));
+    },
+    [patchCampaign],
+  );
+
+  const handleOpenCampaign = useCallback(
+    (id: string) => {
+      const next = campaigns.find((c) => String(c.id) === String(id));
+      setOpenCampaignId(String(id));
+      setLastOpenedId(String(id));
+      try {
+        window.localStorage.setItem(LAST_OPENED_KEY, String(id));
+      } catch {
+        // Not being able to remember is not a reason to fail to open.
+      }
+      setCuratedHouseholds([]);
+      setCurationSummary(null);
+      setPendingPaymentSlot(null);
+      // Land the operator on the section that owes work, not on section 1.
+      if (next) {
+        setActivePhase(computeProgress(next, next.curatedCount ?? 0).current);
+      }
+      if (window.location.hash !== `#/c/${id}`) {
+        window.location.hash = `#/c/${id}`;
+      }
+    },
+    [campaigns],
+  );
+
+  const handleBackToFile = () => {
+    setOpenCampaignId(null);
+    setPendingPaymentSlot(null);
+    if (window.location.hash) window.location.hash = '';
+    loadFile();
   };
 
-  // Update a slot status
-  const handleUpdateSlotStatus = (slotNumber: number, newStatus: SlotStatus) => {
-    setCampaign((prev) => ({
-      ...prev,
-      slots: prev.slots.map((s) =>
-        s.slotNumber === slotNumber ? { ...s, status: newStatus } : s
-      ),
-    }));
+  // One campaign, one address. Two people share this file, so a form has to be
+  // sendable as a link rather than described as "the Fontana one".
+  //
+  // The listener is attached once and reads the current logic through a ref;
+  // re-subscribing on every file update would tear the listener down and back
+  // up on each slot edit. Only a *change* of target opens a campaign, because
+  // reopening the one already on screen would reset the curation results held
+  // for this session.
+  const applyHashRef = useRef(() => {});
+  applyHashRef.current = () => {
+    const match = window.location.hash.match(/^#\/c\/(.+)$/);
+    const id = match ? decodeURIComponent(match[1]) : null;
+    if (id !== null && String(id) === String(openCampaignId)) return;
+    if (id === null) {
+      setOpenCampaignId(null);
+      return;
+    }
+    const matched = campaigns.find((c) => String(c.id) === String(id));
+    if (matched) handleOpenCampaign(String(matched.id));
   };
 
-  // Update a slot business name and headline
-  const handleUpdateSlotBusiness = (slotNumber: number, businessName: string, headline?: string) => {
-    setCampaign((prev) => ({
-      ...prev,
-      slots: prev.slots.map((s) =>
-        s.slotNumber === slotNumber
-          ? {
-              ...s,
-              businessName,
-              offerHeadline: headline || s.offerHeadline,
-              status: s.status === 'VACANT' ? 'RESERVED' : s.status,
-            }
-          : s
-      ),
-    }));
+  useEffect(() => {
+    const onHashChange = () => applyHashRef.current();
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  // A link opened cold lands before the file has loaded, so resolve the hash
+  // again once campaigns arrive.
+  useEffect(() => {
+    applyHashRef.current();
+  }, [campaigns.length]);
+
+  const handleSwitchMode = (next: AppMode) => {
+    if (next === mode) return;
+    setOpenCampaignId(null);
+    setCuratedHouseholds([]);
+    setCurationSummary(null);
+    setPendingPaymentSlot(null);
+    if (window.location.hash) window.location.hash = '';
+    setAppMode(next);
   };
 
-  // Assign lead from CRM Prospecting to slot
-  const handleAssignLeadToSlot = (slotNumber: number, lead: LeadProspect) => {
-    setCampaign((prev) => ({
-      ...prev,
-      slots: prev.slots.map((s) =>
-        s.slotNumber === slotNumber
-          ? {
-              ...s,
-              businessName: lead.businessName,
-              contactPerson: lead.decisionMaker,
-              phone: lead.phone,
-              status: 'RESERVED',
-              offerHeadline: lead.bilingualHooks.es,
-            }
-          : s
-      ),
-    }));
-    setCurrentTab('canvas');
-  };
-
-  // Autocomplete all slots to PAID for demo/evaluation
-  const handleQuickSimulateAllPaid = () => {
-    const demoNames: Record<number, string> = {
-      1: 'Eastvale Premier Family Dentistry',
-      2: 'Inland Air Pro Heating & Cooling',
-      3: 'Eastvale Animal Hospital & Urgent Pet Care',
-      4: 'Riverside County Master Plumbing',
-      5: 'Eastvale Auto Care & Brake Masters',
-      6: "Vito's Stone Oven Artisanal Pizza",
-      7: 'Apex Athletic Performance & CrossFit',
-      8: 'Inland Solar & Roofing Dynamics',
-      9: 'Eastvale Spine & Wellness Center',
-      10: 'Inland Empire Steam Pro Carpet & Tile',
-      11: 'Signature Mobile Detailing & Ceramic',
-      12: 'Fluffy Paws Mobile Spa & Grooming',
-      13: 'Taquería El Tapatío & Cantina Familiar',
-      14: 'Inland Valley Insurance Advisors',
-    };
-
-    setCampaign((prev) => ({
-      ...prev,
-      slots: prev.slots.map((s) => ({
-        ...s,
-        status: 'PAID',
-        businessName: s.businessName || demoNames[s.slotNumber] || `Comercio Slot ${s.slotNumber}`,
-      })),
-    }));
-  };
-
-  // Run Algorithmic Propensity Curation
-  const handleRunCuration = () => {
-    setIsCurating(true);
-    setTimeout(() => {
-      // 1. Generate 15,000 synthetic households from Inland Empire
-      const pool = generateSyntheticHouseholds(campaign.targetCity, campaign.targetZip, 15000);
-      // 2. Vectorized dot-product scoring and top 5,000 cutoff
-      const { curatedHouseholds: top5k, summary } = executePropensityCuration(
-        pool,
-        CLOSED_CATEGORIES,
-        5000
+  const handleCreateCampaign = async (city: string, zip: string, households: number) => {
+    setIsCreating(true);
+    try {
+      const created = await createCampaign(city, zip, mode, households);
+      setCampaigns((prev) => [created, ...prev.filter((c) => c.id !== created.id)]);
+      handleOpenCampaign(created.id);
+    } catch (err) {
+      console.error('Failed to create campaign:', err);
+      const raw = err instanceof Error ? err.message : String(err);
+      // A conflict is an ordinary outcome — this zone already has a drop this
+      // month — so it reads as a sentence, not as an HTTP status.
+      setLoadError(
+        raw.startsWith('CONFLICT:')
+          ? t('common:file.createConflict', { zone: `${city} · ${zip}` })
+          : raw,
       );
-
-      setCuratedHouseholds(top5k);
-      setCurationSummary(summary);
-      setIsCurating(false);
-      setCampaign((prev) => ({ ...prev, status: 'CURATED' }));
-    }, 600);
-  };
-
-  // Trigger Curation from Master Button
-  const handleTriggerCurationMaster = () => {
-    setCurrentTab('curation');
-    if (curatedHouseholds.length === 0) {
-      handleRunCuration();
+    } finally {
+      setIsCreating(false);
     }
   };
 
-  // Increment scan count when simulated in export view
-  const handleIncrementScan = (slotNumber: number) => {
-    setCampaign((prev) => ({
-      ...prev,
-      slots: prev.slots.map((s) =>
-        s.slotNumber === slotNumber ? { ...s, scanCount: s.scanCount + 1 } : s
-      ),
-    }));
+  /**
+   * File a campaign away, or bring it back. Archiving destroys nothing: the
+   * campaign keeps its slots, its money and its audience and simply stops
+   * competing for attention in the drawer.
+   */
+  const handleArchiveCampaign = async (campaignId: string, archived: boolean) => {
+    setIsFiling(true);
+    try {
+      const updated = await setCampaignArchived(campaignId, archived);
+      patchCampaign(campaignId, () => updated);
+      setLoadError(null);
+    } catch (err) {
+      console.error('Failed to archive campaign:', err);
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsFiling(false);
+    }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-amber-500 selection:text-slate-950">
-      {/* Platform Header */}
-      <Header
-        currentTab={currentTab}
-        setCurrentTab={setCurrentTab}
-        campaign={campaign}
-        onZoneChange={handleZoneChange}
-      />
+  /**
+   * Destroy a campaign. The backend refuses this for a live campaign that holds
+   * work — money collected, an audience cut, a drop at the printer — because
+   * that is a business record; the refusal comes back as a sentence, not a code.
+   */
+  const handleDeleteCampaign = async (campaignId: string) => {
+    setIsFiling(true);
+    try {
+      await deleteCampaign(campaignId);
+      setCampaigns((prev) => prev.filter((c) => String(c.id) !== String(campaignId)));
+      if (String(openCampaignId) === String(campaignId)) setOpenCampaignId(null);
+      setLoadError(null);
+    } catch (err) {
+      console.error('Failed to delete campaign:', err);
+      const raw = err instanceof Error ? err.message : String(err);
+      setLoadError(raw.startsWith('CONFLICT:') ? t('common:file.deleteFailed') : raw);
+    } finally {
+      setIsFiling(false);
+    }
+  };
 
-      {/* Main Content View */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Executive Financial Metrics & Cash Rule Bar */}
-        <FinancialMetrics
-          campaign={campaign}
-          onExecuteCuration={handleTriggerCurationMaster}
-        />
+  /**
+   * Change the drop's reach. Every slot price, the print cost, the curation cut
+   * and the manifest all hang off this number, so the backend re-prices the
+   * slots and discards an audience that was cut to the old reach.
+   */
+  const handleResizeCampaign = async (households: number) => {
+    if (!campaign) return;
+    setIsSaving(true);
+    try {
+      const updated = await resizeCampaign(campaign.id, households);
+      patchCampaign(campaign.id, () => updated);
+      setDraftReach(null);
+      setCuratedHouseholds([]);
+      setCurationSummary(null);
+      setLoadError(null);
+    } catch (err) {
+      console.error('Failed to resize campaign:', err);
+      const raw = err instanceof Error ? err.message : String(err);
+      setLoadError(raw.startsWith('CONFLICT:') ? t('common:reach.conflict') : raw);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-        {/* Tab 1: Interactive 12x9" Canvas */}
-        {currentTab === 'canvas' && (
-          <PostalCanvas
-            slots={campaign.slots}
-            onUpdateSlotStatus={handleUpdateSlotStatus}
-            onUpdateSlotBusiness={handleUpdateSlotBusiness}
-            onQuickSimulateAllPaid={handleQuickSimulateAllPaid}
-            onExecuteCuration={handleTriggerCurationMaster}
-          />
+  /**
+   * Write the cost model's suggested prices onto every slot that has not been
+   * paid yet. Paid slots are left alone: that price is already a transaction.
+   */
+  const handleApplySuggestedPrices = async (prices: Record<number, number>) => {
+    if (!campaign) return;
+    const updates = campaign.slots
+      .filter((s) => s.status !== 'PAID' && prices[s.slotNumber] > 0)
+      .map((s) => ({ slotNumber: s.slotNumber, priceUsd: prices[s.slotNumber] }));
+    if (updates.length === 0) return;
+
+    setIsSaving(true);
+    try {
+      const slots = await batchUpdateCampaignSlots(campaign.id, updates);
+      patchSlots(campaign.id, () => slots);
+      setLoadError(null);
+    } catch (err) {
+      console.error('Failed to apply suggested prices:', err);
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /**
+   * A cost edit changes what every drop costs, so the open campaign's figures
+   * follow it at once: the ledger, the margin and the section 3 gate all read
+   * from these two numbers. A drop already at the printer keeps its stamped
+   * cost, which is what the backend reports for it.
+   */
+  const handleCostsChange = useCallback((unitCost: number, fixedCost: number) => {
+    setCampaigns((prev) => {
+      // Same numbers: keep the identical array so nothing re-renders.
+      const stale = prev.some(
+        (c) =>
+          c.status !== 'IN_PRODUCTION' &&
+          c.status !== 'MAILED' &&
+          (c.unitCostUsd !== unitCost || (c.fixedCostUsd ?? 0) !== fixedCost),
+      );
+      if (!stale) return prev;
+      return prev.map((c) =>
+        c.status === 'IN_PRODUCTION' || c.status === 'MAILED'
+          ? c
+          : { ...c, unitCostUsd: unitCost, fixedCostUsd: fixedCost },
+      );
+    });
+  }, []);
+
+  // ---------------------------------------------------------------- slots
+
+  const handleUpdateSlotStatus = async (slotNumber: number, newStatus: SlotStatus) => {
+    if (!campaign) return;
+
+    // Money moves outside the app, so PAID is a record of a transfer that
+    // already happened: collect the reference before committing it.
+    if (newStatus === 'PAID') {
+      setPendingPaymentSlot(slotNumber);
+      return;
+    }
+
+    setIsSaving(true);
+    patchSlots(campaign.id, (slots) =>
+      slots.map((s) => (s.slotNumber === slotNumber ? { ...s, status: newStatus } : s)),
+    );
+    try {
+      const updated = await updateCampaignSlot(campaign.id, slotNumber, {
+        status: newStatus,
+      });
+      patchSlots(campaign.id, (slots) =>
+        slots.map((s) => (s.slotNumber === slotNumber ? updated : s)),
+      );
+    } catch (err) {
+      console.error('Failed to persist slot status to SQLite:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleConfirmPayment = async (record: {
+    paymentRef: string;
+    amountCollectedUsd: number;
+    paidAt: string;
+  }) => {
+    if (!campaign || pendingPaymentSlot === null) return;
+    const slotNumber = pendingPaymentSlot;
+    setIsSaving(true);
+    try {
+      const updated = await updateCampaignSlot(campaign.id, slotNumber, {
+        status: 'PAID',
+        ...record,
+      });
+      patchSlots(campaign.id, (slots) =>
+        slots.map((s) => (s.slotNumber === slotNumber ? updated : s)),
+      );
+      setPendingPaymentSlot(null);
+    } catch (err) {
+      console.error('Failed to persist payment record to SQLite:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateSlotPrice = async (slotNumber: number, priceUsd: number) => {
+    if (!campaign) return;
+    setIsSaving(true);
+    patchSlots(campaign.id, (slots) =>
+      slots.map((s) => (s.slotNumber === slotNumber ? { ...s, priceUsd } : s)),
+    );
+    try {
+      await updateCampaignSlot(campaign.id, slotNumber, { priceUsd });
+    } catch (err) {
+      console.error('Failed to persist slot price to SQLite:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateSlotAvgTicket = async (slotNumber: number, avgTicketUsd: number) => {
+    if (!campaign) return;
+    setIsSaving(true);
+    patchSlots(campaign.id, (slots) =>
+      slots.map((s) => (s.slotNumber === slotNumber ? { ...s, avgTicketUsd } : s)),
+    );
+    try {
+      await updateCampaignSlot(campaign.id, slotNumber, { avgTicketUsd });
+    } catch (err) {
+      console.error('Failed to persist slot avg ticket to SQLite:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateSlotBusiness = async (
+    slotNumber: number,
+    businessName: string,
+    headline?: string,
+  ) => {
+    if (!campaign) return;
+    setIsSaving(true);
+    const existing = campaign.slots.find((s) => s.slotNumber === slotNumber);
+    const targetStatus: SlotStatus =
+      existing?.status === 'VACANT' ? 'RESERVED' : existing?.status || 'RESERVED';
+    try {
+      const updated = await updateCampaignSlot(campaign.id, slotNumber, {
+        businessName,
+        offerHeadline: headline || existing?.offerHeadline,
+        status: targetStatus,
+      });
+      patchSlots(campaign.id, (slots) =>
+        slots.map((s) => (s.slotNumber === slotNumber ? updated : s)),
+      );
+    } catch (err) {
+      console.error('Failed to persist slot business to SQLite:', err);
+      patchSlots(campaign.id, (slots) =>
+        slots.map((s) =>
+          s.slotNumber === slotNumber
+            ? {
+                ...s,
+                businessName,
+                offerHeadline: headline || s.offerHeadline,
+                status: targetStatus,
+              }
+            : s,
+        ),
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleClearSlot = async (slotNumber: number) => {
+    if (!campaign) return;
+    setIsSaving(true);
+    const reset = {
+      businessName: '',
+      contactPerson: '',
+      phone: '',
+      status: 'VACANT' as SlotStatus,
+      paymentRef: '',
+    };
+    patchSlots(campaign.id, (slots) =>
+      slots.map((s) =>
+        s.slotNumber === slotNumber
+          ? { ...s, ...reset, paidAt: undefined, amountCollectedUsd: undefined }
+          : s,
+      ),
+    );
+    try {
+      await updateCampaignSlot(campaign.id, slotNumber, reset);
+    } catch (err) {
+      console.error('Failed to persist slot release to SQLite:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSwapSlots = async (sourceSlotNumber: number, targetSlotNumber: number) => {
+    if (!campaign || sourceSlotNumber === targetSlotNumber) return;
+    const source = campaign.slots.find((s) => s.slotNumber === sourceSlotNumber);
+    const target = campaign.slots.find((s) => s.slotNumber === targetSlotNumber);
+    if (!source || !target) return;
+
+    setIsSaving(true);
+    // Everything that belongs to the advertiser travels; what belongs to the
+    // paper stays. The category is the advertiser's — moving a dentist into the
+    // hero makes the hero the dentistry box — while size and price stay with the
+    // position, which is what the printer and the price list are measured on.
+    // Without the category the two vacant boxes exchange nothing visible, which
+    // reads as a broken drag.
+    const carry = (s: SlotState) => ({
+      categoryId: s.categoryId,
+      categoryName:
+        CLOSED_CATEGORIES.find((c) => c.id === s.categoryId)?.name ?? String(s.categoryId),
+      businessName: s.businessName,
+      contactPerson: s.contactPerson,
+      phone: s.phone,
+      email: s.email,
+      website: s.website,
+      status: s.status,
+      logoUrl: s.logoUrl,
+      offerHeadline: s.offerHeadline,
+      avgTicketUsd: s.avgTicketUsd,
+      paymentRef: s.paymentRef,
+      scanCount: s.scanCount,
+    });
+    const sourceData = carry(source);
+    const targetData = carry(target);
+
+    patchSlots(campaign.id, (slots) =>
+      slots.map((s) => {
+        if (s.slotNumber === targetSlotNumber) return { ...s, ...sourceData };
+        if (s.slotNumber === sourceSlotNumber) return { ...s, ...targetData };
+        return s;
+      }),
+    );
+
+    try {
+      await batchUpdateCampaignSlots(campaign.id, [
+        { slotNumber: targetSlotNumber, ...sourceData },
+        { slotNumber: sourceSlotNumber, ...targetData },
+      ]);
+    } catch (err) {
+      console.error('Failed to persist swapped slots to SQLite:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /**
+   * Put every niche back in the box it was designed for. The advertisers travel
+   * with their niche, so nobody loses their name, their headline or their
+   * payment: only the arrangement returns to the factory layout.
+   */
+  const handleResetSlotLayout = async (wipe = false) => {
+    if (!campaign) return;
+    setIsSaving(true);
+    try {
+      const updated = await resetSlotLayout(campaign.id, wipe);
+      patchCampaign(campaign.id, () => updated);
+      setLoadError(null);
+    } catch (err) {
+      console.error('Failed to reset the slot layout:', err);
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /**
+   * The route engine reports how many households the selected routes cover.
+   * That number is the drop: the postal zone on the card prints it, the ledger
+   * bills postage and printing on it, and the margin is measured against it.
+   */
+  const handleCoverageChange = useCallback(
+    (covered: number, routeCount: number) => {
+      if (!openCampaignId) return;
+      patchCampaign(openCampaignId, (c) =>
+        c.coveredHouseholds === covered && c.selectedRoutes === routeCount
+          ? c
+          : { ...c, coveredHouseholds: covered, selectedRoutes: routeCount },
+      );
+    },
+    [openCampaignId, patchCampaign],
+  );
+
+  /**
+   * Put a candidate in every empty box in one pass, so the partner's next act
+   * is a phone call rather than fourteen searches. Nothing here sells anything:
+   * the boxes land as PROSPECTING, which is a call to make.
+   */
+  const handleAutofillSlots = async () => {
+    if (!campaign) return;
+    setIsFilling(true);
+    setFillReport(null);
+    try {
+      // Real sources in both worlds. Practising against invented businesses
+      // teaches nothing about the actual microzone, and the free sources —
+      // OpenStreetMap, and Yelp where it has to step in — cost nothing to ask.
+      // A niche with no real business leaves its box empty and says so.
+      const report = await autofillSlots(campaign.id, false);
+      setFillReport(report);
+      const refreshed = await listCampaigns(mode);
+      setCampaigns(refreshed);
+      setLoadError(null);
+    } catch (err) {
+      console.error('Autofill failed:', err);
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsFilling(false);
+    }
+  };
+
+  /** They said no: remember it and bring the next candidate for that box. */
+  const handleNextCandidate = async (slotNumber: number) => {
+    if (!campaign) return;
+    setBusySlot(slotNumber);
+    try {
+      const result = await nextCandidate(campaign.id, slotNumber, false, true);
+      const refreshed = await listCampaigns(mode);
+      setCampaigns(refreshed);
+      setLoadError(result.exhausted ? (result.detail ?? null) : null);
+    } catch (err) {
+      console.error('Next candidate failed:', err);
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusySlot(null);
+    }
+  };
+
+  /**
+   * Practice shortcut: stamp the whole card as collected so section 3 opens.
+   * The backend refuses this outside the practice file.
+   */
+  const handleMarkAllPaid = async () => {
+    if (!campaign) return;
+    setIsSaving(true);
+    try {
+      await markAllPaid(campaign.id);
+      setCampaigns(await listCampaigns(mode));
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /**
+   * Undo a payment recorded by mistake. The box goes back to RESERVED — the
+   * advertiser is still there, the money simply is not — and the reference and
+   * the date are cleared so nothing claims a transfer that did not happen.
+   */
+  const handleUndoPayment = async (slotNumber: number) => {
+    if (!campaign) return;
+    setIsSaving(true);
+    try {
+      const updated = await updateCampaignSlot(campaign.id, slotNumber, {
+        status: 'RESERVED',
+        paymentRef: '',
+        amountCollectedUsd: 0,
+      });
+      patchSlots(campaign.id, (slots) =>
+        slots.map((s) => (s.slotNumber === slotNumber ? updated : s)),
+      );
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAssignLeadToSlot = async (
+    slotNumber: number,
+    lead: LeadProspect,
+    targetStatus: SlotStatus = 'RESERVED',
+  ) => {
+    if (!campaign) return;
+    setIsSaving(true);
+    try {
+      const updated = await updateCampaignSlot(campaign.id, slotNumber, {
+        businessName: lead.businessName,
+        contactPerson: lead.decisionMaker,
+        phone: lead.phone,
+        status: targetStatus,
+        offerHeadline: lead.bilingualHooks?.es || '',
+      });
+      patchSlots(campaign.id, (slots) =>
+        slots.map((s) => (s.slotNumber === slotNumber ? updated : s)),
+      );
+      setActivePhase('slots');
+    } catch (err) {
+      console.error('Failed to persist lead assignment to SQLite:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSourceLeadForSlot = (slotNumber: number) => {
+    setActivePhase('slots');
+    openInspector(slotNumber);
+  };
+
+  const handleIncrementScan = async (slotNumber: number) => {
+    if (!campaign) return;
+    const current = campaign.slots.find((s) => s.slotNumber === slotNumber);
+    if (!current) return;
+    const scanCount = current.scanCount + 1;
+    patchSlots(campaign.id, (slots) =>
+      slots.map((s) => (s.slotNumber === slotNumber ? { ...s, scanCount } : s)),
+    );
+    try {
+      await updateCampaignSlot(campaign.id, slotNumber, { scanCount });
+    } catch (err) {
+      console.error('Failed to persist scan count to SQLite:', err);
+    }
+  };
+
+  // ------------------------------------------------------------- curation
+
+  const handleRunCuration = async () => {
+    if (!campaign) return;
+    setIsCurating(true);
+    try {
+      const weights = CLOSED_CATEGORIES.map((c) => [
+        c.demographicWeights.income,
+        c.demographicWeights.homeOwnership,
+        c.demographicWeights.homeAgeYears,
+        c.demographicWeights.childrenPresent,
+        c.demographicWeights.vehiclesCount,
+        c.demographicWeights.petOwner,
+        c.demographicWeights.homeValue,
+      ]);
+
+      const target = campaign.totalTargetHouseholds;
+      const data = await executeBackendCuration(campaign.id, weights, target, mockMode);
+      const summary: CurationSummary = data.summary || {
+        totalAnalyzed: (data as any).total_analyzed || target * 3,
+        totalSelected: (data as any).total_selected || target,
+        minScore: (data as any).min_score || 60,
+        maxScore: (data as any).max_score || 90,
+        avgScore: (data as any).avg_score || 75,
+        carrierRouteDistribution: ((data as any).carrier_route_breakdown || []).map((r: any) => ({
+          route: r.carrier_route || r.route,
+          count: r.count,
+          zip: campaign.targetZip,
+        })),
+        categorySynergyBreakdown: [],
+        scoreHistogram: (data as any).histogram || [],
+      };
+
+      const households = data.top_5k || [];
+      setCuratedHouseholds(households);
+      setCurationSummary(summary);
+      patchCampaign(campaign.id, (c) => ({
+        ...c,
+        status: 'CURATED',
+        curatedCount: households.length || summary.totalSelected,
+      }));
+    } catch (err) {
+      console.error('Backend curation failed, executing fallback local curation:', err);
+      const target = campaign.totalTargetHouseholds;
+      const pool = generateSyntheticHouseholds(
+        campaign.targetCity,
+        campaign.targetZip,
+        Math.max(15000, target * 3),
+      );
+      const { curatedHouseholds: top5k, summary } = executePropensityCuration(
+        pool,
+        CLOSED_CATEGORIES,
+        target,
+      );
+      setCuratedHouseholds(top5k);
+      setCurationSummary(summary);
+      patchCampaign(campaign.id, (c) => ({
+        ...c,
+        status: 'CURATED',
+        curatedCount: top5k.length,
+      }));
+    } finally {
+      setIsCurating(false);
+    }
+  };
+
+  // ----------------------------------------------------------- production
+
+  const advanceStatus = async (status: Campaign['status']) => {
+    if (!campaign) return;
+    setIsSaving(true);
+    try {
+      const updated = await updateCampaignStatus(campaign.id, status);
+      patchCampaign(campaign.id, (c) => ({
+        ...c,
+        status: updated.status,
+        productionAt: updated.productionAt,
+        mailedAt: updated.mailedAt,
+      }));
+      if (status === 'IN_PRODUCTION') setActivePhase('production');
+    } catch (err) {
+      console.error('Failed to advance campaign status:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ---------------------------------------------------------------- view
+
+  const isSpanish = (i18n.language || 'es').toLowerCase().startsWith('es');
+  // One ruled cell split in two, so the controls sit on the form's ruling
+  // instead of floating beside it. Both chips name what the next press gives
+  // you, never the current state: the partner works in two languages daily and
+  // two identical chips pointing opposite ways is a trap.
+  const chrome = (
+    <div className="flex items-stretch divide-x divide-rule border border-rule">
+      <button
+        id="btn-open-settings"
+        type="button"
+        onClick={() => setSettingsOpen(true)}
+        aria-label={t('common:settings.open')}
+        className="field-label flex min-h-11 min-w-11 sm:min-w-0 items-center justify-center gap-1.5 px-2.5 transition-colors hover:bg-secondary hover:text-ink"
+      >
+        <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+        <span className="hidden sm:inline">{t('common:settings.open')}</span>
+      </button>
+      <button
+        id="btn-open-assistant"
+        data-tour="assistant"
+        type="button"
+        onClick={() => setAssistantOpen(true)}
+        aria-label={t('common:assistant.open')}
+        className="field-label flex min-h-11 min-w-11 sm:min-w-0 items-center justify-center gap-1.5 px-2.5 text-live transition-colors hover:bg-secondary"
+      >
+        <MessageCircleQuestion className="h-3.5 w-3.5 shrink-0" />
+        <span className="hidden sm:inline">{t('common:assistant.open')}</span>
+      </button>
+      <button
+        id="language-toggle-btn"
+        type="button"
+        onClick={() => i18n.changeLanguage(isSpanish ? 'en' : 'es')}
+        aria-label={t('common:header.switchTo', { lang: isSpanish ? 'English' : 'Español' })}
+        className="field-label flex min-h-11 min-w-11 items-center justify-center px-2.5 transition-colors hover:bg-secondary hover:text-ink"
+      >
+        {isSpanish ? 'EN' : 'ES'}
+      </button>
+      <button
+        id="theme-toggle-btn"
+        type="button"
+        onClick={toggleTheme}
+        aria-label={
+          theme === 'dark'
+            ? t('common:header.toggleThemeLight')
+            : t('common:header.toggleThemeDark')
+        }
+        className="field-label flex min-h-11 min-w-11 sm:min-w-0 items-center justify-center px-2.5 transition-colors hover:bg-secondary hover:text-ink"
+      >
+        {theme === 'dark' ? (
+          <>
+            <Sun className="h-3.5 w-3.5 shrink-0 sm:hidden" />
+            <span className="hidden sm:inline">{t('common:form.stockLight')}</span>
+          </>
+        ) : (
+          <>
+            <Moon className="h-3.5 w-3.5 shrink-0 sm:hidden" />
+            <span className="hidden sm:inline">{t('common:form.stockDark')}</span>
+          </>
         )}
+      </button>
+    </div>
+  );
 
-        {/* Tab 2: Lead Sourcing CRM & Yelp/LLM Hit List */}
-        {currentTab === 'prospecting' && (
-          <ProspectingView
-            targetCity={campaign.targetCity}
-            targetZip={campaign.targetZip}
-            slots={campaign.slots}
-            onAssignLeadToSlot={handleAssignLeadToSlot}
-          />
-        )}
+  const renderSection = (phase: PhaseId): React.ReactNode => {
+    if (!campaign) return null;
+    const pendingSlot =
+      pendingPaymentSlot !== null
+        ? campaign.slots.find((s) => s.slotNumber === pendingPaymentSlot)
+        : undefined;
 
-        {/* Tab 3: Algorithmic Propensity Curation Engine */}
-        {currentTab === 'curation' && (
+    switch (phase) {
+      case 'slots': {
+        // While the operator types a new reach, section 1 runs on the typed
+        // number: the ledger, the print cost and the 14 prices all scale with
+        // it. The backend write happens when typing settles.
+        const shown =
+          draftReach && draftReach !== campaign.totalTargetHouseholds
+            ? scaleCampaignToReach(campaign, draftReach)
+            : campaign;
+        const inspected =
+          inspectedSlot !== null
+            ? shown.slots.find((s) => s.slotNumber === inspectedSlot)
+            : undefined;
+        return (
+          <>
+            <ReachControl
+              campaign={campaign}
+              onResize={handleResizeCampaign}
+              onDraftChange={setDraftReach}
+              isSaving={isSaving}
+            />
+            <FinancialMetrics campaign={shown} />
+            <CostPanel
+              key={`costs-${costsVersion}`}
+              mode={mode}
+              households={billableHouseholds(shown)}
+              openSlots={campaign.slots.filter((s) => s.status !== 'PAID').map((s) => s.slotNumber)}
+              onApplySuggested={handleApplySuggestedPrices}
+              onCostsChange={handleCostsChange}
+              isSaving={isSaving}
+            />
+            {/* The postal card with its integrated curtain inspector. At rest the
+                slots take the full width of the flyer; clicking any slot smoothly draws
+                open the inspector curtain at the exact height of the slots. */}
+            <PostalCanvas
+              slots={shown.slots}
+              onUpdateSlotStatus={handleUpdateSlotStatus}
+              onUpdateSlotBusiness={handleUpdateSlotBusiness}
+              onUpdateSlotPrice={handleUpdateSlotPrice}
+              onUpdateSlotAvgTicket={handleUpdateSlotAvgTicket}
+              onSwapSlots={handleSwapSlots}
+              onResetLayout={handleResetSlotLayout}
+              onAutofill={handleAutofillSlots}
+              onMarkAllPaid={handleMarkAllPaid}
+              onUndoPayment={handleUndoPayment}
+              isDemo={mode === 'DEMO'}
+              onNextCandidate={handleNextCandidate}
+              isFilling={isFilling}
+              busySlot={busySlot}
+              fillReport={fillReport}
+              coveredHouseholds={shown.coveredHouseholds ?? 0}
+              selectedRoutes={shown.selectedRoutes ?? 0}
+              onQuickSimulateAllPaid={undefined}
+              onExecuteCuration={undefined}
+              onSourceLeadForSlot={handleSourceLeadForSlot}
+              onClearSlot={handleClearSlot}
+              isSaving={isSaving}
+              isLoading={false}
+              onInspectSlot={openInspector}
+              selectedSlot={inspectedSlot}
+              inspectorOpen={inspectorOpen}
+              onCloseInspector={closeInspector}
+              inspectorNode={
+                inspected ? (
+                  <SlotInspector
+                    slot={inspected}
+                    slots={campaign.slots}
+                    campaignId={campaign.id}
+                    targetCity={campaign.targetCity}
+                    targetZip={campaign.targetZip}
+                    // Candidates are always the real ones, in both worlds. The
+                    // practice file simulates the audience, never the businesses:
+                    // an invented shop with no phone is a box nobody can sell.
+                    mockMode={false}
+                    isSaving={isSaving}
+                    onClose={closeInspector}
+                    onUpdateBusiness={handleUpdateSlotBusiness}
+                    onUpdateStatus={handleUpdateSlotStatus}
+                    onSwapSlots={(from, to) => {
+                      handleSwapSlots(from, to);
+                      setInspectedSlot(to);
+                    }}
+                    onClearSlot={(n) => {
+                      handleClearSlot(n);
+                    }}
+                    onUndoPayment={handleUndoPayment}
+                    onAssignLead={handleAssignLeadToSlot}
+                  />
+                ) : null
+              }
+            />
+            {pendingSlot && (
+              <PaymentStamp
+                slot={pendingSlot}
+                onConfirm={handleConfirmPayment}
+                onCancel={() => setPendingPaymentSlot(null)}
+                isSaving={isSaving}
+              />
+            )}
+          </>
+        );
+      }
+
+      case 'curation':
+        return (
           <CurationStudio
             campaignCode={campaign.code}
+            campaignId={campaign.id}
             targetCity={campaign.targetCity}
             targetZip={campaign.targetZip}
+            targetHouseholds={campaign.totalTargetHouseholds}
+            onCoverageChange={handleCoverageChange}
             curatedHouseholds={curatedHouseholds}
             curationSummary={curationSummary}
             isCurating={isCurating}
             onRunCuration={handleRunCuration}
-            onGoToExport={() => setCurrentTab('export')}
+            onGoToExport={() => setActivePhase('manifest')}
+            mockMode={mockMode}
+            persistedCount={campaign.curatedCount ?? 0}
           />
-        )}
+        );
 
-        {/* Tab 4: QR Generator & Action Mail Postal Manifest */}
-        {currentTab === 'export' && (
+      case 'manifest':
+        return (
           <PostalExportView
             campaign={campaign}
             slots={campaign.slots}
             curatedHouseholds={curatedHouseholds}
             onIncrementScan={handleIncrementScan}
+            section="manifest"
+            onDeliveredToPrinter={() => advanceStatus('IN_PRODUCTION')}
+            isSaving={isSaving}
+            persistedCount={curatedCount}
           />
-        )}
+        );
 
-        {/* Tab 5: FastAPI & Architecture Specification */}
-        {currentTab === 'architecture' && <ArchitectureViewer />}
-      </main>
+      case 'production':
+        return (
+          <>
+            <ProductionSection
+              campaign={campaign}
+              onMarkMailed={() => advanceStatus('MAILED')}
+              isSaving={isSaving}
+            />
+            <div className="mt-8 border-t border-rule-strong pt-6">
+              <PostalExportView
+                campaign={campaign}
+                slots={campaign.slots}
+                curatedHouseholds={curatedHouseholds}
+                onIncrementScan={handleIncrementScan}
+                section="telemetry"
+              />
+            </div>
+          </>
+        );
 
-      {/* Enterprise Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950/80 mt-12 py-6 text-center text-xs text-slate-400">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>
-            Co-Op Direct Mail Platform • Inland Empire Shared Direct Mail Operations
-          </span>
-          <span className="font-mono text-slate-400">
-            USPS Marketing Mail ECRWSS • CASS/NCOA Certified • Action Mail Spec
-          </span>
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <GuidedTour
+        tourId={tour === 'form' ? 'form' : 'file'}
+        steps={tour === 'form' ? FORM_TOUR : FILE_TOUR}
+        active={tour !== null && !showSpec}
+        onClose={() => setTour(null)}
+      />
+
+      {loadError && (
+        <p className="border-b border-due bg-due/10 px-6 py-2 font-mono text-[0.69rem] text-due">
+          {t('common:file.loadError', { error: loadError })}
+        </p>
+      )}
+
+      {campaign && progress ? (
+        <FormShell
+          campaign={campaign}
+          progress={progress}
+          activePhase={activePhase}
+          onSelectPhase={setActivePhase}
+          onReplayTour={() => setTour('form')}
+          onBackToFile={handleBackToFile}
+          expertMode={expertMode}
+          isSyncing={isSaving}
+          lastSavedAt={lastSavedAt}
+          renderSection={renderSection}
+        >
+          {chrome}
+        </FormShell>
+      ) : showSpec ? (
+        <div className="mx-auto w-full max-w-6xl px-6 pb-20">
+          <div className="flex items-center justify-between gap-4 border-b border-rule-strong py-4">
+            <button
+              type="button"
+              onClick={() => setShowSpec(false)}
+              className="field-label transition-colors hover:text-ink"
+            >
+              ← {t('common:form.backToFile')}
+            </button>
+            <div className="flex items-center gap-2">{chrome}</div>
+          </div>
+          <div className="pt-6">
+            <ArchitectureViewer />
+          </div>
         </div>
-      </footer>
+      ) : (
+        <CampaignFile
+          campaigns={campaigns}
+          isLoading={isLoadingFile}
+          onOpenCampaign={handleOpenCampaign}
+          onCreateCampaign={handleCreateCampaign}
+          lastOpenedId={lastOpenedId}
+          onArchiveCampaign={handleArchiveCampaign}
+          onDeleteCampaign={handleDeleteCampaign}
+          isCreating={isCreating}
+          isFiling={isFiling}
+          onOpenSpec={() => setShowSpec(true)}
+          chrome={chrome}
+          onReplayTour={() => setTour('file')}
+          modeSwitch={
+            <ModeSwitch
+              mode={mode}
+              onChange={handleSwitchMode}
+              demoCount={mode === 'DEMO' ? campaigns.length : otherModeCount}
+              liveCount={mode === 'LIVE' ? campaigns.length : otherModeCount}
+            />
+          }
+          mode={mode}
+        />
+      )}
+
+      <Assistant open={assistantOpen} onClose={() => setAssistantOpen(false)} />
+
+      <Settings
+        open={settingsOpen}
+        mode={mode}
+        households={campaign?.totalTargetHouseholds ?? 5000}
+        onClose={() => setSettingsOpen(false)}
+        onCostsChanged={() => setCostsVersion((v) => v + 1)}
+      />
     </div>
   );
 }

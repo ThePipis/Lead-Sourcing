@@ -1,0 +1,108 @@
+{
+  "header": {
+    "moduleTag": "MODULE C • VECTORIZED JOINT AFFINITY ENGINE",
+    "title": "Algorithmic Audience Curation & Propensity Engine",
+    "description": "Replaces rigid boolean SQL filters with a multivariable demographic weighting matrix. Calculates joint cumulative affinity across all 14 businesses and cuts the top 5,000 households with the highest response probability.",
+    "mockEngineBtn": "Mock Engine (15k IE Homes)",
+    "dataAxleBtn": "Data Axle API (Sandbox)",
+    "runCuration": "Run Curation (5,000)",
+    "processing": "Processing 15k Matrix…"
+  },
+  "math": {
+    "title": "Mathematical foundation of the propensity engine",
+    "individualScore": "Per-niche individual score",
+    "individualFormula": "score_i = Σ (w_ij × x_j)  for j = 1..7 attributes",
+    "individualNote": "Dot product of the niche weight vector and the household's normalized demographic vector.",
+    "compositeScore": "Household composite score",
+    "compositeFormula": "score_total = Σ score_i / 14  ·  normalized to [0, 100]",
+    "compositeNote": "Cumulative joint affinity across all 14 businesses. The cut takes the 5,000 highest values."
+  },
+  "stats": {
+    "totalAnalyzed": "Households analyzed",
+    "totalAnalyzedSub": "Synthetic pool for the microzone",
+    "totalSelected": "Curated Households",
+    "totalSelectedSub": "Exact cutoff at 100% postal run",
+    "avgScore": "Average score",
+    "avgScoreRange": "Range {{min}} – {{max}}",
+    "carrierRoutes": "CRRT routes covered",
+    "carrierRoutesSub": "USPS delivery routes reached",
+    "histogramTitle": "Propensity score distribution",
+    "histogramSub": "Households per score band",
+    "histogramBarTitle": "{{range}}: {{count}} households"
+  },
+  "comparison": {
+    "eddmTitle": "Traditional EDDM",
+    "eddm1": "Delivery to whole postal routes, no selection.",
+    "eddm2": "Rigid boolean filters over SQL.",
+    "eddm3": "High waste on off-profile households.",
+    "curationTitle": "Algorithmic curation",
+    "curation1": "Multivariate demographic weighting per niche.",
+    "curation2": "Cumulative joint affinity across the 14 businesses.",
+    "curation3": "Exact cut to the 5,000 highest-propensity households.",
+    "continueExport": "Export Postal Manifest →"
+  },
+  "matrix": {
+    "title": "Demographic weight matrix per niche",
+    "scale": "Scale 0.0 – 1.0",
+    "colCategory": "Niche",
+    "colIncome": "Household Income",
+    "colHomeOwnership": "Homeowner",
+    "colHomeAge": "Home Age",
+    "colChildren": "Children Present",
+    "colVehicles": "Vehicles (+2)",
+    "colPets": "Pet Owner",
+    "colHomeValue": "Home Value"
+  },
+  "records": {
+    "searchPlaceholder": "Search by name, street, or CRRT route…",
+    "showing": "Showing {{filtered}} of {{total}} curated records",
+    "colId": "ID",
+    "colRecipient": "Resident",
+    "colAddress": "Street Address",
+    "colCrrt": "CRRT Route",
+    "colSequence": "Walk Seq",
+    "colScore": "Affinity Score"
+  },
+  "tabs": {
+    "overview": "Executive Summary",
+    "matrix": "Weights Matrix (14 Niches)",
+    "records": "5,000 Curated Homes",
+    "routes": "Postal Routes (CRRT)"
+  },
+  "empty": {
+    "title": "The propensity engine has not run yet",
+    "description": "Run the curation to score 15,000 households and select the top 5,000 for this microzone.",
+    "persistedTitle": "{{count}} households already curated and persisted",
+    "persistedDescription": "This campaign already has its audience in SQLite. Re-run the engine only if prices or demographic weights changed; the current selection will be replaced."
+  },
+  "routeEngine": {
+    "title": "Route engine · who the drop reaches",
+    "intro": "A cooperative drop is delivered by saturation: the carrier leaves it in every box on the route, addressed to 'Postal Customer'. So the choice here is made in ROUTES, not households, and no list needs buying. USPS publishes each route with its official count and median income; the Census adds owner occupancy, single-family share, vehicles and home value.",
+    "zip": "Target ZIP",
+    "target": "Target households",
+    "plan": "Compute routes",
+    "planning": "Querying USPS and Census…",
+    "manifest": "Manifest CSV",
+    "covered": "Households covered",
+    "selectedRoutes": "Routes in the drop",
+    "available": "Available in the ZIP",
+    "enrichment": "Score inputs",
+    "hybrid": "USPS + Census",
+    "uspsOnly": "USPS only",
+    "hybridNote": "Hybrid score: income, age and household size from USPS per route, plus owner occupancy, single-family share, vehicles and home value from the ACS, joined through the block groups each route crosses and weighted by households.",
+    "uspsOnlyNote": "Scored on what USPS publishes per route. The Census enrichment did not answer this time; the weights renormalise themselves so routes stay comparable.",
+    "inDrop": "In the drop",
+    "route": "Route",
+    "households": "Households",
+    "income": "Median income",
+    "size": "HH size",
+    "score": "Score",
+    "in": "Yes",
+    "out": "No"
+  },
+  "routes": {
+    "title": "Carrier route breakdown",
+    "total": "{{count}} households in total",
+    "households": "households"
+  }
+}

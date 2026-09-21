@@ -1,1 +1,360 @@
 @import "tailwindcss";
+
+/* Self-hosted so the form renders identically offline. wdth carries the
+   condensed width used for printed field labels. */
+@import "@fontsource-variable/archivo/wdth.css";
+@import "@fontsource/azeret-mono/400.css";
+@import "@fontsource/azeret-mono/500.css";
+@import "@fontsource/azeret-mono/700.css";
+
+/* Tailwind v4 defaults the `dark:` variant to prefers-color-scheme. useTheme
+   toggles a `.dark` class on <html>, so bind the variant to that class. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-canvas-bg: var(--canvas-bg);
+  --color-slot-bg: var(--slot-bg);
+  --color-slot-border: var(--slot-border);
+  --color-highlight: var(--highlight);
+
+  /* Reserved-color law. These three encode state and nothing else. */
+  --color-due: var(--due);
+  --color-clear: var(--clear);
+  --color-live: var(--live);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-ink: var(--ink);
+  --color-ink-dim: var(--ink-dim);
+  --color-ink-faint: var(--ink-faint);
+
+  /* The whole interface sat at 10-12px. These raise the scale roughly 18%
+     against a 17.5px root so controls and figures are readable without the
+     browser's own zoom, while the steps stay far enough apart to keep the
+     hierarchy. */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-base: 1.0625rem;
+  --text-lg: 1.1875rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.625rem;
+
+  --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Azeret Mono", ui-monospace, "Cascadia Mono", monospace;
+}
+
+@layer base {
+  /* Dark is the default: this is a production document worked at a desk for
+     long stretches, read as a backlit form rather than a sheet of paper. */
+  :root {
+    --background: #0b0d11;
+    --foreground: #ded3ba;
+    --card: #11151c;
+    --card-foreground: #ded3ba;
+    --popover: #11151c;
+    --popover-foreground: #ded3ba;
+    --primary: #d9a441;
+    --primary-foreground: #16120a;
+    --secondary: #161b24;
+    --secondary-foreground: #ded3ba;
+    --muted: #11151c;
+    --muted-foreground: #8d8878;
+    --accent: #1c2330;
+    --accent-foreground: #ded3ba;
+    --border: #222a36;
+    --ring: #d9a441;
+
+    --canvas-bg: #090b0f;
+    --slot-bg: #11151c;
+    --slot-border: #222a36;
+    --highlight: #d9a441;
+
+    --ink: #ded3ba;
+    --ink-dim: #8d8878;
+    --ink-faint: #7c8496;
+    --rule: #222a36;
+    --rule-strong: #35404f;
+
+    --due: #d2503f;
+    --clear: #46a97d;
+    --live: #d9a441;
+  }
+
+  /* Light is the form on its actual stock: manila, printed in black. */
+  .light {
+    --background: #e7e1d1;
+    --foreground: #16181c;
+    --card: #f3eee1;
+    --card-foreground: #16181c;
+    --popover: #f3eee1;
+    --popover-foreground: #16181c;
+    --primary: #7d5a0e;
+    --primary-foreground: #fdfaf2;
+    --secondary: #ded6c2;
+    --secondary-foreground: #16181c;
+    --muted: #ded6c2;
+    --muted-foreground: #5c5747;
+    --accent: #d2c9b1;
+    --accent-foreground: #16181c;
+    --border: #c0b79f;
+    --ring: #7d5a0e;
+
+    --canvas-bg: #d9d2bf;
+    --slot-bg: #f3eee1;
+    --slot-border: #c0b79f;
+    --highlight: #7d5a0e;
+
+    --ink: #16181c;
+    --ink-dim: #5c5747;
+    --ink-faint: #6a6350;
+    --rule: #c0b79f;
+    --rule-strong: #9d947c;
+
+    --due: #a3302a;
+    --clear: #216b4c;
+    --live: #7d5a0e;
+  }
+
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    color-scheme: dark;
+    font-size: 17.5px;
+  }
+
+  html.light {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    min-height: 100vh;
+    font-family: var(--font-sans);
+    font-synthesis-weight: none;
+    /* Taps act immediately instead of waiting out the double-tap-zoom delay. */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: color-mix(in oklab, var(--live) 22%, transparent);
+  }
+
+  /* Headings set their own line breaks rather than leaving a one-word last line. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  /* Every figure on this form is read in columns: route codes, ZIP+4, walk
+     sequences, money. Lining tabular figures are functional here. */
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The surfaces we did not draw still carry the world. */
+  ::selection {
+    background-color: color-mix(in oklab, var(--live) 34%, transparent);
+    color: var(--foreground);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  * {
+    scrollbar-color: var(--rule-strong) transparent;
+    scrollbar-width: thin;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--rule-strong);
+    border: 3px solid var(--background);
+    border-radius: 0;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--ink-faint);
+  }
+}
+
+@layer components {
+  /* The drag handle draws its own cursor, and which glyph it draws depends on
+     the stock.
+
+     On the backlit theme the browser's own `grab` hand reads perfectly: a pale
+     hand against a near-black page. On manila it does not — a white glyph with
+     a hairline outline on a light sheet is a ghost — so there the handle gets a
+     four-way arrow with a heavy dark outline, which is also the plainer way of
+     saying "this moves". One control, two backgrounds, whichever glyph survives
+     the background it sits on. */
+  .cursor-drag {
+    cursor: grab;
+  }
+
+  .cursor-drag:active {
+    cursor: grabbing;
+  }
+
+  .light .cursor-drag {
+    cursor:
+      url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'%3E%3Cpath d='M12 1.5 L15.5 6 H13 V11 H18 V8.5 L22.5 12 L18 15.5 V13 H13 V18 H15.5 L12 22.5 L8.5 18 H11 V13 H6 V15.5 L1.5 12 L6 8.5 V11 H11 V6 H8.5 Z' fill='%23ffffff' stroke='%23141414' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E")
+        13 13,
+      grab;
+  }
+
+  .light .cursor-drag:active {
+    cursor:
+      url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'%3E%3Cpath d='M12 1.5 L15.5 6 H13 V11 H18 V8.5 L22.5 12 L18 15.5 V13 H13 V18 H15.5 L12 22.5 L8.5 18 H11 V13 H6 V15.5 L1.5 12 L6 8.5 V11 H11 V6 H8.5 Z' fill='%237d5a0e' stroke='%23141414' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E")
+        13 13,
+      grabbing;
+  }
+
+  /* Printed field label: condensed, small, tracked, the caption under a box
+     on a government form. */
+  .field-label {
+    font-family: var(--font-sans);
+    font-variation-settings: "wdth" 62;
+    font-weight: 700;
+    font-size: 0.7rem;
+    line-height: 1.1;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  /* A value typed into a box. */
+  .field-value {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  /* The one command a screen is allowed to give. */
+  .imperative {
+    font-family: var(--font-sans);
+    font-variation-settings: "wdth" 62;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* Ruled box. The form is drawn with these, not with cards. */
+  .ruled {
+    border: 1px solid var(--rule);
+    background-color: var(--card);
+  }
+
+  /*
+   * The one authored moment: the round datestamp landing on a section the
+   * operator just sealed. It lands once, on the real transition only, and the
+   * section it settles on was already on screen before it played.
+   */
+  .stamp-land {
+    animation: stamp-land 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    transform-origin: 70% 30%;
+  }
+
+  @keyframes stamp-land {
+    0% {
+      opacity: 0;
+      transform: scale(1.6) rotate(-7deg);
+      filter: blur(1.5px);
+    }
+    70% {
+      opacity: 1;
+      filter: blur(0);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(-1.5deg);
+      filter: blur(0);
+    }
+  }
+
+  /* A gate opening: the hatching clears off the section that just became live. */
+  .gate-open {
+    animation: gate-open 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes gate-open {
+    from {
+      background-color: color-mix(in oklab, var(--live) 22%, transparent);
+    }
+    to {
+      background-color: transparent;
+    }
+  }
+
+  /* ------------------------------------------------------------------ *
+  @media (prefers-reduced-motion: reduce) {
+    .stamp-land,
+    .gate-open {
+      animation: none;
+    }
+    .stamp-land {
+      transform: rotate(-1.5deg);
+    }
+  }
+
+  /* Visible to a screen reader, not on the page. */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* A block the operator never fills in. */
+  .reserved {
+    color: var(--ink-faint);
+    background-image: repeating-linear-gradient(
+      135deg,
+      transparent 0 6px,
+      color-mix(in oklab, var(--rule) 55%, transparent) 6px 7px
+    );
+  }
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

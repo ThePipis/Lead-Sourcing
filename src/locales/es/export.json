@@ -1,0 +1,75 @@
+{
+  "header": {
+    "moduleTag": "MÓDULO D • INFRAESTRUCTURA DE EXPORTACIÓN & TRAZABILIDAD",
+    "title": "Postal Export & QR Campaign Telemetry",
+    "description": "Descarga el manifiesto postal CASS-ordenado listo para enviar a imprenta (Action Mail / Inland Valley) y gestiona los códigos QR dinámicos con redirección y analítica en tiempo real.",
+    "downloadCsv": "Descargar Manifiesto CSV (5,000 Hogares)",
+    "generating": "Descargando…",
+    "showPreview": "Previsualizar Manifiesto (10 filas)",
+    "hidePreview": "Ocultar Previsualización"
+  },
+  "preview": {
+    "title": "Especificaciones de Manifiesto de Producción Action Mail",
+    "badge": "CASS / NCOA",
+    "subtitle": "Campaña {{id}}",
+    "totalDataset": "Dataset total:",
+    "households": "5,000 hogares",
+    "fixedColumns": "10 columnas fijas ECRWSS",
+    "loading": "Generando previsualización…",
+    "noRecords": "Sin registros curados. Ejecuta el motor de propensión primero."
+  },
+  "specs": {
+    "suffix": "Sufijo de archivo",
+    "suffixVal": "_5000_ActionMail.csv",
+    "zipValidation": "Validación de ZIP",
+    "zipValidationVal": "ZIP+4 verificado contra CASS",
+    "carrierRoute": "Orden de reparto",
+    "carrierRouteVal": "CARRIER_ROUTE ASC + WALK_SEQUENCE ASC",
+    "urls": "URLs de trazabilidad",
+    "urlsVal": "Redirección corta con registro de escaneo"
+  },
+  "qr": {
+    "listTitle": "Trazabilidad de Códigos QR Dinámicos (14 Comercios)",
+    "listSubtitle": "Cada comercio cuenta con un código QR único que apunta a la URL base de redirección. La plataforma registra la IP, timestamp y dispositivo antes de redirigir al destino configurado.",
+    "slotPrefix": "SLOT #{{id}}",
+    "scans": "Total Escaneos Registrados",
+    "printHeader": "QR de producción · Slot #{{id}}",
+    "vectorDpi": "Vectorial · 300 DPI",
+    "copy": "Copiar URL Redirección",
+    "copied": "Copiado",
+    "simulateScan": "Simular Escaneo QR",
+    "simulateDescription": "Registra un escaneo de prueba desde {{city}} y persiste el contador en SQLite.",
+    "targetUrl": "URL de redirección del QR"
+  },
+  "telemetry": {
+    "title": "Telemetría de Escaneos",
+    "totalScans": "{{count}} escaneos totales",
+    "noScans": "Todavía no hay escaneos registrados.",
+    "noScansSub": "Simula un escaneo para ver el registro en vivo.",
+    "slotPrefix": "Slot #{{id}} · {{business}}",
+    "device": "Dispositivo:",
+    "ip": "IP:"
+  },
+  "alerts": {
+    "needCuration": "Ejecuta primero la curación: no hay hogares para exportar."
+  },
+  "columns": {
+    "recordId": "RECORD_ID",
+    "name": "NAME / CURRENT RESIDENT",
+    "address": "STREET_ADDRESS",
+    "city": "CITY",
+    "state": "STATE",
+    "zip": "ZIP_CODE",
+    "crrt": "CARRIER_ROUTE",
+    "walkSeq": "WALK_SEQUENCE",
+    "score": "PROPENSITY_SCORE",
+    "imb": "IMB_ROUTING_CODE"
+  },
+  "printer": {
+    "label": "Entrega a imprenta",
+    "body": "Descarga el CSV y envíalo a Action Mail / Inland Valley. Cuando lo tengan, sella la entrega: la sección 4 se abre y la campaña pasa a producción.",
+    "action": "Sellar entrega a imprenta",
+    "done": "Entregado",
+    "needDownload": "Ejecuta la curación y descarga el manifiesto antes de sellar."
+  }
+}

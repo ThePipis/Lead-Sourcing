@@ -1,0 +1,64 @@
+{
+  "source": {
+    "title": "Prospecting source",
+    "mockDescription": "Simulated prospects geolocated in Eastvale / Corona (92880 / 92882) at $0 cost.",
+    "liveDescription": "Live queries to Yelp Fusion API and Geoapify Places filtering rating ≥ 4.0 in microzone.",
+    "mockModeBtn": "🧪 Simulation Mode",
+    "liveModeBtn": "🌐 Live Search"
+  },
+  "categories": {
+    "title": "14 Closed Verticals with 1-on-1 Exclusivity",
+    "subtitle": "Filtering Yelp + Geoapify candidates (Rating ≥ 4.0, Reviews ≥ 15)",
+    "slotPrefix": "SLOT #{{id}}",
+    "frontSide": "Front Side",
+    "backSide": "Back Side",
+    "adCost": "Ad Cost: {{price}} USD",
+    "avgTicket": "Average Ticket: {{ticket}} USD",
+    "breakevenBadge": "🎯 Breakeven: {{deals}} {{clientText}} ({{ratio}} sales)",
+    "oneClient": "client",
+    "multiClients": "clients",
+    "currentStatus": "Current status of Slot #{{id}}:"
+  },
+  "llama": {
+    "title": "Llama.cpp local LLM",
+    "subtitle": "One-Shot scripts adapted to Ticket ${{ticket}} and Breakeven of {{deals}} {{clientText}}",
+    "spanishBtn": "Español (ES)",
+    "englishBtn": "English (EN)",
+    "hookHeader": "One-Shot Phone Closing Hook ({{lang}}):",
+    "copyPitch": "Copy Script",
+    "copied": "Copied",
+    "breakevenRoi": "Commercial Breakeven ROI:",
+    "investment": "Investment:",
+    "ticket": "Average Ticket: {{ticket}} USD",
+    "equilibrium": "Breakeven Point: {{deals}} {{clientText}} ({{ratio}} deals cover 100% of ad cost)",
+    "oneNewClient": "new client",
+    "multiNewClients": "new clients"
+  },
+  "crm": {
+    "loading": "Fetching prospects from Yelp Fusion and Geoapify Places in {{city}}…",
+    "loadingSub": "Applying filter rating ≥ 4.0 and reviews ≥ 15…",
+    "noLeads": "No prospects matching criteria found for this category in {{city}}.",
+    "top": "TOP #{{rank}}",
+    "reviews": "({{count}} reviews)",
+    "decisionMaker": "Decision Maker Detected:",
+    "visitWebsite": "Visit merchant website",
+    "crmStatus": "CRM Status:",
+    "contacted": "Contacted",
+    "contactedActive": "Contacted (Negotiating)",
+    "negotiatingInSlot": "Negotiating in Slot #{{slot}}",
+    "confirmReplaceContacted": "Slot #{{slot}} currently has \"{{current}}\". Do you want to replace it and set \"{{next}}\" to NEGOTIATING?",
+    "contactedBadge": "Contacted",
+    "negotiatingBadge": "In Negotiation",
+    "rejected": "Rejected",
+    "blocked": "Declined / Blocked",
+    "blockedNotice": "Merchant was released from this slot. Added to exclusion blacklist.",
+    "searchReplacement": "Find another merchant / vacancy",
+    "searchingReplacement": "Searching for replacement merchant...",
+    "assignSlot": "Sold / Assign to Slot #{{id}}",
+    "assigned": "Assigned to Slot"
+  },
+  "focus": {
+    "banner": "Sourcing a business for the {{category}} niche.",
+    "dismiss": "Show all niches"
+  }
+}

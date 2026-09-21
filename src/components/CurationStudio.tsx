@@ -1,24 +1,27 @@
 import React, { useState } from 'react';
-import { 
-  Sparkles, 
-  Database, 
-  BarChart3, 
-  Sliders, 
-  Layers, 
-  CheckCircle2, 
-  ArrowRight, 
-  Search, 
-  Download,
+import { useTranslation } from 'react-i18next';
+import { RouteEngine } from './RouteEngine.tsx';
+import {
+  Sparkles,
+  BarChart3,
+  Sliders,
+  CheckCircle2,
+  ArrowRight,
+  Search,
   AlertTriangle,
   Info,
   MapPin,
-  TrendingUp
 } from 'lucide-react';
 import { CLOSED_CATEGORIES } from '../data/categories.ts';
 import { Household, CurationSummary } from '../types.ts';
 
 interface CurationStudioProps {
   campaignCode: string;
+  /** Needed by the route engine, which stores its plan against the campaign. */
+  campaignId: string;
+  targetHouseholds: number;
+  /** Reports the routes' covered household count up to the ledger and the card. */
+  onCoverageChange: (covered: number, routeCount: number) => void;
   targetCity: string;
   targetZip: string;
   curatedHouseholds: Household[];
@@ -26,84 +29,74 @@ interface CurationStudioProps {
   isCurating: boolean;
   onRunCuration: () => void;
   onGoToExport: () => void;
+  /** Households already persisted for this campaign, independent of this session. */
+  persistedCount?: number;
+  /** Follows the app's world: a synthetic pool in the practice file. */
+  mockMode: boolean;
 }
 
 export const CurationStudio: React.FC<CurationStudioProps> = ({
-  campaignCode,
-  targetCity,
+  campaignId,
   targetZip,
+  targetHouseholds,
+  onCoverageChange,
+  targetCity,
   curatedHouseholds,
   curationSummary,
   isCurating,
   onRunCuration,
   onGoToExport,
+  persistedCount = 0,
+  mockMode,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'matrix' | 'records' | 'routes'>('overview');
+  const { t } = useTranslation(['curation', 'common']);
+  const [activeTab, setActiveTab] = useState<'overview' | 'matrix' | 'records' | 'routes'>(
+    'overview',
+  );
   const [searchTerm, setSearchTerm] = useState('');
-  const [dataSourceMode, setDataSourceMode] = useState<'MOCK' | 'DATA_AXLE'>('MOCK');
 
-  const filteredHouseholds = curatedHouseholds.filter((h) =>
-    h.residentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    h.streetAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    h.carrierRoute.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredHouseholds = curatedHouseholds.filter(
+    (h) =>
+      h.residentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      h.streetAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      h.carrierRoute.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   return (
     <div className="space-y-6">
+      {/* The audience is decided here, in carrier routes. Everything below —
+          the propensity engine's synthetic pool, the household table — describes
+          a drop whose real size this panel sets. */}
+      <RouteEngine
+        campaignId={campaignId}
+        targetZip={targetZip}
+        targetHouseholds={targetHouseholds}
+        onCoverageChange={onCoverageChange}
+      />
+
       {/* Curation Control Panel Header */}
-      <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span className="text-xs font-mono font-bold text-amber-400">
-              MÓDULO C • MOTOR VECTORIAL DE AFINIDAD CONJUNTA
-            </span>
-          </div>
-          <h2 className="text-xl font-bold text-white tracking-tight">
-            Algorithmic Audience Curation & Propensity Engine
-          </h2>
-          <p className="text-xs text-slate-400 max-w-3xl">
-            Sustituye los filtros booleanos rígidos de SQL por una matriz de ponderación demográfica multivariable. 
-            Calcula la afinidad conjunta acumulada con los 14 comercios y corta exactamente los 5,000 hogares con mayor probabilidad de respuesta.
-          </p>
-        </div>
+      <div className="flex flex-col gap-4 border border-border bg-card p-5 text-card-foreground transition-colors lg:flex-row lg:items-center">
+        <p className="min-w-0 sm:min-w-[34ch] max-w-[68ch] flex-1 text-xs leading-relaxed text-muted-foreground">
+          {t('curation:header.description')}
+        </p>
 
-        {/* Action button & Data mode toggle */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
-          <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
-            <button
-              onClick={() => setDataSourceMode('MOCK')}
-              className={`px-3 py-1.5 rounded-md font-semibold transition-all ${
-                dataSourceMode === 'MOCK' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Mock Engine (15k Hogares IE)
-            </button>
-            <button
-              onClick={() => setDataSourceMode('DATA_AXLE')}
-              className={`px-3 py-1.5 rounded-md font-semibold transition-all ${
-                dataSourceMode === 'DATA_AXLE' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Data Axle API (Sandbox)
-            </button>
-          </div>
-
+        {/* The data source follows the app's world, set once in the drawer. */}
+        <div className="flex w-full flex-col items-stretch gap-3 sm:flex-row sm:items-center lg:w-auto">
           <button
             id="btn-run-curation-engine"
-            onClick={onRunCuration}
+            onClick={() => onRunCuration()}
             disabled={isCurating}
-            className="px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 cursor-pointer transition-all"
+            className="px-5 py-2.5 text-xs font-bold uppercase tracking-wider bg-clear hover:opacity-90 text-background  flex items-center justify-center space-x-2 cursor-pointer transition-colors disabled:opacity-50"
           >
             {isCurating ? (
               <>
-                <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
-                <span>Procesando Matriz 15k...</span>
+                <div className="w-3.5 h-3.5 border border-white border-t-transparent  animate-spin"></div>
+                <span>{t('curation:header.processing')}</span>
               </>
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                <span>Ejecutar Curación (5,000)</span>
+                <span>{t('curation:header.runCuration')}</span>
               </>
             )}
           </button>
@@ -111,142 +104,203 @@ export const CurationStudio: React.FC<CurationStudioProps> = ({
       </div>
 
       {/* Mathematical Foundation Card */}
-      <div className="bg-slate-950 border border-slate-800/90 rounded-xl p-4 font-mono text-xs text-slate-300">
-        <div className="flex items-center space-x-2 text-amber-400 font-bold mb-2">
+      <div className="bg-secondary/40 border border-border p-4 font-mono text-xs text-foreground  transition-colors">
+        <div className="flex items-center space-x-2 text-primary font-bold mb-2">
           <Info className="w-4 h-4" />
-          <span>FORMULACIÓN MATEMÁTICA DEL MODELO DE PROPENSIDAD:</span>
+          <span>{t('curation:math.title')}</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-slate-900/90 p-3 rounded border border-slate-800">
-            <span className="text-slate-400 text-[11px]">1. Score de Afinidad Individual Negocio j con Hogar i:</span>
-            <p className="text-amber-300 font-bold text-sm my-1">
-              Match(i, j) = ∑ [ W_(j, k) × Hogar_(i, k) ]
+          <div className="bg-card p-3 border border-border ">
+            <span className="text-muted-foreground text-[0.69rem]">
+              {t('curation:math.individualScore')}
+            </span>
+            <p className="text-primary font-bold text-sm my-1">
+              {t('curation:math.individualFormula')}
             </p>
-            <p className="text-[10px] text-slate-400">
-              Donde W_(j,k) representa el peso asignado al atributo demográfico k para el giro comercial j.
+            <p className="text-[0.63rem] text-muted-foreground">
+              {t('curation:math.individualNote')}
             </p>
           </div>
 
-          <div className="bg-slate-900/90 p-3 rounded border border-slate-800">
-            <span className="text-slate-400 text-[11px]">2. Score Compuesto de la Postal H_i & Selección:</span>
-            <p className="text-emerald-300 font-bold text-sm my-1">
-              H_i = ∑_(j=1)^(14) Match(i, j) &nbsp;|&nbsp; Top 5,000 con max(H_i)
+          <div className="bg-card p-3 border border-border ">
+            <span className="text-muted-foreground text-[0.69rem]">
+              {t('curation:math.compositeScore')}
+            </span>
+            <p className="text-clear font-bold text-sm my-1">
+              {t('curation:math.compositeFormula')}
             </p>
-            <p className="text-[10px] text-slate-400">
-              Garantiza la máxima sinergia cruzada: un hogar debe ser relevante para múltiples comercios simultáneamente.
+            <p className="text-[0.63rem] text-muted-foreground">
+              {t('curation:math.compositeNote')}
             </p>
           </div>
         </div>
       </div>
 
       {/* Sub-navigation tabs */}
-      <div className="flex space-x-2 border-b border-slate-800 pb-2">
+      <div className="flex space-x-2 border-b border-border pb-2 overflow-x-auto scrollbar-none">
         <button
           onClick={() => setActiveTab('overview')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
-            activeTab === 'overview' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
+          className={`px-4 py-2 text-xs font-bold transition-colors cursor-pointer shrink-0 ${
+            activeTab === 'overview'
+              ? 'bg-primary text-primary-foreground '
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
           }`}
         >
-          Resumen & Métricas de Curation
+          {t('curation:tabs.overview')}
         </button>
         <button
           onClick={() => setActiveTab('matrix')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
-            activeTab === 'matrix' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
+          className={`px-4 py-2 text-xs font-bold transition-colors cursor-pointer shrink-0 ${
+            activeTab === 'matrix'
+              ? 'bg-primary text-primary-foreground '
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
           }`}
         >
-          Matriz de Ponderación W_(j,k)
+          {t('curation:tabs.matrix')}
         </button>
         <button
           onClick={() => setActiveTab('routes')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
-            activeTab === 'routes' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
+          className={`px-4 py-2 text-xs font-bold transition-colors cursor-pointer shrink-0 ${
+            activeTab === 'routes'
+              ? 'bg-primary text-primary-foreground '
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
           }`}
         >
-          Rutas de Transporte (CRRT)
+          {t('curation:tabs.routes')}
         </button>
         <button
           onClick={() => setActiveTab('records')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
-            activeTab === 'records' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
+          className={`px-4 py-2 text-xs font-bold transition-colors cursor-pointer shrink-0 ${
+            activeTab === 'records'
+              ? 'bg-primary text-primary-foreground '
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
           }`}
         >
-          Explorador de Hogares Seleccionados ({curatedHouseholds.length})
+          {t('curation:tabs.records', { count: curatedHouseholds.length })}
         </button>
       </div>
+
+      {/* Nothing to show until the engine has run at least once */}
+      {!curationSummary && (activeTab === 'overview' || activeTab === 'routes') && (
+        <div className="bg-card border border-border p-10 text-center space-y-3 text-card-foreground ">
+          <Sparkles className="w-6 h-6 text-muted-foreground mx-auto" />
+          <p className="text-sm font-semibold text-foreground">
+            {persistedCount > 0
+              ? t('curation:empty.persistedTitle', {
+                  count: persistedCount.toLocaleString('en-US'),
+                })
+              : t('curation:empty.title')}
+          </p>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            {persistedCount > 0
+              ? t('curation:empty.persistedDescription')
+              : t('curation:empty.description')}
+          </p>
+          <button
+            id="btn-run-curation-empty"
+            type="button"
+            onClick={() => onRunCuration()}
+            disabled={isCurating}
+            className="mt-2 inline-flex items-center gap-1.5 bg-primary px-4 py-2 text-xs font-bold text-primary-foreground disabled:opacity-50 cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>
+              {isCurating ? t('curation:header.processing') : t('curation:header.runCuration')}
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* TAB 1: OVERVIEW & HISTOGRAM */}
       {activeTab === 'overview' && curationSummary && (
         <div className="space-y-6">
           {/* Key Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-              <span className="text-xs text-slate-400">Población Analizada</span>
-              <p className="text-2xl font-bold font-mono text-white mt-1">
+            <div className="bg-card border border-border p-4 text-card-foreground ">
+              <span className="text-xs text-muted-foreground">
+                {t('curation:stats.totalAnalyzed')}
+              </span>
+              <p className="text-2xl font-bold font-mono text-foreground mt-1">
                 {curationSummary.totalAnalyzed.toLocaleString()}
               </p>
-              <p className="text-[11px] text-slate-500 mt-1">Hogares unifamiliares en radio 5 mi</p>
+              <p className="text-[0.69rem] text-muted-foreground mt-1">
+                {t('curation:stats.totalAnalyzedSub')}
+              </p>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-              <span className="text-xs text-slate-400">Hogares Seleccionados (Cut)</span>
-              <p className="text-2xl font-bold font-mono text-emerald-400 mt-1">
+            <div className="bg-card border border-border p-4 text-card-foreground ">
+              <span className="text-xs text-muted-foreground">
+                {t('curation:stats.totalSelected')}
+              </span>
+              <p className="text-2xl font-bold font-mono text-clear mt-1">
                 {curationSummary.totalSelected.toLocaleString()}
               </p>
-              <p className="text-[11px] text-slate-500 mt-1">Exactamente 5,000 para el tiro postal</p>
+              <p className="text-[0.69rem] text-muted-foreground mt-1">
+                {t('curation:stats.totalSelectedSub')}
+              </p>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-              <span className="text-xs text-slate-400">Score Promedio Seleccionado</span>
-              <p className="text-2xl font-bold font-mono text-amber-400 mt-1">
+            <div className="bg-card border border-border p-4 text-card-foreground ">
+              <span className="text-xs text-muted-foreground">{t('curation:stats.avgScore')}</span>
+              <p className="text-2xl font-bold font-mono text-live mt-1">
                 {curationSummary.avgScore}
               </p>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Rango: {curationSummary.minScore} a {curationSummary.maxScore} pts
+              <p className="text-[0.69rem] text-muted-foreground mt-1">
+                {t('curation:stats.avgScoreRange', {
+                  min: curationSummary.minScore,
+                  max: curationSummary.maxScore,
+                })}
               </p>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-              <span className="text-xs text-slate-400">Rutas Carrier (CRRT) Activas</span>
-              <p className="text-2xl font-bold font-mono text-sky-400 mt-1">
+            <div className="bg-card border border-border p-4 text-card-foreground ">
+              <span className="text-xs text-muted-foreground">
+                {t('curation:stats.carrierRoutes')}
+              </span>
+              <p className="text-2xl font-bold font-mono text-primary mt-1">
                 {curationSummary.carrierRouteDistribution.length}
               </p>
-              <p className="text-[11px] text-slate-500 mt-1">Para saturación postal con descuento USPS</p>
+              <p className="text-[0.69rem] text-muted-foreground mt-1">
+                {t('curation:stats.carrierRoutesSub')}
+              </p>
             </div>
           </div>
 
           {/* Histogram Chart & Visual Distribution */}
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-4">
+          <div className="bg-card border border-border p-5 space-y-4 text-card-foreground ">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-                  <BarChart3 className="w-4 h-4 text-amber-400" />
-                  <span>Distribución de Puntajes Compuestos H_i (Histograma de Afinidad)</span>
+                <h3 className="text-sm font-bold text-foreground flex items-center space-x-2">
+                  <BarChart3 className="w-4 h-4 text-primary" />
+                  <span>{t('curation:stats.histogramTitle')}</span>
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Frecuencia de hogares agrupados por rango de puntaje. La curva sesgada a la derecha demuestra alta afinidad colectiva.
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {t('curation:stats.histogramSub')}
                 </p>
               </div>
             </div>
 
             {/* Visual Histogram Bars */}
             <div className="pt-4 pb-2">
-              <div className="grid grid-cols-8 gap-2 items-end h-44 bg-slate-950 p-4 rounded-lg border border-slate-800">
+              <div className="grid grid-cols-8 gap-2 items-end h-44 bg-secondary/50 p-4 border border-border">
                 {curationSummary.scoreHistogram.map((bin, i) => {
                   const maxCount = Math.max(...curationSummary.scoreHistogram.map((b) => b.count));
                   const heightPercent = maxCount > 0 ? (bin.count / maxCount) * 100 : 0;
 
                   return (
                     <div key={i} className="flex flex-col items-center h-full justify-end group">
-                      <span className="text-[10px] font-mono text-slate-400 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-[0.63rem] font-mono text-muted-foreground mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         {bin.count}
                       </span>
                       <div
-                        className="w-full rounded-t bg-gradient-to-t from-emerald-600 to-amber-400 transition-all duration-500 hover:brightness-125 cursor-pointer"
+                        className="w-full bg-live transition-colors duration-500 hover:brightness-110 "
                         style={{ height: `${Math.max(8, heightPercent)}%` }}
-                        title={`Rango: ${bin.binRange} | Hogares: ${bin.count}`}
+                        title={t('curation:stats.histogramBarTitle', {
+                          range: bin.binRange,
+                          count: bin.count,
+                        })}
                       />
-                      <span className="text-[9px] font-mono text-slate-400 mt-2 rotate-[-45deg] origin-top-left truncate max-w-full">
+                      <span className="text-[0.56rem] font-mono text-muted-foreground mt-2 rotate-[-45deg] origin-top-left truncate max-w-full">
                         {bin.binRange}
                       </span>
                     </div>
@@ -258,27 +312,27 @@ export const CurationStudio: React.FC<CurationStudioProps> = ({
 
           {/* Comparison: Random EDDM vs Algorithmic Propensity */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-2">
-              <div className="flex items-center space-x-2 text-rose-400 font-bold text-xs">
+            <div className="bg-card border border-border p-4 space-y-2 text-card-foreground ">
+              <div className="flex items-center space-x-2 text-due font-bold text-xs">
                 <AlertTriangle className="w-4 h-4" />
-                <span>MÉTODO TRADICIONAL: EDDM ALEATORIO (SPRAY & PRAY)</span>
+                <span>{t('curation:comparison.eddmTitle')}</span>
               </div>
-              <ul className="text-xs text-slate-400 space-y-1.5 list-disc pl-4">
-                <li>Bombardea todas las casas de una ruta sin discriminar departamentos, casas alquiladas o desocupadas.</li>
-                <li>Hogares sin mascotas reciben ofertas de veterinaria (desperdicio neto de presupuesto).</li>
-                <li>Hogares en casas nuevas reciben ofertas de techado de 20 años (tasa de respuesta &lt; 0.4%).</li>
+              <ul className="text-xs text-muted-foreground space-y-1.5 list-disc pl-4 leading-relaxed">
+                <li>{t('curation:comparison.eddm1')}</li>
+                <li>{t('curation:comparison.eddm2')}</li>
+                <li>{t('curation:comparison.eddm3')}</li>
               </ul>
             </div>
 
-            <div className="bg-slate-900 border border-emerald-900/60 p-4 rounded-xl space-y-2 bg-emerald-950/10">
-              <div className="flex items-center space-x-2 text-emerald-400 font-bold text-xs">
+            <div className="bg-clear/10 border border-clear/40 p-4 space-y-2 text-card-foreground ">
+              <div className="flex items-center space-x-2 text-clear font-bold text-xs">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>NUESTRO MOTOR: CURACIÓN ALGORÍTMICA VECTORIAL</span>
+                <span>{t('curation:comparison.curationTitle')}</span>
               </div>
-              <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4">
-                <li>Solo hogares que tienen alta resonancia conjunta con 8 o más de los 14 giros comerciales.</li>
-                <li>Concentración probada en familias con alto ingreso disponible, viviendas propias y múltiples vehículos.</li>
-                <li>Tasa de respuesta estimada de 2.8% a 4.2% con retorno sobre inversión inmediato.</li>
+              <ul className="text-xs text-foreground space-y-1.5 list-disc pl-4 leading-relaxed">
+                <li>{t('curation:comparison.curation1')}</li>
+                <li>{t('curation:comparison.curation2')}</li>
+                <li>{t('curation:comparison.curation3')}</li>
               </ul>
             </div>
           </div>
@@ -286,9 +340,9 @@ export const CurationStudio: React.FC<CurationStudioProps> = ({
           <div className="flex justify-end pt-2">
             <button
               onClick={onGoToExport}
-              className="px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center space-x-2 transition-all shadow-md"
+              className="px-5 py-2.5 text-xs font-bold uppercase tracking-wider bg-primary hover:bg-primary/90 text-primary-foreground flex items-center space-x-2 transition-colors  cursor-pointer"
             >
-              <span>Continuar a Exportación Postal y Códigos QR</span>
+              <span>{t('curation:comparison.continueExport')}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -297,45 +351,64 @@ export const CurationStudio: React.FC<CurationStudioProps> = ({
 
       {/* TAB 2: DEMOGRAPHIC WEIGHTS MATRIX W_{j,k} */}
       {activeTab === 'matrix' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden p-4 space-y-3">
+        <div className="bg-card border border-border overflow-hidden p-4 space-y-3 text-card-foreground ">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-              <Sliders className="w-4 h-4 text-amber-400" />
-              <span>Matriz de Coeficientes de Ponderación W_(j, k) (14 Nichos × 7 Atributos)</span>
+            <h3 className="text-sm font-bold text-foreground flex items-center space-x-2">
+              <Sliders className="w-4 h-4 text-primary" />
+              <span>{t('curation:matrix.title')}</span>
             </h3>
-            <span className="text-xs text-slate-400 font-mono">Escala de Ponderación: 0.00 a 1.00</span>
+            <span className="text-xs text-muted-foreground font-mono">
+              {t('curation:matrix.scale')}
+            </span>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left border-collapse font-mono">
               <thead>
-                <tr className="bg-slate-950 text-slate-300 border-b border-slate-800">
-                  <th className="py-2.5 px-3 font-bold"># Giro Comercial</th>
-                  <th className="py-2.5 px-3 text-right">Ingresos</th>
-                  <th className="py-2.5 px-3 text-right">Casa Propia</th>
-                  <th className="py-2.5 px-3 text-right">Antigüedad Casa</th>
-                  <th className="py-2.5 px-3 text-right">Hijos</th>
-                  <th className="py-2.5 px-3 text-right">Vehículos</th>
-                  <th className="py-2.5 px-3 text-right">Mascotas</th>
-                  <th className="py-2.5 px-3 text-right">Valor Inmueble</th>
+                <tr className="bg-secondary text-secondary-foreground border-b border-border">
+                  <th className="py-2.5 px-3 font-bold">{t('curation:matrix.colCategory')}</th>
+                  <th className="py-2.5 px-3 text-right">{t('curation:matrix.colIncome')}</th>
+                  <th className="py-2.5 px-3 text-right">
+                    {t('curation:matrix.colHomeOwnership')}
+                  </th>
+                  <th className="py-2.5 px-3 text-right">{t('curation:matrix.colHomeAge')}</th>
+                  <th className="py-2.5 px-3 text-right">{t('curation:matrix.colChildren')}</th>
+                  <th className="py-2.5 px-3 text-right">{t('curation:matrix.colVehicles')}</th>
+                  <th className="py-2.5 px-3 text-right">{t('curation:matrix.colPets')}</th>
+                  <th className="py-2.5 px-3 text-right">{t('curation:matrix.colHomeValue')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-border">
                 {CLOSED_CATEGORIES.map((cat) => {
                   const w = cat.demographicWeights;
+                  const catName = t(`common:categories.${cat.id}.name`, cat.name);
                   return (
-                    <tr key={cat.id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="py-2 px-3 text-white font-medium">
-                        <span className="text-amber-400 mr-2">#{cat.id}</span>
-                        {cat.name}
+                    <tr key={cat.id} className="hover:bg-muted/50 transition-colors">
+                      <td className="py-2 px-3 text-foreground font-medium">
+                        <span className="text-primary mr-2 font-bold">#{cat.id}</span>
+                        {catName}
                       </td>
-                      <td className="py-2 px-3 text-right text-emerald-400 font-bold">{w.income.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-right text-sky-400 font-bold">{w.homeOwnership.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-right text-amber-300">{w.homeAgeYears.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-right text-purple-400">{w.childrenPresent.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-right text-cyan-400">{w.vehiclesCount.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-right text-rose-400 font-bold">{w.petOwner.toFixed(2)}</td>
-                      <td className="py-2 px-3 text-right text-slate-300">{w.homeValue.toFixed(2)}</td>
+                      <td className="py-2 px-3 text-right text-clear font-bold">
+                        {w.income.toFixed(2)}
+                      </td>
+                      <td className="py-2 px-3 text-right text-ink font-bold">
+                        {w.homeOwnership.toFixed(2)}
+                      </td>
+                      <td className="py-2 px-3 text-right text-live">
+                        {w.homeAgeYears.toFixed(2)}
+                      </td>
+                      <td className="py-2 px-3 text-right text-ink ">
+                        {w.childrenPresent.toFixed(2)}
+                      </td>
+                      <td className="py-2 px-3 text-right text-ink ">
+                        {w.vehiclesCount.toFixed(2)}
+                      </td>
+                      <td className="py-2 px-3 text-right text-due font-bold">
+                        {w.petOwner.toFixed(2)}
+                      </td>
+                      <td className="py-2 px-3 text-right text-muted-foreground">
+                        {w.homeValue.toFixed(2)}
+                      </td>
                     </tr>
                   );
                 })}
@@ -347,27 +420,36 @@ export const CurationStudio: React.FC<CurationStudioProps> = ({
 
       {/* TAB 3: CARRIER ROUTES BREAKDOWN */}
       {activeTab === 'routes' && curationSummary && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div className="bg-card border border-border p-5 space-y-4 text-card-foreground ">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-              <MapPin className="w-4 h-4 text-amber-400" />
-              <span>Distribución por Rutas de Cartero (USPS Carrier Routes - CRRT)</span>
+            <h3 className="text-sm font-bold text-foreground flex items-center space-x-2">
+              <MapPin className="w-4 h-4 text-primary" />
+              <span>{t('curation:routes.title')}</span>
             </h3>
-            <span className="text-xs text-slate-400 font-mono">
-              Total: {curationSummary.totalSelected.toLocaleString()} destinatarios
+            <span className="text-xs text-muted-foreground font-mono">
+              {t('curation:routes.total', {
+                count: curationSummary.totalSelected.toLocaleString(),
+              })}
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {curationSummary.carrierRouteDistribution.map((cr) => (
-              <div key={cr.route} className="bg-slate-950 p-3.5 rounded-lg border border-slate-800 flex items-center justify-between">
+              <div
+                key={cr.route}
+                className="bg-secondary/50 p-3.5 border border-border flex items-center justify-between "
+              >
                 <div>
-                  <span className="text-xs font-mono font-bold text-amber-400">{cr.route}</span>
-                  <p className="text-[11px] text-slate-400">{targetCity}, CA {cr.zip}</p>
+                  <span className="text-xs font-mono font-bold text-primary">{cr.route}</span>
+                  <p className="text-[0.69rem] text-muted-foreground">
+                    {targetCity}, CA {cr.zip}
+                  </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-base font-bold font-mono text-white">{cr.count}</span>
-                  <p className="text-[10px] text-slate-500">hogares</p>
+                  <span className="text-base font-bold font-mono text-foreground">{cr.count}</span>
+                  <p className="text-[0.63rem] text-muted-foreground">
+                    {t('curation:routes.households')}
+                  </p>
                 </div>
               </div>
             ))}
@@ -377,44 +459,51 @@ export const CurationStudio: React.FC<CurationStudioProps> = ({
 
       {/* TAB 4: HOUSEHOLDS EXPLORER */}
       {activeTab === 'records' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden p-4 space-y-3">
+        <div className="bg-card border border-border overflow-hidden p-4 space-y-3 text-card-foreground ">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+              <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-2.5" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por nombre, calle o ruta (ej: Citrus, C012)..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                placeholder={t('curation:records.searchPlaceholder')}
+                className="w-full bg-background border border-border pl-9 pr-3 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary "
               />
             </div>
-            <span className="text-xs text-slate-400 font-mono self-center">
-              Mostrando {filteredHouseholds.length} de {curatedHouseholds.length} hogares
+            <span className="text-xs text-muted-foreground font-mono self-center">
+              {t('curation:records.showing', {
+                filtered: filteredHouseholds.length,
+                total: curatedHouseholds.length,
+              })}
             </span>
           </div>
 
           <div className="overflow-x-auto max-h-[500px]">
             <table className="w-full text-xs text-left border-collapse font-mono">
-              <thead className="sticky top-0 bg-slate-950 z-10 border-b border-slate-800 text-slate-300">
+              <thead className="sticky top-0 bg-secondary text-secondary-foreground z-10 border-b border-border">
                 <tr>
-                  <th className="py-2.5 px-3">ID Hogar</th>
-                  <th className="py-2.5 px-3">Destinatario</th>
-                  <th className="py-2.5 px-3">Dirección Residencial</th>
-                  <th className="py-2.5 px-3">Ruta CRRT</th>
-                  <th className="py-2.5 px-3 text-right">Secuencia</th>
-                  <th className="py-2.5 px-3 text-right">Score H_i</th>
+                  <th className="py-2.5 px-3">{t('curation:records.colId')}</th>
+                  <th className="py-2.5 px-3">{t('curation:records.colRecipient')}</th>
+                  <th className="py-2.5 px-3">{t('curation:records.colAddress')}</th>
+                  <th className="py-2.5 px-3">{t('curation:records.colCrrt')}</th>
+                  <th className="py-2.5 px-3 text-right">{t('curation:records.colSequence')}</th>
+                  <th className="py-2.5 px-3 text-right">{t('curation:records.colScore')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 text-slate-300">
+              <tbody className="divide-y divide-border text-foreground">
                 {filteredHouseholds.slice(0, 100).map((h) => (
-                  <tr key={h.id} className="hover:bg-slate-800/50 transition-colors">
-                    <td className="py-2 px-3 text-amber-400 font-bold">{h.id}</td>
-                    <td className="py-2 px-3 text-white font-medium">{h.residentName}</td>
-                    <td className="py-2 px-3 text-slate-400">{h.streetAddress}, {h.city} {h.zip5}</td>
-                    <td className="py-2 px-3 text-sky-400 font-bold">{h.carrierRoute}</td>
-                    <td className="py-2 px-3 text-right text-slate-400">{h.walkSequence}</td>
-                    <td className="py-2 px-3 text-right text-emerald-400 font-bold">{h.compositeScore}</td>
+                  <tr key={h.id} className="hover:bg-muted/50 transition-colors">
+                    <td className="py-2 px-3 text-primary font-bold">{h.id}</td>
+                    <td className="py-2 px-3 text-foreground font-medium">{h.residentName}</td>
+                    <td className="py-2 px-3 text-muted-foreground">
+                      {h.streetAddress}, {h.city} {h.zip5}
+                    </td>
+                    <td className="py-2 px-3 text-ink font-bold">{h.carrierRoute}</td>
+                    <td className="py-2 px-3 text-right text-muted-foreground">{h.walkSequence}</td>
+                    <td className="py-2 px-3 text-right text-clear font-bold">
+                      {h.compositeScore}
+                    </td>
                   </tr>
                 ))}
               </tbody>

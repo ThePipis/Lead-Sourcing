@@ -6,3 +6,37 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Markdown Files (Documentation, Plans, Tasks, Notes)
+*.md
+
+# AI Agents & Assistants Tooling
+.agents/
+.claude/
+.serena/
+.impeccable/
+tasks/
+skills-lock.json
+
+# IDE & Editors
+.vscode/
+.idea/
+
+# Python Environments & Cache
+backend/venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Databases & Local SQLite
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Cloudflare & Wrangler
+.wrangler/
+
+# Temporary Test Artifacts & Screenshots
+*.png

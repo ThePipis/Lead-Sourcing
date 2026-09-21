@@ -1,0 +1,541 @@
+{
+  "nav": {
+    "tablero": "1. Tablero 12\"×9\" & Slots",
+    "leadSourcing": "2. Lead Sourcing (Yelp + LLM)",
+    "propensityEngine": "3. Propensity Engine (5k Hogares)",
+    "postalExport": "4. QR & Exportación Postal",
+    "architectureFastApi": "Arquitectura FastAPI & DB"
+  },
+  "status": {
+    "vacant": "VACANTE",
+    "negotiating": "NEGOCIANDO",
+    "reserved": "RESERVADO",
+    "paid": "PAGADO",
+    "vacantBadge": "VACANTE",
+    "negotiatingBadge": "NEGOCIANDO",
+    "reservedBadge": "RESERVADO",
+    "paidBadge": "PAGADO"
+  },
+  "statusLabel": {
+    "vacant": "Vacante",
+    "negotiating": "Negociando",
+    "reserved": "Reservado",
+    "paid": "Pagado"
+  },
+  "buttons": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "export": "Exportar",
+    "loading": "Cargando…",
+    "saving": "Guardando…",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "close": "Cerrar",
+    "search": "Buscar",
+    "download": "Descargar"
+  },
+  "header": {
+    "title": "Co-Op Direct Mail Platform",
+    "badge": "Inland Empire, CA",
+    "subtitle": "Postal Gigante 12\"×9\" • Motor de Curación por Propensión Algorítmica",
+    "microzoneLabel": "Microzona",
+    "statusProspecting": "PROSPECCIÓN ({{count}}/14 PAGADOS)",
+    "statusFloorMet": "PISO OPERATIVO ALCANZADO",
+    "toggleThemeLight": "Modo Claro",
+    "toggleThemeDark": "Modo Oscuro",
+    "language": "Idioma",
+    "switchTo": "Cambiar idioma a {{lang}}"
+  },
+  "alerts": {
+    "sqliteConnected": "SQLite Conectado",
+    "sqliteDisconnected": "SQLite Desconectado",
+    "errorOccurred": "Ocurrió un error inesperado.",
+    "syncing": "Sincronizando…"
+  },
+  "categories": {
+    "1": {
+      "name": "Odontología Familiar",
+      "niche": "Odontología Familiar e Implantes",
+      "description": "Espacio dominante en cabecera frontal. Máximo impacto visual garantizado en la primera impresión postal.",
+      "defaultHeadline": "Sonrisas Saludables para Toda la Familia | $79 Examen + Limpieza + Rayos X"
+    },
+    "2": {
+      "name": "HVAC / Aire Acondicionado",
+      "niche": "HVAC & Calefacción Residencial",
+      "description": "Posición estándar frontal. Alta tasa de conversión en recambio estacional y tune-up en el calor del IE.",
+      "defaultHeadline": "Evite el Golpe de Calor en el IE | $49 A/C Super Tune-Up + 15% Descuento Sistema Completo"
+    },
+    "3": {
+      "name": "Hospital Veterinario",
+      "niche": "Hospital Veterinario & Urgencias",
+      "description": "Posición estándar frontal. Conexión emocional inmediata con dueños de mascotas de alto poder adquisitivo.",
+      "defaultHeadline": "Cuidado Médico Compasivo 7 Días | 50% de Descuento en Primera Consulta Preventiva"
+    },
+    "4": {
+      "name": "Plomería Residencial",
+      "niche": "Plomería de Emergencia & Desazolve",
+      "description": "Posición estándar frontal. Alta frecuencia de consulta en residencias con más de 10 años de construcción.",
+      "defaultHeadline": "Plomeros de Confianza 24/7 | $50 Off Desazolve de Drenaje o Inspección con Cámara Gratis"
+    },
+    "5": {
+      "name": "Taller Mecánico / Frenos",
+      "niche": "Mecánica Automotriz & Frenos",
+      "description": "Posición estándar frontal. Enfoque en hogares con 2 a 4 vehículos de uso diario en commute al condado de Orange/LA.",
+      "defaultHeadline": "Viaje Seguro por la Autopista | $99 Frenos Completos Por Eje + Diagnóstico Computarizado"
+    },
+    "6": {
+      "name": "Pizzería Artesanal",
+      "niche": "Pizzería Artesanal a la Leña",
+      "description": "Posición estándar frontal. Imanes de nevera y cupones de alto canje para cenas familiares de fin de semana.",
+      "defaultHeadline": "Masa Madre al Horno de Piedra | Compra 1 Pizza Grande y Lleva la Segunda al 50%"
+    },
+    "7": {
+      "name": "Gimnasio Boutique / CrossFit",
+      "niche": "CrossFit & Fitness Comunitario",
+      "description": "Posición estándar frontal. Impulso a metas de salud en familias jóvenes de Eastvale y Corona.",
+      "defaultHeadline": "Transforme su Salud Este Mes | 14 Días VIP Pass Ilimitado + Sesión de Coaching Gratis"
+    },
+    "8": {
+      "name": "Techado / Roofing",
+      "niche": "Tejados Residenciales & Paneles",
+      "description": "Posición estándar posterior. Alto ticket promedio en reemplazo completo y mantenimiento preventivo post-lluvias.",
+      "defaultHeadline": "Proteja su Mayor Inversión | $500 Off en Reemplazo Completo de Techo + Inspección 100% Gratis"
+    },
+    "9": {
+      "name": "Quiropráctico / Fisioterapia",
+      "niche": "Quiropráctica & Alivio de Dolor",
+      "description": "Posición estándar posterior. Alivio para trabajadores y deportistas que sufren lesiones posturales o accidentes.",
+      "defaultHeadline": "Viva Sin Dolor de Espalda | $29 Consulta Inicial + Ajuste Quiropráctico + Terapia de Masaje"
+    },
+    "10": {
+      "name": "Limpieza de Alfombras / Tapetes",
+      "niche": "Limpieza a Vapor & Desinfección",
+      "description": "Posición estándar posterior. Servicio esencial para hogares familiares con niños pequeños y mascotas.",
+      "defaultHeadline": "Hogar Impecable y Libre de Alérgenos | 3 Habitaciones por solo $99 (Limpieza Profunda a Vapor)"
+    },
+    "11": {
+      "name": "Detailing Automotriz Móvil",
+      "niche": "Estética Automotriz a Domicilio",
+      "description": "Posición estándar posterior. Servicio premium a domicilio para propietarios de camionetas y sedanes de lujo.",
+      "defaultHeadline": "Brillo de Exhibición en su Cochera | $120 Paquete Cerámico Completo Interior + Exterior a Domicilio"
+    },
+    "12": {
+      "name": "Grooming Móvil Canino",
+      "niche": "Estética Canina en Van Equipada",
+      "description": "Posición estándar posterior. Comodidad absoluta en la puerta del hogar para familias ocupadas con mascotas.",
+      "defaultHeadline": "Spa VIP para su Mascota sin Estrés | $15 Off en Primer Baño y Corte Estilizado en su Puerta"
+    },
+    "13": {
+      "name": "Restaurante Mexicano Auténtico",
+      "niche": "Cocina Tradicional Familiar",
+      "description": "Posición estándar posterior. El punto de reunión gastronómico preferido para celebraciones y cenas de fin de semana.",
+      "defaultHeadline": "Sabor Casero y Tradición en Cada Platillo | Aperitivo Gratis con la Compra de 2 Entradas"
+    },
+    "14": {
+      "name": "Agencia de Seguros",
+      "niche": "Seguros de Auto, Hogar & Vida",
+      "description": "Espacio Medium ancho (~7\"×3\") en la cara posterior. Posición estratégica junto al cuadro postal de USPS.",
+      "defaultHeadline": "Ahorre hasta $600/Año en Pólizas Combinadas | Cotización Rápida en 5 Minutos Sin Compromiso"
+    }
+  },
+  "architecture": {
+    "tag": "FULL-STACK ENTERPRISE SYSTEM ARCHITECTURE",
+    "title": "FastAPI Backend + React Frontend + SpatiaLite / PostGIS",
+    "description": "Arquitectura desacoplada de alto rendimiento. Diseñada para procesar matrices vectoriales con NumPy en milisegundos, orquestar APIs externas (Yelp, Geoapify, Data Axle, Llama.cpp) y exportar manifiestos conformes con las especificaciones técnicas postales.",
+    "stackBadge": "FastAPI 0.115 + Pydantic v2 + SQLAlchemy 2.0",
+    "treeTitle": "1. Estructura Completa de Directorios y Archivos",
+    "copyTree": "Copiar Árbol",
+    "codeTitle": "2. Código de Producción Backend (FastAPI / Python)",
+    "copyCode": "Copiar Código",
+    "copied": "Copiado"
+  },
+  "footer": {
+    "copyright": "Co-Op Direct Mail Platform • Operaciones de Correo Compartido en Inland Empire",
+    "specs": "USPS Marketing Mail ECRWSS • Certificado CASS/NCOA • Especificación Action Mail"
+  },
+  "file": {
+    "title": "Archivo de campañas",
+    "subtitle": "Cada campaña es un impreso de aceptación de cuatro secciones. Se trabajan en orden: una sección no abre hasta que la anterior está sellada.",
+    "count": "{{count}} en archivo",
+    "loading": "Abriendo el archivo…",
+    "others": "Resto del archivo",
+    "open": "Abrir impreso",
+    "mailed": "Depositada",
+    "collected": "Cobrado",
+    "slotsOwed": "Espacios por cobrar",
+    "households": "Hogares curados",
+    "zip": "ZIP",
+    "newLabel": "Abrir impreso nuevo",
+    "pickZone": "Elige una microzona…",
+    "allZonesUsed": "Todas las microzonas ya tienen impreso",
+    "create": "Abrir impreso",
+    "creating": "Abriendo…",
+    "sectionsDone": "{{done}} de {{total}} secciones selladas",
+    "loadError": "No se pudo leer el archivo: {{error}}",
+    "spec": "Especificación FastAPI & DB",
+    "emptyLiveTitle": "Aquí empieza tu primera campaña real",
+    "emptyLiveBody": "El archivo en vivo está vacío a propósito. Elige una microzona abajo y abre el impreso: la campaña nace con sus 14 espacios vacíos y la app te dirá, paso a paso, qué hacer en cada momento.",
+    "emptyDemoTitle": "El archivo de práctica está vacío",
+    "emptyDemoBody": "No queda ninguna campaña de simulación. Abre una nueva abajo para volver a practicar el proceso completo.",
+    "createConflict": "Ya existe una campaña de este mes para {{zone}}. Ábrela desde el archivo o espera al mes siguiente.",
+    "sizeLabel": "Hogares de la tirada",
+    "sizeHint": "Elige primero la microzona: el mínimo lo pone el correo, no esta casilla. El cartero reparte rutas completas, así que el envío más chico posible es la ruta más pequeña del ZIP.",
+    "sizeLocked": "El tamaño queda fijo en cuanto cobras el primer espacio: ese comercio compró un alcance concreto.",
+    "costPerPiece": "Costo por pieza",
+    "indexTitle": "Índice del archivo",
+    "filters": {
+      "active": "Activas",
+      "archived": "Archivadas",
+      "all": "Todas"
+    },
+    "newToggle": "Abrir impreso nuevo",
+    "newClose": "Cerrar",
+    "archive": "Archivar",
+    "unarchive": "Devolver al archivo activo",
+    "archivedTag": "Archivada",
+    "delete": "Eliminar",
+    "deleteBlocked": "No se puede eliminar: ya tiene cobros registrados o la tirada está en imprenta. Archívala.",
+    "confirmDelete": "¿Eliminar?",
+    "confirmYes": "Sí, eliminar",
+    "confirmNo": "No",
+    "emptyIndex": "El archivo activo está vacío.",
+    "emptyArchived": "Nada archivado todavía.",
+    "deleteFailed": "No se pudo eliminar: la campaña ya tiene cobros registrados o está en imprenta. Archívala en su lugar.",
+    "leadTag": "En curso",
+    "sizeHintFloor": "El cartero reparte rutas completas, no casas sueltas. En el {{zip}} la ruta más pequeña tiene {{floor}} buzones: ese es el envío más chico posible y el mínimo de esta casilla. De este número salen el precio de los 14 espacios y el costo de la tirada.",
+    "sizeHintNoFloor": "No se pudo consultar las rutas del {{zip}} en el USPS, así que el mínimo real se desconoce. El sistema tomará rutas enteras hasta cubrir tu meta y te dirá cuántos buzones son de verdad.",
+    "sizeHintLoading": "Consultando en el USPS las rutas del {{zip}} para saber cuál es el envío más chico posible…"
+  },
+  "form": {
+    "backToFile": "Archivo",
+    "saving": "Guardando",
+    "expert": "Modo experto",
+    "expertHint": "Puertas desbloqueadas. Solo en desarrollo; Ctrl+Shift+E para salir.",
+    "stamped": "Sellado",
+    "reserved": "Para uso posterior",
+    "stockLight": "Papel",
+    "stockDark": "Retroiluminado",
+    "section": {
+      "slots": "1 · Venta de espacios",
+      "curation": "2 · Curación de audiencia",
+      "manifest": "3 · Manifiesto postal",
+      "production": "4 · Producción y resultados"
+    },
+    "summary": {
+      "slots": "{{paid}} de {{total}} espacios pagados",
+      "curationDone": "{{count}} hogares curados y persistidos",
+      "curationPending": "Motor de propensión sin ejecutar",
+      "manifestDone": "Manifiesto entregado a imprenta",
+      "manifestPending": "CSV de 5,000 filas sin cortar",
+      "productionMailed": "Tirada depositada en USPS",
+      "productionPending": "En imprenta, sin depositar"
+    },
+    "blocked": {
+      "curation": "Requiere el piso operativo de {{floor}} espacios pagados. Faltan {{missing}}.",
+      "manifest": "Requiere la sección 2 sellada: sin hogares curados no hay manifiesto que cortar.",
+      "production": "Requiere la sección 3 sellada: nada se deposita antes de imprimirse.",
+      "curationCost": "Requiere cubrir el costo de la tirada. Faltan ${{missing}} por cobrar."
+    },
+    "imperative": {
+      "fillSlot": "Conseguir comercio para el espacio {{slot}}",
+      "collectSlot": "Registrar el cobro del espacio {{slot}}",
+      "runCuration": "Ejecutar el motor de propensión",
+      "exportManifest": "Cortar y entregar el manifiesto",
+      "markMailed": "Registrar el depósito en USPS",
+      "complete": "Campaña completa · mide los escaneos"
+    },
+    "savedAt": "Guardado {{time}}",
+    "savedTitle": "Cada cambio se escribe solo en SQLite; no hay botón de guardar."
+  },
+  "payment": {
+    "title": "Registro de cobro · espacio {{slot}}",
+    "noBusiness": "Sin comercio asignado",
+    "reference": "Forma de pago",
+    "referencePlaceholder": "Escribe la referencia",
+    "amount": "Importe cobrado (USD)",
+    "listPrice": "Precio de lista: ${{price}}",
+    "date": "Fecha del cobro",
+    "belowList": "${{diff}} por debajo del precio de lista. Se registra el importe real.",
+    "cancel": "Cancelar",
+    "confirm": "Sellar como pagado",
+    "methods": {
+      "zelle": "Zelle",
+      "check": "Cheque",
+      "transfer": "Transferencia bancaria",
+      "cash": "Efectivo",
+      "other": "Otro (escribir)"
+    }
+  },
+  "production": {
+    "printedOn": "Entregado a imprenta",
+    "mailedOn": "Depositado en USPS",
+    "households": "Hogares en la tirada",
+    "awaitingLabel": "Tirada en imprenta",
+    "awaitingBody": "La imprenta tiene el manifiesto. Cuando Action Mail confirme el depósito en USPS, séllalo aquí: a partir de ese momento los escaneos QR que lleguen son resultado de esta tirada.",
+    "markMailed": "Sellar depósito en USPS",
+    "resultsTitle": "Escaneos por comercio",
+    "totalScans": "{{count}} escaneos totales",
+    "noScans": "Todavía no llega ningún escaneo. Los primeros suelen aparecer entre 3 y 7 días después del depósito.",
+    "renewalNote": "{{business}} lidera con {{count}} escaneos. Es el argumento para venderle la siguiente tirada.",
+    "colSlot": "Espacio",
+    "colBusiness": "Comercio",
+    "colScans": "Escaneos",
+    "unnamed": "Sin comercio"
+  },
+  "finance": {
+    "collected": "Cobrado",
+    "contracted": "Valor de la tarjeta",
+    "cost": "Costo operativo",
+    "margin": "Margen si se completa",
+    "floorMet": "Piso operativo alcanzado",
+    "floorMissing": "Faltan {{missing}} espacios para el piso de {{floor}}",
+    "floorMissingCost": "Faltan ${{missing}} para cubrir la tirada de {{households}} hogares",
+    "fromRoutes": "Sobre {{households}} piezas reales de {{routes}} rutas"
+  },
+  "tour": {
+    "label": "Tutorial guiado",
+    "step": "Paso {{current}} de {{total}}",
+    "skip": "Saltar tutorial",
+    "back": "Anterior",
+    "next": "Siguiente",
+    "done": "Entendido",
+    "replay": "¿Cómo funciona?",
+    "file1": {
+      "title": "Esto es el archivo",
+      "body": "Cada línea es una campaña: una tirada de postales a 5,000 hogares de una microzona. Aquí no se trabaja, aquí solo eliges cuál abrir."
+    },
+    "file2": {
+      "title": "La app te dice qué toca",
+      "body": "Esta línea en ámbar es lo único pendiente de esta campaña. No tienes que decidir por dónde seguir: haz eso y la app te dará la siguiente orden."
+    },
+    "file3": {
+      "title": "Las cuatro casillas",
+      "body": "Toda campaña pasa por cuatro secciones, siempre en el mismo orden. Verde es sellada. Rayada es cerrada todavía, porque le falta terminar la anterior."
+    },
+    "file4": {
+      "title": "Lo rojo se debe",
+      "body": "Rojo siempre significa dinero sin cobrar o un paso bloqueado. Verde significa liquidado. El color nunca se usa de adorno, así que puedes fiarte de él."
+    },
+    "file5": {
+      "title": "Para empezar de cero",
+      "body": "Elige una microzona aquí y abre un impreso nuevo. La campaña nace con sus 14 espacios vacíos y la app te pedirá el primero."
+    },
+    "form1": {
+      "title": "Una sola orden a la vez",
+      "body": "Arriba está siempre lo único que toca hacer ahora. Si te pierdes en cualquier momento, lee esta línea y haz eso."
+    },
+    "form2": {
+      "title": "Se trabaja en la sección abierta",
+      "body": "Ábrela y dentro tienes los controles de ese paso. Nada de lo que veas fuera de ella te hace falta todavía."
+    },
+    "form3": {
+      "title": "Las cerradas te dicen por qué",
+      "body": "Una sección rayada no está rota ni te falta un permiso: te dice qué le falta para abrirse. En cuanto eso se cumpla, se abre sola."
+    },
+    "form4": {
+      "title": "Puedes salir cuando quieras",
+      "body": "Todo se guarda solo en cuanto lo haces. Vuelve al archivo y la campaña queda exactamente donde la dejaste."
+    },
+    "file1b": {
+      "title": "Primero: ¿práctica o de verdad?",
+      "body": "En Simulación hay campañas ya cargadas para que practiques sin consecuencias. En vivo empieza vacío a propósito: es donde harás tu primera campaña real, de cero y paso a paso."
+    },
+    "file6": {
+      "title": "El índice del archivo",
+      "body": "Aquí está todo lo que has abierto alguna vez. ACTIVAS es lo que trabajas hoy; ARCHIVADAS es lo que quitaste de en medio sin borrarlo. La lista tiene su propio scroll: tengas 3 campañas o 50, esta pantalla mide lo mismo."
+    },
+    "file7": {
+      "title": "Archivar y eliminar",
+      "body": "El primer icono archiva: la campaña se va de la lista pero conserva espacios, dinero y audiencia, y puedes devolverla cuando quieras. El segundo elimina de verdad, y te pide confirmación. En vivo se bloquea si ya cobraste algo o la tirada está en imprenta: eso es un registro de negocio, no un estorbo."
+    },
+    "file8": {
+      "title": "Si no entiendes algo, pregúntale",
+      "body": "El asistente conoce este sistema: fórmulas, siglas del correo, reglas, cómo se hace cada cosa. Responde solo con la documentación y te enseña de dónde lo sacó. Corre en tu propio servidor, así que no cuesta nada y no sale nada a internet."
+    },
+    "form5": {
+      "title": "El alcance manda sobre todo lo demás",
+      "body": "Cuántos hogares recibirán la postal. De este número dependen el precio de los 14 espacios, el costo de la tirada y el corte de la curación. Escríbelo y todo se recalcula solo; no hay botón de aplicar. Se congela en cuanto cobras el primer espacio."
+    },
+    "form6": {
+      "title": "Tus costos y lo que deberías cobrar",
+      "body": "Aquí escribes lo que te cotiza el Direct Mail House: impresión, datos, presort, acabado, franqueo. Con eso y el alcance, el sistema calcula a cuánto ofrecer cada espacio para dejar tu margen, y te lo aplica a los que aún no han pagado."
+    },
+    "form7": {
+      "title": "La tarjeta de 12\" × 9\"",
+      "body": "Los 14 espacios tal como se imprimirán. Arrastra por el asa para intercambiar dos anuncios de sitio: el giro y el comercio viajan juntos, el tamaño y el precio se quedan con la casilla. La zona USPS no se toca: ahí van la indicia y la dirección."
+    },
+    "form8": {
+      "title": "Pregunta sin salir del impreso",
+      "body": "¿Se te fue una fórmula o una sigla? El asistente está aquí mismo y responde con la documentación del sistema."
+    }
+  },
+  "mode": {
+    "label": "Modo de la aplicación",
+    "live": "En vivo",
+    "demo": "Simulación",
+    "liveHint": "Datos reales. Solo verás las campañas que abras tú, la búsqueda de comercios consulta Yelp y Geoapify de verdad, y la curación usa la audiencia real. Un archivo vacío es el punto de partida correcto.",
+    "demoHint": "Archivo de práctica. Campañas tuyas para ensayar el proceso completo sin consecuencias: bórralas cuando quieras. Los comercios y las rutas son reales —salen de OpenStreetMap, Yelp y el USPS—; lo único sintético es la audiencia de hogares."
+  },
+  "reach": {
+    "label": "Alcance de la tirada",
+    "unit": "hogares",
+    "currentCost": "Costo de impresión y franqueo",
+    "perPiece": "Por pieza",
+    "hint": "De este número dependen el precio de los 14 espacios, el costo de la tirada, el corte de la curación y el manifiesto. Cámbialo mientras no hayas cobrado ningún espacio.",
+    "previewCurated": "Los {{count}} hogares ya curados se descartan: fueron seleccionados para el alcance anterior y habrá que volver a ejecutar la curación.",
+    "lockedProduction": "El alcance queda fijo: la tirada ya está en imprenta.",
+    "conflict": "No se puede cambiar el alcance: ya hay espacios cobrados o la tirada está en imprenta.",
+    "lockedPaid_one": "El alcance queda fijo: ya cobraste un espacio y ese comercio compró este alcance concreto.",
+    "lockedPaid_other": "El alcance queda fijo: ya cobraste {{count}} espacios y esos comercios compraron este alcance concreto.",
+    "invalid": "Escribe una cantidad entre {{min}} y {{max}} hogares.",
+    "hintFloor": "El cartero reparte rutas completas, no casas sueltas. En el {{zip}} la ruta más pequeña tiene {{floor}} buzones: ese es el envío más chico posible. Escribe tu meta y el sistema tomará rutas enteras hasta cubrirla, y te dirá cuántos buzones son de verdad.",
+    "hintNoFloor": "No se pudo consultar las rutas del {{zip}} en el USPS, así que el mínimo real se desconoce. El sistema tomará rutas enteras hasta cubrir tu meta y te dirá cuántos buzones son de verdad.",
+    "hintLoading": "Consultando en el USPS las rutas del {{zip}} para saber cuál es el envío más chico posible…"
+  },
+  "costs": {
+    "title": "Costos operativos y precio sugerido",
+    "piece": "pieza",
+    "perPiece": "/ pieza",
+    "perDrop": "/ tirada",
+    "intro": "Escribe lo que te cotiza el Direct Mail House y el proveedor de datos. Con esos costos y los {{households}} hogares de esta tirada, el sistema calcula solo a cuánto debes ofrecer cada espacio. Nada de esto es público: son tus cotizaciones.",
+    "lines": {
+      "listPerPiece": {
+        "label": "Datos y lista de hogares",
+        "note": "Licencia del archivo de hogares (Data Axle, InfoUSA o equivalente) más normalización y validación CASS/NCOA. Data Axle no publica tarifas: se cotiza por volumen vía Salesgenie, así que este número lo pones a mano. En modo simulación déjalo en 0 y usa rutas EDDM o datos del Census."
+      },
+      "printPerPiece": {
+        "label": "Impresión offset/digital",
+        "note": "Impresión a gran escala del jumbo 12\" × 9\" por ambas caras, con los 14 espacios. Incluye papel y tintas."
+      },
+      "variableDataPerPiece": {
+        "label": "Ink-jet de datos variables",
+        "note": "Impresión de la dirección, el endoso ECRWSS, la indicia, el permiso y el código de barras IMB pieza por pieza."
+      },
+      "presortPerPiece": {
+        "label": "Presort y clasificación",
+        "note": "Clasificación por ruta de cartero y secuencia de caminata, que es lo que habilita la tarifa con descuento."
+      },
+      "finishingPerPiece": {
+        "label": "Acabado y empaque USPS",
+        "note": "Corte, control de calidad, fajado, etiquetado de bandejas y paletizado según especificación del USPS."
+      },
+      "postagePerPiece": {
+        "label": "Franqueo USPS",
+        "note": "Tarifa por pieza. Por defecto $0.260, el precio EDDM Retail publicado para flats de hasta 3.3 oz. Si entras por un permiso propio o con presort, ajústalo."
+      },
+      "setupFee": {
+        "label": "Setup y preprensa",
+        "note": "Cargo único por tirada: pruebas, placas, programación del variable data."
+      },
+      "deliveryFee": {
+        "label": "Entrega a BMEU/SCF",
+        "note": "Última milla del paletizado hasta la unidad de ingreso del USPS o el centro de clasificación."
+      },
+      "targetMargin": {
+        "label": "Margen objetivo",
+        "note": "Qué porcentaje de lo que cobras quieres que quede como ganancia después de pagar todos los costos de arriba."
+      }
+    },
+    "unitCost": "Costo por pieza",
+    "fixedCost": "Costos fijos",
+    "totalCost": "Costo total de la tirada",
+    "cardValue": "Tarjeta completa vendida",
+    "suggested": "Precio sugerido por espacio",
+    "hero": "Hero (espacio 1)",
+    "standard": "Estándar (2–13)",
+    "back": "Reverso (espacio 14)",
+    "ready": "Con estos costos y un margen del {{margin}}%, vender los 14 espacios a estos precios cubre la tirada y deja ese margen. El hero y el reverso se ponderan distinto porque valen distinto.",
+    "unquoted": "Solo está cargado el franqueo. Mientras impresión, datos y acabado estén en 0, el precio sugerido solo cubre el correo: pide la cotización al mail house y escríbela arriba.",
+    "applyToSlots_one": "Aplicar a 1 espacio sin cobrar",
+    "applyToSlots_other": "Aplicar a {{count}} espacios sin cobrar",
+    "entry": "Entrada postal",
+    "retail": "EDDM Retail",
+    "bmeu": "EDDM Online · BMEU"
+  },
+  "assistant": {
+    "title": "Asistente de operación",
+    "open": "Asistente",
+    "close": "Cerrar el asistente",
+    "connecting": "Conectando con el servidor local…",
+    "indexed": "{{docs}} documentos · {{chunks}} fragmentos",
+    "offline": "No hay respuesta en {{endpoint}}. Enciende el servidor o revisa la red; mientras tanto te muestro la documentación en bruto.",
+    "tab": {
+      "chat": "Consulta",
+      "docs": "Documentos"
+    },
+    "intro": "Pregúntame cualquier cosa del sistema: fórmulas, siglas postales, reglas, cómo se hace algo. Respondo solo con lo que dice la documentación, y te muestro de dónde lo saqué.",
+    "suggestions": [
+      "¿Cómo se calcula el precio sugerido de cada espacio?",
+      "¿Qué es el piso operativo y cuándo se cumple?",
+      "¿Qué significan ECRWSS, IMB y presort?",
+      "¿Qué pasa si cambio el alcance después de curar la audiencia?"
+    ],
+    "you": "Tú",
+    "reply": "Asistente",
+    "thinking": "Consultando la documentación…",
+    "sources_one": "1 fragmento consultado",
+    "sources_other": "{{count}} fragmentos consultados",
+    "placeholder": "Escribe tu pregunta… (Enter envía, Shift+Enter salta línea)",
+    "send": "Enviar",
+    "grounding": "Responde solo con la documentación del sistema. Corre en tu servidor local: no sale nada a internet y no cuesta tokens.",
+    "docsIntro": "Todo lo que subas aquí pasa a formar parte de lo que el asistente puede consultar: cotizaciones del mail house, contratos, notas tuyas, tarifas del USPS. Formatos de texto: .md, .txt, .csv, .json, .yml.",
+    "upload": "Subir documento",
+    "uploading": "Subiendo e indexando…",
+    "originSeed": "Documentación del sistema",
+    "originUpload": "Subido por ti",
+    "chunks_one": "1 fragmento",
+    "chunks_other": "{{count}} fragmentos",
+    "deleteDoc": "Eliminar del RAG",
+    "seedLocked": "Es la documentación del propio sistema: se regenera al arrancar. Edita el archivo en docs/ para cambiarla.",
+    "noDocs": "Todavía no hay documentos indexados."
+  },
+  "settings": {
+    "title": "Configuración de datos y costos",
+    "open": "Config",
+    "close": "Cerrar la configuración",
+    "scopeDemo": "Ajustes del modo SIMULACIÓN",
+    "scopeLive": "Ajustes del modo EN VIVO",
+    "tab": {
+      "routes": "Motor de rutas",
+      "sources": "Fuentes de datos",
+      "market": "Precios de mercado"
+    },
+    "sourcesIntro": "De dónde saca datos el sistema en este modo. Las gratuitas no cuestan nada y sirven para practicar el proceso completo; las de pago son las que hacen falta para una campaña real. Cada una dice qué te da y qué no, y puedes probarla aquí mismo con 5 registros.",
+    "cost": {
+      "free": "Gratis",
+      "paid": "De pago"
+    },
+    "keyOk": "Clave configurada",
+    "keyMissing": "Falta {{key}} en backend/.env",
+    "on": "Activada",
+    "off": "Desactivada",
+    "gives": "Da:",
+    "lacks": "No da:",
+    "test": "Probar con 5 registros",
+    "openSite": "Abrir el sitio",
+    "marketIntro": "Precios publicados del mercado, recogidos el {{date}}. No son cotizaciones tuyas: sirven para presupuestar mientras consigues las reales, y para que la simulación trabaje con cifras del orden correcto.",
+    "applyPreset": "Cargar estos valores en el modo {{mode}}",
+    "applyPresetNote": "Sobrescribe las líneas de costo de este modo. Tus cotizaciones reales las escribes en la sección 1 del impreso, y mandan sobre esto.",
+    "dataAxleTitle": "Data Axle · lo que sí es público",
+    "plan": "Plan",
+    "monthly": "Al mes",
+    "commitment": "Compromiso 12 meses",
+    "routesIntro": "Esto sustituye a comprar una lista de consumidores. El USPS publica cada ruta de cartero de un ZIP con su conteo oficial de hogares y su demografía; el sistema las puntúa y elige las mejores hasta cubrir tu alcance. Una tirada de saturación se entrega a 'Postal Customer', así que no hacen falta nombres.",
+    "zip": "ZIP objetivo",
+    "targetHouseholds": "Hogares objetivo",
+    "runRoutes": "Calcular rutas",
+    "covered": "Hogares cubiertos",
+    "routesUsed": "Rutas usadas",
+    "cutoff": "Score de corte",
+    "availableZip": "Disponibles en el ZIP",
+    "coveredNote": "Pediste {{target}} hogares y las {{routes}} mejores rutas suman {{covered}}. No cuadra exacto a propósito: se compran rutas completas, y el franqueo y la impresión se facturan sobre el número real.",
+    "noCensus": "Puntuado solo con lo que publica el USPS: ingreso medio, edad y tamaño de hogar por ruta. Con la clave gratuita del Census se añaden propietarios, vivienda unifamiliar, vehículos y valor de vivienda.",
+    "downloadManifest": "Descargar manifiesto de rutas (CSV)",
+    "route": "Ruta",
+    "households": "Hogares",
+    "income": "Ingreso medio",
+    "hhSize": "Tam. hogar",
+    "score": "Score",
+    "selected": "elegida"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "source": {
+    "title": "Fuente de Prospección",
+    "mockDescription": "Candidatos simulados con geolocalización dentro de Eastvale / Corona (92880 / 92882) a $0 costo.",
+    "liveDescription": "Peticiones en vivo a Yelp Fusion API y Geoapify Places filtrando por rating ≥ 4.0 en la microzona.",
+    "mockModeBtn": "🧪 Modo Simulación",
+    "liveModeBtn": "🌐 Búsqueda en Vivo"
+  },
+  "categories": {
+    "title": "14 Giros Cerrados con Exclusividad 1-a-1",
+    "subtitle": "Filtrando candidatos Yelp + Geoapify (Rating ≥ 4.0, Reseñas ≥ 15)",
+    "slotPrefix": "SLOT #{{id}}",
+    "frontSide": "Cara Frontal",
+    "backSide": "Cara Posterior",
+    "adCost": "Costo Anuncio: {{price}} USD",
+    "avgTicket": "Ticket Promedio: {{ticket}} USD",
+    "breakevenBadge": "🎯 Breakeven: {{deals}} {{clientText}} ({{ratio}} ventas)",
+    "oneClient": "cliente",
+    "multiClients": "clientes",
+    "currentStatus": "Estado actual del Slot #{{id}}:"
+  },
+  "llama": {
+    "title": "Llama.cpp Local LLM",
+    "subtitle": "Guiones One-Shot adaptados a Ticket ${{ticket}} y Breakeven de {{deals}} {{clientText}}",
+    "spanishBtn": "Español (ES)",
+    "englishBtn": "English (EN)",
+    "hookHeader": "Gancho de Cierre Telefónico One-Shot ({{lang}}):",
+    "copyPitch": "Copiar Guion",
+    "copied": "Copiado",
+    "breakevenRoi": "ROI Comercial Breakeven:",
+    "investment": "Inversión:",
+    "ticket": "Ticket Promedio: {{ticket}} USD",
+    "equilibrium": "Punto de Equilibrio: {{deals}} {{clientText}} ({{ratio}} cierres cubren el 100% del anuncio)",
+    "oneNewClient": "cliente nuevo",
+    "multiNewClients": "clientes nuevos"
+  },
+  "crm": {
+    "loading": "Extrayendo candidatos de Yelp Fusion y Geoapify Places en {{city}}…",
+    "loadingSub": "Aplicando filtro de rating ≥ 4.0 y reseñas ≥ 15…",
+    "noLeads": "No se encontraron prospectos que cumplan los criterios para esta categoría en {{city}}.",
+    "top": "TOP #{{rank}}",
+    "reviews": "({{count}} reseñas)",
+    "decisionMaker": "Decisor Detectado:",
+    "visitWebsite": "Visitar sitio web del negocio",
+    "crmStatus": "Estado CRM:",
+    "contacted": "Contactado",
+    "contactedActive": "Contactado (Negociando)",
+    "negotiatingInSlot": "Negociando en Slot #{{slot}}",
+    "confirmReplaceContacted": "El espacio #{{slot}} tiene asignado a \"{{current}}\". ¿Deseas reemplazarlo y poner a \"{{next}}\" en estado NEGOCIANDO?",
+    "contactedBadge": "Contactado",
+    "negotiatingBadge": "En Negociación",
+    "rejected": "Rechazado",
+    "blocked": "Desestimó / Bloqueado",
+    "blockedNotice": "Comercio liberado del espacio. Añadido a la lista de exclusión.",
+    "searchReplacement": "Buscar otra vacante o negocio",
+    "searchingReplacement": "Buscando nueva vacante de negocio...",
+    "assignSlot": "Vendido / Asignar al Slot #{{id}}",
+    "assigned": "Asignado al Slot"
+  },
+  "focus": {
+    "banner": "Buscando un comercio para el nicho {{category}}.",
+    "dismiss": "Ver todos los nichos"
+  }
+}

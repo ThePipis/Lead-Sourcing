@@ -1,0 +1,75 @@
+{
+  "header": {
+    "moduleTag": "MODULE D • EXPORT INFRASTRUCTURE & TRACEABILITY",
+    "title": "Postal Export & QR Campaign Telemetry",
+    "description": "Download the CASS-sorted postal manifest ready for printer injection (Action Mail / Inland Valley) and manage dynamic QR codes with redirects and real-time analytics.",
+    "downloadCsv": "Download Manifest CSV (5,000 Homes)",
+    "generating": "Downloading…",
+    "showPreview": "Preview Manifest (10 rows)",
+    "hidePreview": "Hide Preview"
+  },
+  "preview": {
+    "title": "Action Mail Production Manifest Specifications",
+    "badge": "CASS / NCOA",
+    "subtitle": "Campaign {{id}}",
+    "totalDataset": "Total dataset:",
+    "households": "5,000 households",
+    "fixedColumns": "10 fixed ECRWSS columns",
+    "loading": "Generating preview…",
+    "noRecords": "No curated records. Run the propensity engine first."
+  },
+  "specs": {
+    "suffix": "File suffix",
+    "suffixVal": "_5000_ActionMail.csv",
+    "zipValidation": "ZIP validation",
+    "zipValidationVal": "ZIP+4 verified against CASS",
+    "carrierRoute": "Delivery order",
+    "carrierRouteVal": "CARRIER_ROUTE ASC + WALK_SEQUENCE ASC",
+    "urls": "Tracking URLs",
+    "urlsVal": "Short redirect with scan logging"
+  },
+  "qr": {
+    "listTitle": "Dynamic QR Code Telemetry (14 Merchants)",
+    "listSubtitle": "Each merchant has a unique QR code pointing to the tracking base URL. The platform logs IP, timestamp, and device before redirecting to the target destination.",
+    "slotPrefix": "SLOT #{{id}}",
+    "scans": "Total Scans Recorded",
+    "printHeader": "Production QR · Slot #{{id}}",
+    "vectorDpi": "Vector · 300 DPI",
+    "copy": "Copy Redirect URL",
+    "copied": "Copied",
+    "simulateScan": "Simulate QR Scan",
+    "simulateDescription": "Logs a test scan from {{city}} and persists the counter in SQLite.",
+    "targetUrl": "QR redirect URL"
+  },
+  "telemetry": {
+    "title": "Scan telemetry",
+    "totalScans": "{{count}} total scans",
+    "noScans": "No scans logged yet.",
+    "noScansSub": "Simulate a scan to see the live log.",
+    "slotPrefix": "Slot #{{id}} · {{business}}",
+    "device": "Device:",
+    "ip": "IP:"
+  },
+  "alerts": {
+    "needCuration": "Run the curation first: there are no households to export."
+  },
+  "columns": {
+    "recordId": "RECORD_ID",
+    "name": "NAME / CURRENT RESIDENT",
+    "address": "STREET_ADDRESS",
+    "city": "CITY",
+    "state": "STATE",
+    "zip": "ZIP_CODE",
+    "crrt": "CARRIER_ROUTE",
+    "walkSeq": "WALK_SEQUENCE",
+    "score": "PROPENSITY_SCORE",
+    "imb": "IMB_ROUTING_CODE"
+  },
+  "printer": {
+    "label": "Delivery to printer",
+    "body": "Download the CSV and send it to Action Mail / Inland Valley. Once they have it, stamp the delivery: section 4 opens and the campaign moves into production.",
+    "action": "Stamp delivery to printer",
+    "done": "Delivered",
+    "needDownload": "Run the curation and download the manifest before stamping."
+  }
+}

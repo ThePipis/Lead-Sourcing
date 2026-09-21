@@ -1,0 +1,541 @@
+{
+  "nav": {
+    "tablero": "1. 12\"×9\" Board & Slots",
+    "leadSourcing": "2. Lead Sourcing (Yelp + LLM)",
+    "propensityEngine": "3. Propensity Engine (5k Homes)",
+    "postalExport": "4. QR & Postal Export",
+    "architectureFastApi": "FastAPI & DB Architecture"
+  },
+  "status": {
+    "vacant": "VACANT",
+    "negotiating": "NEGOTIATING",
+    "reserved": "RESERVED",
+    "paid": "PAID",
+    "vacantBadge": "VACANT",
+    "negotiatingBadge": "NEGOTIATING",
+    "reservedBadge": "RESERVED",
+    "paidBadge": "PAID"
+  },
+  "statusLabel": {
+    "vacant": "Vacant",
+    "negotiating": "Negotiating",
+    "reserved": "Reserved",
+    "paid": "Paid"
+  },
+  "buttons": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "export": "Export",
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "copy": "Copy",
+    "copied": "Copied",
+    "close": "Close",
+    "search": "Search",
+    "download": "Download"
+  },
+  "header": {
+    "title": "Co-Op Direct Mail Platform",
+    "badge": "Inland Empire, CA",
+    "subtitle": "12\"×9\" Jumbo Postcard • Algorithmic Propensity Curation Engine",
+    "microzoneLabel": "Microzone",
+    "statusProspecting": "PROSPECTING ({{count}}/14 PAID)",
+    "statusFloorMet": "OPERATIONAL FLOOR REACHED",
+    "toggleThemeLight": "Light Mode",
+    "toggleThemeDark": "Dark Mode",
+    "language": "Language",
+    "switchTo": "Switch language to {{lang}}"
+  },
+  "alerts": {
+    "sqliteConnected": "SQLite Connected",
+    "sqliteDisconnected": "SQLite Disconnected",
+    "errorOccurred": "An unexpected error occurred.",
+    "syncing": "Syncing…"
+  },
+  "categories": {
+    "1": {
+      "name": "Family Dentistry",
+      "niche": "Family Dentistry & Dental Implants",
+      "description": "Dominant front banner space. Maximum visual impact guaranteed on the first postal impression.",
+      "defaultHeadline": "Healthy Smiles for the Whole Family | $79 Exam + Cleaning + X-Rays"
+    },
+    "2": {
+      "name": "HVAC / Air Conditioning",
+      "niche": "Residential HVAC & Heating",
+      "description": "Standard front position. High seasonal conversion rate for system replacements and tune-ups in the IE heat.",
+      "defaultHeadline": "Beat the Inland Empire Heat | $49 A/C Super Tune-Up + 15% Off Full System"
+    },
+    "3": {
+      "name": "Veterinary Hospital",
+      "niche": "Veterinary Hospital & Urgent Care",
+      "description": "Standard front position. Immediate emotional connection with high-income pet owners.",
+      "defaultHeadline": "Compassionate 7-Day Care | 50% Off First Preventive Wellness Exam"
+    },
+    "4": {
+      "name": "Residential Plumbing",
+      "niche": "Emergency Plumbing & Drain Cleaning",
+      "description": "Standard front position. High service inquiry frequency in homes built over 10 years ago.",
+      "defaultHeadline": "Trusted 24/7 Plumbers | $50 Off Drain Snaking or Free In-Pipe Camera Inspection"
+    },
+    "5": {
+      "name": "Auto Repair / Brakes",
+      "niche": "Automotive Mechanics & Brakes",
+      "description": "Standard front position. Targeting households with 2 to 4 commuter vehicles into OC/LA.",
+      "defaultHeadline": "Highway Safety Package | $99 Complete Brake Job Per Axle + Computer Diagnostic"
+    },
+    "6": {
+      "name": "Artisanal Pizzeria",
+      "niche": "Wood-Fired Artisanal Pizzeria",
+      "description": "Standard front position. High-redemption coupons and fridge magnets for weekend family dinners.",
+      "defaultHeadline": "Stone-Oven Sourdough Pizza | Buy 1 Large Pizza, Get the 2nd at 50% Off"
+    },
+    "7": {
+      "name": "Boutique Gym / CrossFit",
+      "niche": "Community CrossFit & Functional Fitness",
+      "description": "Standard front position. Driving wellness goals for young families across Eastvale and Corona.",
+      "defaultHeadline": "Transform Your Health This Month | 14-Day VIP All-Access Pass + Free Coaching Session"
+    },
+    "8": {
+      "name": "Roofing Services",
+      "niche": "Residential Roofing & Solar Panels",
+      "description": "Standard back position. High average ticket on complete re-roofing and post-rain preventive maintenance.",
+      "defaultHeadline": "Protect Your Greatest Asset | $500 Off Full Roof Replacement + 100% Free Inspection"
+    },
+    "9": {
+      "name": "Chiropractor / Physical Therapy",
+      "niche": "Chiropractic & Pain Relief",
+      "description": "Standard back position. Relief for active workers and athletes suffering from posture strain or sports injuries.",
+      "defaultHeadline": "Live Free from Back Pain | $29 Initial Exam + Chiropractic Adjustment + Massage Therapy"
+    },
+    "10": {
+      "name": "Carpet & Upholstery Cleaning",
+      "niche": "Steam Cleaning & Sanitization",
+      "description": "Standard back position. Essential service for family households with young children and pets.",
+      "defaultHeadline": "Spotless Allergen-Free Living | 3 Rooms for Only $99 (Deep Steam Cleaning)"
+    },
+    "11": {
+      "name": "Mobile Auto Detailing",
+      "niche": "Mobile Auto Esthetics & Ceramic Coating",
+      "description": "Standard back position. Premium driveway service for luxury SUV and sedan owners.",
+      "defaultHeadline": "Showroom Shine in Your Driveway | $120 Full Interior + Exterior Mobile Ceramic Package"
+    },
+    "12": {
+      "name": "Mobile Dog Grooming",
+      "niche": "Van-Equipped Mobile Pet Grooming",
+      "description": "Standard back position. Ultimate doorstep convenience for busy families with pets.",
+      "defaultHeadline": "Stress-Free VIP Pet Spa | $15 Off Your First Bath & Breed-Specific Haircut at Your Door"
+    },
+    "13": {
+      "name": "Authentic Mexican Restaurant",
+      "niche": "Traditional Family Mexican Cuisine",
+      "description": "Standard back position. The community's favorite gathering spot for celebrations and weekend dining.",
+      "defaultHeadline": "Handcrafted Heritage Flavors | Complimentary Appetizer with the Purchase of 2 Entrees"
+    },
+    "14": {
+      "name": "Insurance Agency",
+      "niche": "Auto, Home & Life Insurance",
+      "description": "Wide medium space (~7\"×3\") on the back side. Strategic position right next to the USPS postal indicia.",
+      "defaultHeadline": "Save up to $600/Year on Bundled Policies | Fast 5-Minute Quote with No Obligation"
+    }
+  },
+  "architecture": {
+    "tag": "FULL-STACK ENTERPRISE SYSTEM ARCHITECTURE",
+    "title": "FastAPI Backend + React Frontend + SpatiaLite / PostGIS",
+    "description": "High-performance decoupled architecture. Engineered to process vectorized matrices with NumPy in milliseconds, orchestrate external APIs (Yelp, Geoapify, Data Axle, Llama.cpp) and export certified postal manifests.",
+    "stackBadge": "FastAPI 0.115 + Pydantic v2 + SQLAlchemy 2.0",
+    "treeTitle": "1. Complete Directory & File Structure",
+    "copyTree": "Copy Tree",
+    "codeTitle": "2. Production Backend Code (FastAPI / Python)",
+    "copyCode": "Copy Code",
+    "copied": "Copied"
+  },
+  "footer": {
+    "copyright": "Co-Op Direct Mail Platform • Inland Empire Shared Direct Mail Operations",
+    "specs": "USPS Marketing Mail ECRWSS • CASS/NCOA Certified • Action Mail Spec"
+  },
+  "file": {
+    "title": "Campaign file",
+    "subtitle": "Each campaign is a four-section acceptance form. Sections are worked in order: one does not open until the one before it is stamped.",
+    "count": "{{count}} on file",
+    "loading": "Opening the file…",
+    "others": "Rest of the file",
+    "open": "Open form",
+    "mailed": "Mailed",
+    "collected": "Collected",
+    "slotsOwed": "Slots unpaid",
+    "households": "Curated households",
+    "zip": "ZIP",
+    "newLabel": "Open a new form",
+    "pickZone": "Pick a microzone…",
+    "allZonesUsed": "Every microzone already has a form",
+    "create": "Open form",
+    "creating": "Opening…",
+    "sectionsDone": "{{done}} of {{total}} sections stamped",
+    "loadError": "Could not read the file: {{error}}",
+    "spec": "FastAPI & DB specification",
+    "emptyLiveTitle": "Your first real campaign starts here",
+    "emptyLiveBody": "The live file is empty on purpose. Pick a microzone below and open the form: the campaign starts with its 14 slots empty, and the app tells you what to do at every step.",
+    "emptyDemoTitle": "The practice file is empty",
+    "emptyDemoBody": "No simulation campaigns left. Open a new one below to practise the whole process again.",
+    "createConflict": "A campaign for {{zone}} already exists this month. Open it from the file, or wait for next month.",
+    "sizeLabel": "Households in the drop",
+    "sizeHint": "Pick the microzone first: the floor is set by the post office, not by this field. A carrier walks whole routes, so the smallest possible drop is the ZIP's smallest route.",
+    "sizeLocked": "The size locks as soon as you collect the first slot: that advertiser bought a specific reach.",
+    "costPerPiece": "Cost per piece",
+    "indexTitle": "File index",
+    "filters": {
+      "active": "Active",
+      "archived": "Archived",
+      "all": "All"
+    },
+    "newToggle": "Open a new drop",
+    "newClose": "Close",
+    "archive": "Archive",
+    "unarchive": "Return to the active file",
+    "archivedTag": "Archived",
+    "delete": "Delete",
+    "deleteBlocked": "Cannot be deleted: money is already collected or the drop is at the printer. Archive it.",
+    "confirmDelete": "Delete?",
+    "confirmYes": "Yes, delete",
+    "confirmNo": "No",
+    "emptyIndex": "The active file is empty.",
+    "emptyArchived": "Nothing archived yet.",
+    "deleteFailed": "Could not delete: the campaign already holds collected money or is at the printer. Archive it instead.",
+    "leadTag": "In hand",
+    "sizeHintFloor": "A carrier walks whole routes, not single houses. In {{zip}} the smallest route has {{floor}} boxes: that is the smallest possible drop and this field's minimum. The price of all 14 boxes and the print cost come from this number.",
+    "sizeHintNoFloor": "The USPS route list for {{zip}} could not be read, so the real floor is unknown. The system will take whole routes until your target is covered and report how many boxes that really is.",
+    "sizeHintLoading": "Asking the USPS for the routes in {{zip}} to find the smallest possible drop…"
+  },
+  "form": {
+    "backToFile": "File",
+    "saving": "Saving",
+    "expert": "Expert mode",
+    "expertHint": "Gates unlocked. Development only; Ctrl+Shift+E to leave.",
+    "stamped": "Stamped",
+    "reserved": "For later use",
+    "stockLight": "Stock",
+    "stockDark": "Backlit",
+    "section": {
+      "slots": "1 · Slot sales",
+      "curation": "2 · Audience curation",
+      "manifest": "3 · Postal manifest",
+      "production": "4 · Production and results"
+    },
+    "summary": {
+      "slots": "{{paid}} of {{total}} slots paid",
+      "curationDone": "{{count}} households curated and persisted",
+      "curationPending": "Propensity engine not run",
+      "manifestDone": "Manifest delivered to the printer",
+      "manifestPending": "5,000-row CSV not cut",
+      "productionMailed": "Drop deposited with USPS",
+      "productionPending": "At the printer, not deposited"
+    },
+    "blocked": {
+      "curation": "Needs the operating floor of {{floor}} paid slots. {{missing}} to go.",
+      "manifest": "Needs section 2 stamped: no curated households means no manifest to cut.",
+      "production": "Needs section 3 stamped: nothing is mailed before it is printed.",
+      "curationCost": "Needs the drop's cost covered. ${{missing}} still to collect."
+    },
+    "imperative": {
+      "fillSlot": "Find a business for slot {{slot}}",
+      "collectSlot": "Record the payment for slot {{slot}}",
+      "runCuration": "Run the propensity engine",
+      "exportManifest": "Cut and deliver the manifest",
+      "markMailed": "Record the USPS deposit",
+      "complete": "Campaign complete · watch the scans"
+    },
+    "savedAt": "Saved {{time}}",
+    "savedTitle": "Every change writes itself to SQLite; there is no save button."
+  },
+  "payment": {
+    "title": "Payment record · slot {{slot}}",
+    "noBusiness": "No business assigned",
+    "reference": "Payment method",
+    "referencePlaceholder": "Type the reference",
+    "amount": "Amount collected (USD)",
+    "listPrice": "List price: ${{price}}",
+    "date": "Payment date",
+    "belowList": "${{diff}} below list price. The actual amount is what gets recorded.",
+    "cancel": "Cancel",
+    "confirm": "Stamp as paid",
+    "methods": {
+      "zelle": "Zelle",
+      "check": "Check",
+      "transfer": "Bank transfer",
+      "cash": "Cash",
+      "other": "Other (type it)"
+    }
+  },
+  "production": {
+    "printedOn": "Delivered to printer",
+    "mailedOn": "Deposited with USPS",
+    "households": "Households in the drop",
+    "awaitingLabel": "Drop at the printer",
+    "awaitingBody": "The printer has the manifest. When Action Mail confirms the USPS deposit, stamp it here: from that moment every QR scan that arrives is a result of this drop.",
+    "markMailed": "Stamp USPS deposit",
+    "resultsTitle": "Scans per business",
+    "totalScans": "{{count}} scans total",
+    "noScans": "No scans yet. The first ones usually land 3 to 7 days after the deposit.",
+    "renewalNote": "{{business}} leads with {{count}} scans. That is the argument for selling them the next drop.",
+    "colSlot": "Slot",
+    "colBusiness": "Business",
+    "colScans": "Scans",
+    "unnamed": "No business"
+  },
+  "finance": {
+    "collected": "Collected",
+    "contracted": "Card value",
+    "cost": "Operating cost",
+    "margin": "Margin if completed",
+    "floorMet": "Operating floor reached",
+    "floorMissing": "{{missing}} slots short of the floor of {{floor}}",
+    "floorMissingCost": "${{missing}} short of covering the {{households}}-household drop",
+    "fromRoutes": "On {{households}} real pieces across {{routes}} routes"
+  },
+  "tour": {
+    "label": "Guided walkthrough",
+    "step": "Step {{current}} of {{total}}",
+    "skip": "Skip walkthrough",
+    "back": "Back",
+    "next": "Next",
+    "done": "Got it",
+    "replay": "How does this work?",
+    "file1": {
+      "title": "This is the file",
+      "body": "Each line is a campaign: one postcard drop to 5,000 households in a microzone. No work happens here — you only choose which one to open."
+    },
+    "file2": {
+      "title": "The app tells you what is next",
+      "body": "This amber line is the only thing this campaign is waiting on. You never have to decide where to continue: do that, and the app hands you the next instruction."
+    },
+    "file3": {
+      "title": "The four boxes",
+      "body": "Every campaign moves through four sections, always in the same order. Green is sealed. Hatched is still shut, because the one before it is not finished."
+    },
+    "file4": {
+      "title": "Red means owed",
+      "body": "Red always means money not collected or a step blocked. Green means cleared. Color is never decoration here, so you can trust it."
+    },
+    "file5": {
+      "title": "To start from scratch",
+      "body": "Pick a microzone here and open a new form. The campaign starts with its 14 slots empty, and the app will ask you for the first one."
+    },
+    "form1": {
+      "title": "One instruction at a time",
+      "body": "The only thing to do right now is always at the top. If you get lost at any point, read this line and do that."
+    },
+    "form2": {
+      "title": "Work happens in the open section",
+      "body": "Open it and the controls for that step are inside. Nothing you can see outside it is needed yet."
+    },
+    "form3": {
+      "title": "Shut ones tell you why",
+      "body": "A hatched section is not broken and you are not missing a permission: it says what it is waiting for. The moment that happens, it opens on its own."
+    },
+    "form4": {
+      "title": "You can leave whenever",
+      "body": "Everything saves itself the moment you do it. Go back to the file and the campaign stays exactly where you left it."
+    },
+    "file1b": {
+      "title": "First: practice or for real?",
+      "body": "Simulation comes loaded with campaigns so you can practise without consequences. Live starts empty on purpose: that is where you run your first real campaign, from zero, one step at a time."
+    },
+    "file6": {
+      "title": "The file index",
+      "body": "Everything you have ever opened. ACTIVE is today's work; ARCHIVED is what you moved out of the way without deleting. The list scrolls inside its own frame: with 3 campaigns or 50, this screen is the same height."
+    },
+    "file7": {
+      "title": "Archive and delete",
+      "body": "The first icon files it away: the campaign leaves the list but keeps its slots, money and audience, and comes back whenever you want. The second deletes for real and asks first. Live, it is blocked once money is collected or the drop is at the printer: that is a business record, not clutter."
+    },
+    "file8": {
+      "title": "If something is unclear, ask it",
+      "body": "The assistant knows this system: formulas, postal acronyms, rules, how each thing is done. It answers only from the documentation and shows you where it read it. It runs on your own server, so it costs nothing and nothing leaves the network."
+    },
+    "form5": {
+      "title": "Reach governs everything else",
+      "body": "How many households get the postcard. The price of all 14 slots, the cost of the drop and the curation cut all hang off this number. Type it and everything recalculates; there is no apply button. It freezes the moment you collect on the first slot."
+    },
+    "form6": {
+      "title": "Your costs and what to charge",
+      "body": "Here you enter what the direct mail house quotes: printing, data, presort, finishing, postage. From that and the reach, the system works out what each slot should sell for to leave your margin, and applies it to the ones not yet paid."
+    },
+    "form7": {
+      "title": "The 12\" × 9\" card",
+      "body": "The 14 slots as they will print. Drag by the handle to swap two ads: the niche and the business travel together, size and price stay with the box. The USPS zone is untouchable: the indicia and the address go there."
+    },
+    "form8": {
+      "title": "Ask without leaving the form",
+      "body": "Lost a formula or an acronym? The assistant is right here and answers from the system's documentation."
+    }
+  },
+  "mode": {
+    "label": "Application mode",
+    "live": "Live",
+    "demo": "Simulation",
+    "liveHint": "Real data. You only see campaigns you opened yourself, business sourcing really queries Yelp and Geoapify, and curation uses the real audience. An empty file is the correct starting point.",
+    "demoHint": "Practice file. Your own campaigns for rehearsing the whole process without consequences: delete them whenever. The businesses and routes are real — from OpenStreetMap, Yelp and USPS — only the household audience is synthetic."
+  },
+  "reach": {
+    "label": "Drop reach",
+    "unit": "households",
+    "currentCost": "Print and postage",
+    "perPiece": "Per piece",
+    "hint": "The price of all 14 boxes, the cost of the drop, the curation cut and the manifest all come from this number. Change it while no box has been collected.",
+    "previewCurated": "The {{count}} households already curated are discarded: they were selected for the old reach, so curation has to run again.",
+    "lockedProduction": "The reach is fixed: the drop is already at the printer.",
+    "conflict": "The reach cannot change: slots are already collected, or the drop is at the printer.",
+    "lockedPaid_one": "The reach is fixed: one slot is already collected, and that advertiser bought this specific reach.",
+    "lockedPaid_other": "The reach is fixed: {{count}} slots are already collected, and those advertisers bought this specific reach.",
+    "invalid": "Enter a figure between {{min}} and {{max}} households.",
+    "hintFloor": "A carrier walks whole routes, not single houses. In {{zip}} the smallest route has {{floor}} boxes: that is the smallest drop possible. Type your target and the system takes whole routes until it is covered, then tells you the real count.",
+    "hintNoFloor": "The USPS route list for {{zip}} could not be read, so the real floor is unknown. The system will take whole routes until your target is covered and report how many boxes that really is.",
+    "hintLoading": "Asking the USPS for the routes in {{zip}} to find the smallest possible drop…"
+  },
+  "costs": {
+    "title": "Operating costs and suggested price",
+    "piece": "piece",
+    "perPiece": "/ piece",
+    "perDrop": "/ drop",
+    "intro": "Enter what the direct mail house and the data vendor quote you. From those costs and this drop's {{households}} households, the system works out what each box should sell for. None of this is public: these are your quotes.",
+    "lines": {
+      "listPerPiece": {
+        "label": "Data and household list",
+        "note": "Household file licence (Data Axle, InfoUSA or equivalent) plus CASS/NCOA normalization and validation. Data Axle publishes no rates: it is quoted by volume through Salesgenie, so this one is entered by hand. In simulation mode leave it at 0 and use EDDM routes or Census data."
+      },
+      "printPerPiece": {
+        "label": "Offset/digital printing",
+        "note": "Large-scale printing of the 12\" × 9\" jumbo on both sides with all 14 slots. Stock and inks included."
+      },
+      "variableDataPerPiece": {
+        "label": "Variable-data ink-jet",
+        "note": "Addressing, ECRWSS endorsement, indicia, permit and IMB barcode printed piece by piece."
+      },
+      "presortPerPiece": {
+        "label": "Presort and sortation",
+        "note": "Sorting by carrier route and walk sequence, which is what earns the discounted rate."
+      },
+      "finishingPerPiece": {
+        "label": "Finishing and USPS packaging",
+        "note": "Cutting, QC, banding, tray labelling and palletizing to USPS spec."
+      },
+      "postagePerPiece": {
+        "label": "USPS postage",
+        "note": "Rate per piece. Defaults to $0.260, the published EDDM Retail price for flats up to 3.3 oz. Adjust it if you enter on your own permit or presorted."
+      },
+      "setupFee": {
+        "label": "Setup and prepress",
+        "note": "One charge per drop: proofs, plates, variable-data programming."
+      },
+      "deliveryFee": {
+        "label": "Delivery to BMEU/SCF",
+        "note": "Last mile for the pallets to the USPS entry unit or sectional center."
+      },
+      "targetMargin": {
+        "label": "Target margin",
+        "note": "What share of what you charge should be left as profit once every cost above is paid."
+      }
+    },
+    "unitCost": "Cost per piece",
+    "fixedCost": "Fixed costs",
+    "totalCost": "Total drop cost",
+    "cardValue": "Full card sold",
+    "suggested": "Suggested price per slot",
+    "hero": "Hero (slot 1)",
+    "standard": "Standard (2–13)",
+    "back": "Back (slot 14)",
+    "ready": "At these costs and a {{margin}}% margin, selling all 14 slots at these prices covers the drop and leaves that margin. Hero and back are weighted differently because they are worth differently.",
+    "unquoted": "Only postage is loaded. While print, data and finishing sit at 0, the suggested price covers the mail alone: get the mail house quote and type it above.",
+    "applyToSlots_one": "Apply to 1 uncharged slot",
+    "applyToSlots_other": "Apply to {{count}} uncharged slots",
+    "entry": "Postal entry",
+    "retail": "EDDM Retail",
+    "bmeu": "EDDM Online · BMEU"
+  },
+  "assistant": {
+    "title": "Operating assistant",
+    "open": "Assistant",
+    "close": "Close the assistant",
+    "connecting": "Connecting to the local server…",
+    "indexed": "{{docs}} documents · {{chunks}} passages",
+    "offline": "No answer from {{endpoint}}. Start the server or check the network; meanwhile the raw documentation is shown.",
+    "tab": {
+      "chat": "Ask",
+      "docs": "Documents"
+    },
+    "intro": "Ask anything about the system: formulas, postal acronyms, rules, how something is done. Answers come only from the documentation, and the passages are shown.",
+    "suggestions": [
+      "How is the suggested price per slot calculated?",
+      "What is the operating floor and when is it met?",
+      "What do ECRWSS, IMB and presort mean?",
+      "What happens if I change the reach after curating the audience?"
+    ],
+    "you": "You",
+    "reply": "Assistant",
+    "thinking": "Reading the documentation…",
+    "sources_one": "1 passage consulted",
+    "sources_other": "{{count}} passages consulted",
+    "placeholder": "Type your question… (Enter sends, Shift+Enter adds a line)",
+    "send": "Send",
+    "grounding": "Answers come only from the system's documentation. It runs on your own server: nothing leaves the network and no tokens are spent.",
+    "docsIntro": "Anything uploaded here becomes part of what the assistant can quote: mail house quotes, contracts, your own notes, USPS rates. Text formats: .md, .txt, .csv, .json, .yml.",
+    "upload": "Upload a document",
+    "uploading": "Uploading and indexing…",
+    "originSeed": "System documentation",
+    "originUpload": "Uploaded by you",
+    "chunks_one": "1 passage",
+    "chunks_other": "{{count}} passages",
+    "deleteDoc": "Remove from the RAG",
+    "seedLocked": "This is the system's own documentation: it is rebuilt on startup. Edit the file in docs/ to change it.",
+    "noDocs": "No documents indexed yet."
+  },
+  "settings": {
+    "title": "Data and cost settings",
+    "open": "Config",
+    "close": "Close settings",
+    "scopeDemo": "SIMULATION mode settings",
+    "scopeLive": "LIVE mode settings",
+    "tab": {
+      "routes": "Route engine",
+      "sources": "Data sources",
+      "market": "Market prices"
+    },
+    "sourcesIntro": "Where the system gets data in this mode. The free ones cost nothing and are enough to practise the whole process; the paid ones are what a real campaign needs. Each says what it gives and what it does not, and can be tested here with 5 records.",
+    "cost": {
+      "free": "Free",
+      "paid": "Paid"
+    },
+    "keyOk": "Key configured",
+    "keyMissing": "{{key}} missing from backend/.env",
+    "on": "On",
+    "off": "Off",
+    "gives": "Gives:",
+    "lacks": "Lacks:",
+    "test": "Test with 5 records",
+    "openSite": "Open the site",
+    "marketIntro": "Published market rates, gathered on {{date}}. These are not your quotes: they are for budgeting until you have the real ones, and so simulation works with figures of the right order.",
+    "applyPreset": "Load these into {{mode}} mode",
+    "applyPresetNote": "Overwrites this mode's cost lines. Your real quotes go in section 1 of the form, and they override this.",
+    "dataAxleTitle": "Data Axle · what is actually public",
+    "plan": "Plan",
+    "monthly": "Monthly",
+    "commitment": "12-month commitment",
+    "routesIntro": "This replaces buying a consumer list. USPS publishes every carrier route in a ZIP with its official household count and its demographics; the system scores them and takes the best until your reach is covered. A saturation drop is delivered to 'Postal Customer', so no names are needed.",
+    "zip": "Target ZIP",
+    "targetHouseholds": "Target households",
+    "runRoutes": "Compute routes",
+    "covered": "Households covered",
+    "routesUsed": "Routes used",
+    "cutoff": "Cutoff score",
+    "availableZip": "Available in the ZIP",
+    "coveredNote": "You asked for {{target}} households and the best {{routes}} routes add up to {{covered}}. It does not match exactly on purpose: whole routes are bought, and postage and printing are billed on the real number.",
+    "noCensus": "Scored on what USPS publishes alone: median income, age and household size per route. The free Census key adds owner occupancy, single-family share, vehicles and home value.",
+    "downloadManifest": "Download route manifest (CSV)",
+    "route": "Route",
+    "households": "Households",
+    "income": "Median income",
+    "hhSize": "HH size",
+    "score": "Score",
+    "selected": "chosen"
+  }
+}

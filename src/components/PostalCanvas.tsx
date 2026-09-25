@@ -62,7 +62,7 @@ export interface PostalCanvasProps {
   onUpdateSlotAvgTicket?: (slotNumber: number, newAvgTicket: number) => void;
   onSwapSlots?: (sourceSlotNumber: number, targetSlotNumber: number) => void;
   onMergeSlot?: (slotNumber: number, targetFormat: 'MEDIUM' | 'LARGE') => void;
-  onSplitSlot?: (slotNumber: number) => void;
+  onSplitSlot?: (slotNumber: number, targetFormat?: 'SMALL' | 'MEDIUM') => void;
   onReleaseReservation?: (slotNumber: number) => void;
   onResetLayout?: (wipe: boolean) => void;
   coveredHouseholds?: number;
@@ -218,12 +218,12 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
     }
   };
 
-  const handleSplit = (slotNumber: number) => {
+  const handleSplit = (slotNumber: number, targetFormat: 'SMALL' | 'MEDIUM' = 'SMALL') => {
     setFormatMenuSlot(null);
     if (onSplitSlot) {
-      onSplitSlot(slotNumber);
+      onSplitSlot(slotNumber, targetFormat);
     } else {
-      const updated = splitModularSlot(slotNumber, slots);
+      const updated = splitModularSlot(slotNumber, slots, targetFormat);
       const target = updated.find((s) => s.slotNumber === slotNumber);
       if (target && onUpdateSlotPrice) {
         onUpdateSlotPrice(slotNumber, target.priceUsd);
@@ -573,7 +573,7 @@ interface ModularSlotCardProps {
   isSelected: boolean;
   onInspect?: (slotNumber: number) => void;
   onMerge: (slotNumber: number, format: 'MEDIUM' | 'LARGE') => void;
-  onSplit: (slotNumber: number) => void;
+  onSplit: (slotNumber: number, targetFormat?: 'SMALL' | 'MEDIUM') => void;
   onRelease: (slotNumber: number) => void;
   onUpdateStatus: (slotNumber: number, status: SlotStatus) => void;
   onUndoPayment?: (slotNumber: number, targetStatus?: SlotStatus, clearBusiness?: boolean) => void;
@@ -908,18 +908,48 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
               )}
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSplit(slot.slotNumber);
-              }}
-              className="flex items-center gap-0.5 text-[0.6rem] font-bold text-ink-dim hover:text-due border border-rule px-1.5 py-0.5 rounded bg-background cursor-pointer"
-              title={`Dividir de vuelta en espacios individuales chicos ($${activeSmallPrice})`}
-            >
-              <Minimize2 className="h-2.5 w-2.5 text-due" />
-              <span>Dividir</span>
-            </button>
+            <div>
+              <button
+                type="button"
+                onClick={() => onToggleMenu(slot.slotNumber)}
+                className="flex items-center gap-0.5 text-[0.6rem] font-medium text-ink-dim hover:text-ink border border-rule px-1.5 py-0.5 rounded bg-background cursor-pointer"
+                title="Dividir en Medianos o Chicos"
+              >
+                <Minimize2 className="h-2.5 w-2.5 text-due" />
+                <span>Modificar</span>
+                <ChevronDown className="h-2.5 w-2.5" />
+              </button>
+
+              {menuOpen && (
+                <div className="absolute left-0 bottom-full mb-1 z-30 w-52 bg-card border border-border shadow-xl p-1 text-xs">
+                  <div className="text-[0.62rem] font-bold text-muted-foreground px-2 py-1 uppercase border-b border-border">
+                    Dividir Espacio Grande
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSplit(slot.slotNumber, 'MEDIUM');
+                    }}
+                    className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-live font-bold cursor-pointer"
+                  >
+                    <span>Medianos (1×2)</span>
+                    <span>${activeMedPrice.toLocaleString('en-US')} c/u</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSplit(slot.slotNumber, 'SMALL');
+                    }}
+                    className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-due font-bold cursor-pointer border-t border-border mt-0.5"
+                  >
+                    <span>Dividir en Chicos (1×1)</span>
+                    <span>${activeSmallPrice.toLocaleString('en-US')} c/u</span>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

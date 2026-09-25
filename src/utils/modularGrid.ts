@@ -438,9 +438,14 @@ export function mergeModularSlot(
 }
 
 /**
- * Splits a merged MEDIUM or LARGE slot back into atomic SMALL ($350) slots
+ * Splits a merged MEDIUM or LARGE slot back into atomic SMALL ($350) slots,
+ * or splits a LARGE (2×2) slot into two vertical MEDIUM (1×2, $650) slots.
  */
-export function splitModularSlot(primarySlotNum: number, slots: SlotState[]): SlotState[] {
+export function splitModularSlot(
+  primarySlotNum: number,
+  slots: SlotState[],
+  targetFormat: 'SMALL' | 'MEDIUM' = 'SMALL'
+): SlotState[] {
   const normalized = normalizeModularSlots(slots);
   const primary = normalized.find((s) => s.slotNumber === primarySlotNum);
   if (!primary) return normalized;
@@ -449,6 +454,129 @@ export function splitModularSlot(primarySlotNum: number, slots: SlotState[]): Sl
   const activeSmallPrice = existingSmall?.priceUsd
     ?? (primary.priceUsd ? Math.round((primary.priceUsd * 350) / (primary.format === 'LARGE' ? 1200 : 650) / 5) * 5 : MODULAR_PRICES.SMALL);
 
+  const existingMed = normalized.find((s) => s.format === 'MEDIUM' && s.priceUsd && s.slotNumber !== 32);
+  const activeMedPrice = existingMed?.priceUsd
+    ?? (primary.priceUsd ? Math.round((primary.priceUsd * 650) / (primary.format === 'LARGE' ? 1200 : 350) / 5) * 5 : MODULAR_PRICES.MEDIUM);
+
+  // If primary was LARGE and targetFormat is MEDIUM, split 2x2 into two 1x2 MEDIUM slots
+  if (primary.format === 'LARGE' && targetFormat === 'MEDIUM') {
+    const originRow = primary.gridRow ?? 1;
+    const originCol = primary.gridCol ?? 1;
+    const side = primary.side;
+
+    const getCoord = (s: SlotState) => {
+      const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === s.slotNumber);
+      return {
+        r: s.gridRow ?? def?.gridRow ?? 1,
+        c: s.gridCol ?? def?.gridCol ?? 1,
+        side: s.side ?? def?.side ?? 'FRONT',
+      };
+    };
+
+    const leftBottom = normalized.find((s) => {
+      const coord = getCoord(s);
+      return coord.side === side && coord.r === originRow + 1 && coord.c === originCol;
+    });
+    const rightTop = normalized.find((s) => {
+      const coord = getCoord(s);
+      return coord.side === side && coord.r === originRow && coord.c === originCol + 1;
+    });
+    const rightBottom = normalized.find((s) => {
+      const coord = getCoord(s);
+      return coord.side === side && coord.r === originRow + 1 && coord.c === originCol + 1;
+    });
+
+    const rightTopNum = rightTop?.slotNumber;
+
+    return computeAdaptiveDisplayNumbers(normalized.map((s) => {
+      // 1. Left column top: Primary slot stays, becomes MEDIUM (1x2)
+      if (s.slotNumber === primarySlotNum) {
+        return {
+          ...s,
+          format: 'MEDIUM',
+          rowSpan: 2,
+          colSpan: 1,
+          gridRow: originRow,
+          gridCol: originCol,
+          priceUsd: activeMedPrice,
+          notes: undefined,
+        };
+      }
+
+      // 2. Left column bottom: covered by primarySlotNum
+      if (leftBottom && s.slotNumber === leftBottom.slotNumber) {
+        return {
+          ...s,
+          format: 'MEDIUM',
+          rowSpan: 1,
+          colSpan: 1,
+          gridRow: originRow + 1,
+          gridCol: originCol,
+          status: 'VACANT',
+          priceUsd: activeMedPrice,
+          businessName: undefined,
+          contactPerson: undefined,
+          phone: undefined,
+          email: undefined,
+          website: undefined,
+          logoUrl: undefined,
+          offerHeadline: undefined,
+          notes: `Covered by slot #${primarySlotNum}`,
+        };
+      }
+
+      // 3. Right column top: becomes a new independent VACANT MEDIUM slot
+      if (rightTop && s.slotNumber === rightTop.slotNumber) {
+        const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === s.slotNumber);
+        const cat = CLOSED_CATEGORIES.find((c) => c.id === def?.categoryId);
+        return {
+          ...s,
+          format: 'MEDIUM',
+          rowSpan: 2,
+          colSpan: 1,
+          gridRow: originRow,
+          gridCol: originCol + 1,
+          status: 'VACANT',
+          priceUsd: activeMedPrice,
+          categoryName: cat?.name ?? s.categoryName,
+          offerHeadline: cat?.defaultHeadline ?? s.offerHeadline,
+          businessName: undefined,
+          contactPerson: undefined,
+          phone: undefined,
+          email: undefined,
+          website: undefined,
+          logoUrl: undefined,
+          notes: undefined,
+        };
+      }
+
+      // 4. Right column bottom: covered by rightTopNum
+      if (rightBottom && s.slotNumber === rightBottom.slotNumber) {
+        return {
+          ...s,
+          format: 'MEDIUM',
+          rowSpan: 1,
+          colSpan: 1,
+          gridRow: originRow + 1,
+          gridCol: originCol + 1,
+          status: 'VACANT',
+          priceUsd: activeMedPrice,
+          businessName: undefined,
+          contactPerson: undefined,
+          phone: undefined,
+          email: undefined,
+          website: undefined,
+          logoUrl: undefined,
+          offerHeadline: undefined,
+          notes: rightTopNum ? `Covered by slot #${rightTopNum}` : `Covered by slot`,
+        };
+      }
+
+      return s;
+    }));
+  }
+
+  // Target is SMALL (split to atomic 1x1 cells)
   return computeAdaptiveDisplayNumbers(normalized.map((s) => {
     if (s.slotNumber === primarySlotNum) {
       const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === primarySlotNum);

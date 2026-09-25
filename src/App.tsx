@@ -566,10 +566,10 @@ export default function App() {
     }
   };
 
-  const handleSplitSlot = async (slotNumber: number) => {
+  const handleSplitSlot = async (slotNumber: number, targetFormat: 'SMALL' | 'MEDIUM' = 'SMALL') => {
     if (!campaign) return;
     setIsSaving(true);
-    const updatedSlots = splitModularSlot(slotNumber, campaign.slots);
+    const updatedSlots = splitModularSlot(slotNumber, campaign.slots, targetFormat);
     patchSlots(campaign.id, () => updatedSlots);
     try {
       await batchUpdateCampaignSlots(campaign.id, updatedSlots);

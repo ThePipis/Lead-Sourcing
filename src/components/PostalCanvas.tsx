@@ -7,6 +7,8 @@ import {
   CheckCheck,
   Building2,
   Loader2,
+  Lock,
+  Unlock,
   GripVertical,
   RotateCcw,
   Sparkles,
@@ -19,6 +21,7 @@ import {
   Layers,
   ArrowRight,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 import {
   DndContext,
@@ -66,7 +69,7 @@ export interface PostalCanvasProps {
   selectedRoutes?: number;
   onAutofill?: () => void;
   onMarkAllPaid?: () => void;
-  onUndoPayment?: (slotNumber: number) => void;
+  onUndoPayment?: (slotNumber: number, targetStatus?: SlotStatus, clearBusiness?: boolean) => void;
   isDemo?: boolean;
   onInspectSlot?: (slotNumber: number) => void;
   selectedSlot?: number | null;
@@ -396,6 +399,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         onSplit={handleSplit}
                         onRelease={handleRelease}
                         onUpdateStatus={onUpdateSlotStatus}
+                        onUndoPayment={onUndoPayment}
                         busy={busySlot === slot.slotNumber}
                         onNextCandidate={onNextCandidate}
                         menuOpen={formatMenuSlot === slot.slotNumber}
@@ -433,6 +437,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         onSplit={handleSplit}
                         onRelease={handleRelease}
                         onUpdateStatus={onUpdateSlotStatus}
+                        onUndoPayment={onUndoPayment}
                         busy={busySlot === slot.slotNumber}
                         onNextCandidate={onNextCandidate}
                         menuOpen={formatMenuSlot === slot.slotNumber}
@@ -459,6 +464,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         onSplit={handleSplit}
                         onRelease={handleRelease}
                         onUpdateStatus={onUpdateSlotStatus}
+                        onUndoPayment={onUndoPayment}
                         busy={busySlot === slot.slotNumber}
                         onNextCandidate={onNextCandidate}
                         menuOpen={formatMenuSlot === slot.slotNumber}
@@ -504,6 +510,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                           onSplit={handleSplit}
                           onRelease={handleRelease}
                           onUpdateStatus={onUpdateSlotStatus}
+                          onUndoPayment={onUndoPayment}
                           busy={busySlot === slot.slotNumber}
                           onNextCandidate={onNextCandidate}
                           menuOpen={formatMenuSlot === slot.slotNumber}
@@ -575,6 +582,7 @@ interface ModularSlotCardProps {
   onSplit: (slotNumber: number) => void;
   onRelease: (slotNumber: number) => void;
   onUpdateStatus: (slotNumber: number, status: SlotStatus) => void;
+  onUndoPayment?: (slotNumber: number, targetStatus?: SlotStatus, clearBusiness?: boolean) => void;
   busy?: boolean;
   onNextCandidate?: (slotNumber: number) => void;
   menuOpen: boolean;
@@ -592,6 +600,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   onSplit,
   onRelease,
   onUpdateStatus,
+  onUndoPayment,
   busy,
   onNextCandidate,
   menuOpen,
@@ -604,6 +613,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   const isProspecting = slot.status === 'PROSPECTING';
   const isVacant = slot.status === 'VACANT';
   const isExpired = isReservationExpired(slot);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
   const format: SlotFormat =
     slot.format ||
@@ -758,6 +768,27 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
           </div>
         )}
 
+        {/* Paid Status & Quick Unlock Action */}
+        {isPaid && (
+          <div className="mb-1.5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-1.5 py-0.5 rounded text-[0.6rem] font-bold border bg-clear/15 border-clear/40 text-clear">
+              <span className="flex items-center gap-1 truncate">
+                <Lock className="h-3 w-3 shrink-0" />
+                <span className="truncate">PAGADO {slot.paymentRef ? `· ${slot.paymentRef}` : ''}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowUnlockModal(true)}
+                className="ml-1 text-[0.58rem] shrink-0 flex items-center gap-0.5 font-black text-due hover:underline hover:text-due-dark bg-due/10 border border-due/30 px-1.5 py-0.2 rounded cursor-pointer transition-colors"
+                title="Desbloquear este slot o hacer rollback si el cliente canceló"
+              >
+                <Unlock className="h-2.5 w-2.5" />
+                Desbloquear
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Business Name & Niche */}
         <div className="mt-0.5">
           <h4 className="text-xs font-bold line-clamp-1 text-foreground">
@@ -901,8 +932,18 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
         {/* Status Dropdown */}
         <select
           value={slot.status}
-          disabled={isPaid}
-          onChange={(e) => onUpdateStatus(slot.slotNumber, e.target.value as SlotStatus)}
+          onChange={(e) => {
+            const next = e.target.value as SlotStatus;
+            if (isPaid && next !== 'PAID') {
+              if (next === 'VACANT') {
+                onUndoPayment?.(slot.slotNumber, 'VACANT', true);
+              } else {
+                onUndoPayment?.(slot.slotNumber, next, false);
+              }
+            } else {
+              onUpdateStatus(slot.slotNumber, next);
+            }
+          }}
           className="bg-card text-foreground border border-border text-[0.63rem] font-semibold px-1 py-0.5 rounded focus:outline-none cursor-pointer"
         >
           <option value="VACANT">Vacante</option>
@@ -911,6 +952,83 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
           <option value="PAID">Pagado (${slot.priceUsd})</option>
         </select>
       </div>
+
+      {/* Inline Unlock / Rollback Modal */}
+      {showUnlockModal && (
+        <div
+          className="absolute inset-0 z-40 bg-card/95 backdrop-blur-xs p-2 sm:p-2.5 flex flex-col justify-between border-2 border-due shadow-xl rounded"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div>
+            <div className="flex items-center justify-between border-b border-border pb-1 mb-1.5">
+              <div className="flex items-center gap-1 text-[0.68rem] font-black text-foreground">
+                <Unlock className="h-3.5 w-3.5 text-due shrink-0" />
+                <span>Desbloquear #{slot.displayNumber ?? slot.slotNumber}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowUnlockModal(false)}
+                className="text-muted-foreground hover:text-foreground text-xs font-bold p-0.5 cursor-pointer"
+                title="Cerrar"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-[0.6rem] text-muted-foreground mb-2 leading-tight">
+              ¿Qué deseas hacer con este espacio pagado?
+            </p>
+
+            <div className="space-y-1.5">
+              {/* Option 1: Desbloquear cobro (Mantener comercio) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUnlockModal(false);
+                  onUndoPayment?.(slot.slotNumber, 'RESERVED', false);
+                }}
+                className="w-full text-left p-1.5 rounded border border-live/50 bg-live/10 hover:bg-live/20 transition-colors cursor-pointer group"
+                title="Quitar cobro pero mantener al cliente para editar datos o renegociar"
+              >
+                <div className="text-[0.64rem] font-bold text-live flex items-center gap-1">
+                  <Unlock className="h-3 w-3 shrink-0" />
+                  <span>Desbloquear cobro (Pasar a Reservado)</span>
+                </div>
+                <div className="text-[0.56rem] text-muted-foreground leading-tight mt-0.5 group-hover:text-foreground">
+                  Conserva el anunciante. Permite editarlo o renegociar.
+                </div>
+              </button>
+
+              {/* Option 2: Dar de baja total (Rollback / Unregister) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUnlockModal(false);
+                  onUndoPayment?.(slot.slotNumber, 'VACANT', true);
+                }}
+                className="w-full text-left p-1.5 rounded border border-due/50 bg-due/10 hover:bg-due/20 transition-colors cursor-pointer group"
+                title="Rollback total: anula el pago y borra al anunciante de la BD"
+              >
+                <div className="text-[0.64rem] font-bold text-due flex items-center gap-1">
+                  <RotateCcw className="h-3 w-3 shrink-0" />
+                  <span>Dar de baja total (Rollback a Vacante)</span>
+                </div>
+                <div className="text-[0.56rem] text-muted-foreground leading-tight mt-0.5 group-hover:text-foreground">
+                  El cliente desistió: quita el pago y libera el slot en la BD.
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowUnlockModal(false)}
+            className="w-full text-center py-1 mt-1 text-[0.6rem] font-semibold text-muted-foreground hover:text-foreground border border-border rounded bg-secondary/50 cursor-pointer"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -11,8 +11,10 @@ import {
   Lock,
   MapPin,
   Phone,
+  RotateCcw,
   Sparkles,
   Star,
+  Unlock,
   X,
 } from 'lucide-react';
 import { CLOSED_CATEGORIES } from '../data/categories.ts';
@@ -40,7 +42,7 @@ interface SlotInspectorProps {
   onUpdateStatus: (slotNumber: number, status: SlotStatus) => void;
   onSwapSlots: (source: number, target: number) => void;
   onClearSlot: (slotNumber: number) => void;
-  onUndoPayment: (slotNumber: number) => void;
+  onUndoPayment: (slotNumber: number, targetStatus?: SlotStatus, clearBusiness?: boolean) => void;
   onAssignLead: (slotNumber: number, lead: LeadProspect, targetStatus?: SlotStatus) => void;
 }
 
@@ -382,10 +384,21 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
               </div>
 
               {isPaid && (
-                <p className="flex items-start gap-2 border border-clear/50 bg-clear/10 px-3 py-1.5 text-xs leading-relaxed text-clear">
-                  <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>{t('canvas:modal.paidNotice')}</span>
-                </p>
+                <div className="flex items-start justify-between gap-2 border border-clear/50 bg-clear/10 px-3 py-2 text-xs leading-relaxed text-clear">
+                  <div className="flex items-start gap-2">
+                    <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>{t('canvas:modal.paidNotice')}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onUndoPayment(slot.slotNumber, 'RESERVED', false)}
+                    className="shrink-0 text-[0.68rem] font-bold text-due hover:underline flex items-center gap-1 cursor-pointer bg-due/10 px-2 py-0.5 border border-due/40 rounded"
+                    title="Desbloquear cobro y regresar a Reservado"
+                  >
+                    <Unlock className="h-3 w-3" />
+                    Desbloquear
+                  </button>
+                </div>
               )}
 
               <label className="block">
@@ -483,15 +496,37 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
               </p>
               <div className="flex flex-wrap gap-2">
                 {isPaid ? (
-                  <button
-                    id="btn-inspector-undo-payment"
-                    type="button"
-                    onClick={() => onUndoPayment(slot.slotNumber)}
-                    disabled={isSaving}
-                    className="min-h-9 border border-due px-3 text-xs font-bold text-due transition-colors hover:bg-due hover:text-background disabled:opacity-40"
-                  >
-                    {t('canvas:modal.undoPayment')}
-                  </button>
+                  <div className="flex flex-col gap-2 w-full">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        id="btn-inspector-undo-payment"
+                        type="button"
+                        onClick={() => onUndoPayment(slot.slotNumber, 'RESERVED', false)}
+                        disabled={isSaving}
+                        className="flex-1 min-h-9 border border-live/70 bg-live/10 px-3 text-xs font-bold text-live transition-colors hover:bg-live hover:text-background disabled:opacity-40 flex items-center justify-center gap-1.5 cursor-pointer"
+                        title="Desbloquear el cobro manteniendo los datos del comercio para poder editarlos o renegociar"
+                      >
+                        <Unlock className="h-3.5 w-3.5" />
+                        <span>Desbloquear cobro (Pasar a Reservado)</span>
+                      </button>
+
+                      <button
+                        id="btn-inspector-rollback-vacant"
+                        type="button"
+                        onClick={() => onUndoPayment(slot.slotNumber, 'VACANT', true)}
+                        disabled={isSaving}
+                        className="flex-1 min-h-9 border border-due bg-due/10 px-3 text-xs font-bold text-due transition-colors hover:bg-due hover:text-background disabled:opacity-40 flex items-center justify-center gap-1.5 cursor-pointer"
+                        title="Rollback total: el cliente desistió o canceló el servicio. Anula el cobro y borra los datos dejando el slot vacante"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        <span>Dar de baja total (Rollback a Vacante)</span>
+                      </button>
+                    </div>
+                    <span className="text-[0.68rem] text-muted-foreground leading-relaxed">
+                      💡 <strong>Desbloquear cobro:</strong> Mantiene al anunciante pero quita el pago para renegociar o editar. <br/>
+                      💡 <strong>Dar de baja total:</strong> Desvincula y desregistra al anunciante de la base de datos dejando el slot libre.
+                    </span>
+                  </div>
                 ) : (
                   <>
                     <button

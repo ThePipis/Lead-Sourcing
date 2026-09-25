@@ -248,6 +248,18 @@ export default function App() {
         }, 0);
         const cost = dropCostUsd(c);
         const margin = revenue > 0 ? (revenue - cost) / revenue : 0;
+        const paidCount = nextSlots.filter((s) => s.status === 'PAID' && s.slotNumber !== 32).length;
+        const totalCollected = nextSlots.reduce((acc, s) => {
+          if (s.format === 'USPS' || s.slotNumber === 32 || s.notes?.includes('Covered by')) return acc;
+          return s.status === 'PAID' ? acc + (s.amountCollectedUsd || s.priceUsd || 0) : acc;
+        }, 0);
+        const advCount = nextSlots.filter((s) => s.slotNumber !== 32 && !s.notes?.includes('Covered by')).length;
+        const nextStatus =
+          advCount > 0 && paidCount >= advCount
+            ? 'LOCKED_READY'
+            : c.status === 'LOCKED_READY'
+            ? 'PROSPECTING'
+            : c.status;
         return {
           ...c,
           slots: nextSlots,
@@ -255,6 +267,9 @@ export default function App() {
           operatingCostEst: cost,
           netMarginEst: Math.max(0, revenue - cost),
           targetMargin: margin,
+          paidCount,
+          totalCollectedUsd: totalCollected,
+          status: nextStatus,
         };
       });
     },
@@ -495,6 +510,14 @@ export default function App() {
       return;
     }
 
+    const currentSlot = campaign.slots.find((s) => s.slotNumber === slotNumber);
+    const wasPaid = currentSlot?.status === 'PAID';
+
+    if (wasPaid) {
+      await handleUndoPayment(slotNumber, newStatus, newStatus === 'VACANT');
+      return;
+    }
+
     const isReserving = newStatus === 'RESERVED';
     const reservedAt = isReserving ? new Date().toISOString() : undefined;
     const reservationExpiresAt = isReserving
@@ -691,13 +714,19 @@ export default function App() {
       businessName: '',
       contactPerson: '',
       phone: '',
+      email: '',
+      website: '',
+      businessAddress: '',
+      offerHeadline: '',
       status: 'VACANT' as SlotStatus,
       paymentRef: '',
+      amountCollectedUsd: 0,
+      paidAt: null,
     };
     patchSlots(campaign.id, (slots) =>
       slots.map((s) =>
         s.slotNumber === slotNumber
-          ? { ...s, ...reset, paidAt: undefined, amountCollectedUsd: undefined }
+          ? { ...s, ...reset, paidAt: undefined, amountCollectedUsd: 0 }
           : s,
       ),
     );
@@ -825,21 +854,58 @@ export default function App() {
   };
 
   /**
-   * Undo a payment recorded by mistake. The box goes back to RESERVED — the
-   * advertiser is still there, the money simply is not — and the reference and
-   * the date are cleared so nothing claims a transfer that did not happen.
+   * Undo a payment or rollback / unregister a slot.
+   * - targetStatus: status to revert to ('RESERVED', 'PROSPECTING', or 'VACANT').
+   * - clearBusiness: whether to wipe business information (for client rollback/unregister).
    */
-  const handleUndoPayment = async (slotNumber: number) => {
+  const handleUndoPayment = async (
+    slotNumber: number,
+    targetStatus: SlotStatus = 'RESERVED',
+    clearBusiness: boolean = false,
+  ) => {
     if (!campaign) return;
     setIsSaving(true);
+    const shouldWipeBusiness = clearBusiness || targetStatus === 'VACANT';
     try {
-      const updated = await updateCampaignSlot(campaign.id, slotNumber, {
-        status: 'RESERVED',
+      const resetPayload: any = {
+        status: targetStatus,
         paymentRef: '',
         amountCollectedUsd: 0,
-      });
+        paidAt: null,
+      };
+      if (shouldWipeBusiness) {
+        resetPayload.businessName = '';
+        resetPayload.contactPerson = '';
+        resetPayload.phone = '';
+        resetPayload.email = '';
+        resetPayload.website = '';
+        resetPayload.businessAddress = '';
+        resetPayload.offerHeadline = '';
+      }
+      const updated = await updateCampaignSlot(campaign.id, slotNumber, resetPayload);
       patchSlots(campaign.id, (slots) =>
-        slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
+        slots.map((s) =>
+          s.slotNumber === slotNumber
+            ? {
+                ...mergeSlotUpdate(s, updated),
+                status: targetStatus,
+                paymentRef: '',
+                amountCollectedUsd: 0,
+                paidAt: undefined,
+                ...(shouldWipeBusiness
+                  ? {
+                      businessName: '',
+                      contactPerson: '',
+                      phone: '',
+                      email: '',
+                      website: '',
+                      businessAddress: '',
+                      offerHeadline: '',
+                    }
+                  : {}),
+              }
+            : s,
+        ),
       );
       setLoadError(null);
     } catch (err) {

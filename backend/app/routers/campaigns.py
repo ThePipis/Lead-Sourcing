@@ -496,6 +496,29 @@ def update_slot(campaign_id: str, slot_id: str, req: SlotUpdate, db: Session = D
         setattr(slot, key, value)
     if "format" in update_data and "slot_type" not in update_data and update_data["format"]:
         slot.slot_type = update_data["format"]
+
+    # When slot is rolled back or unlocked from PAID, clear all payment artifacts
+    if slot.status != "PAID":
+        slot.paid_at = None
+        slot.payment_ref = None
+        slot.amount_collected_usd = 0.0
+
+    # When slot is rolled back to VACANT (unregister), ensure advertiser fields are emptied
+    if slot.status == "VACANT":
+        if "business_name" not in update_data:
+            slot.business_name = None
+        if "contact_person" not in update_data:
+            slot.contact_person = None
+        if "phone" not in update_data:
+            slot.phone = None
+        if "email" not in update_data:
+            slot.email = None
+        if "website" not in update_data:
+            slot.website = None
+        if "business_address" not in update_data:
+            slot.business_address = None
+        if "offer_headline" not in update_data:
+            slot.offer_headline = None
     
     # Recalculate campaign financials dynamically
     all_slots = db.query(Slot).filter(Slot.campaign_id == camp.id).all()
@@ -508,7 +531,7 @@ def update_slot(campaign_id: str, slot_id: str, req: SlotUpdate, db: Session = D
     advertiser_slots_count = len([s for s in all_slots if s.slot_number != 32])
     if advertiser_slots_count > 0 and paid_count >= advertiser_slots_count:
         camp.status = "LOCKED_READY"
-    elif camp.status != "CURATED":
+    elif camp.status == "LOCKED_READY":
         camp.status = "PROSPECTING"
     db.commit()
     db.refresh(slot)
@@ -587,6 +610,30 @@ def batch_update_slots(campaign_id: str, updates: List[dict] = Body(...), db: Se
             val = item.get("amount_collected_usd") if "amount_collected_usd" in item else item.get("amountCollectedUsd")
             if val is not None:
                 slot.amount_collected_usd = float(val)
+
+        # When slot is rolled back or unlocked from PAID, clear all payment artifacts
+        if slot.status != "PAID":
+            slot.paid_at = None
+            slot.payment_ref = None
+            slot.amount_collected_usd = 0.0
+
+        # When slot is rolled back to VACANT (unregister), ensure advertiser fields are emptied
+        if slot.status == "VACANT":
+            if "business_name" not in item and "businessName" not in item:
+                slot.business_name = None
+            if "contact_person" not in item and "contactPerson" not in item:
+                slot.contact_person = None
+            if "phone" not in item:
+                slot.phone = None
+            if "email" not in item:
+                slot.email = None
+            if "website" not in item:
+                slot.website = None
+            if "business_address" not in item and "businessAddress" not in item:
+                slot.business_address = None
+            if "offer_headline" not in item and "offerHeadline" not in item:
+                slot.offer_headline = None
+
         updated_slots.append(slot)
 
     db.commit()
@@ -602,7 +649,7 @@ def batch_update_slots(campaign_id: str, updates: List[dict] = Body(...), db: Se
     advertiser_slots_count = len([s for s in all_slots if s.slot_number != 32])
     if advertiser_slots_count > 0 and paid_count >= advertiser_slots_count:
         camp.status = "LOCKED_READY"
-    elif camp.status != "CURATED":
+    elif camp.status == "LOCKED_READY":
         camp.status = "PROSPECTING"
     db.commit()
     db.refresh(camp)

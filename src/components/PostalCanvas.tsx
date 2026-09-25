@@ -22,6 +22,7 @@ import {
   ArrowRight,
   ShieldAlert,
   Trash2,
+  X,
 } from 'lucide-react';
 import {
   DndContext,
@@ -139,7 +140,20 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [draggingSlot, setDraggingSlot] = useState<number | null>(null);
   const [formatMenuSlot, setFormatMenuSlot] = useState<number | null>(null);
+  const [unlockTargetSlot, setUnlockTargetSlot] = useState<SlotState | null>(null);
   const [, setTimerTick] = useState(0);
+
+  // Close unlock modal on Escape key
+  useEffect(() => {
+    if (!unlockTargetSlot) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setUnlockTargetSlot(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [unlockTargetSlot]);
 
   // Normalize slots to ensure modular 31+1 grid geometry
   const slots = normalizeModularSlots(rawSlots);
@@ -394,6 +408,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         onRelease={handleRelease}
                         onUpdateStatus={onUpdateSlotStatus}
                         onUndoPayment={onUndoPayment}
+                        onPromptUnlock={(s) => setUnlockTargetSlot(s)}
                         busy={busySlot === slot.slotNumber}
                         onNextCandidate={onNextCandidate}
                         menuOpen={formatMenuSlot === slot.slotNumber}
@@ -432,6 +447,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         onRelease={handleRelease}
                         onUpdateStatus={onUpdateSlotStatus}
                         onUndoPayment={onUndoPayment}
+                        onPromptUnlock={(s) => setUnlockTargetSlot(s)}
                         busy={busySlot === slot.slotNumber}
                         onNextCandidate={onNextCandidate}
                         menuOpen={formatMenuSlot === slot.slotNumber}
@@ -459,6 +475,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         onRelease={handleRelease}
                         onUpdateStatus={onUpdateSlotStatus}
                         onUndoPayment={onUndoPayment}
+                        onPromptUnlock={(s) => setUnlockTargetSlot(s)}
                         busy={busySlot === slot.slotNumber}
                         onNextCandidate={onNextCandidate}
                         menuOpen={formatMenuSlot === slot.slotNumber}
@@ -505,6 +522,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                           onRelease={handleRelease}
                           onUpdateStatus={onUpdateSlotStatus}
                           onUndoPayment={onUndoPayment}
+                          onPromptUnlock={(s) => setUnlockTargetSlot(s)}
                           busy={busySlot === slot.slotNumber}
                           onNextCandidate={onNextCandidate}
                           menuOpen={formatMenuSlot === slot.slotNumber}
@@ -557,6 +575,111 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                 </div>
               )}
             </DragOverlay>
+
+            {/* Global Unlock / Rollback Modal */}
+            {unlockTargetSlot && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+                onClick={() => setUnlockTargetSlot(null)}
+              >
+                <div
+                  className="w-full max-w-md bg-card border-2 border-due shadow-2xl rounded-lg p-5 flex flex-col space-y-4 animate-in zoom-in-95 duration-150"
+                  onClick={(e) => e.stopPropagation()}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="unlock-modal-title"
+                >
+                  <div className="flex items-center justify-between border-b border-border pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-md bg-due/15 text-due">
+                        <Unlock className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 id="unlock-modal-title" className="text-sm font-black text-foreground">
+                          Desbloquear Espacio #{unlockTargetSlot.displayNumber ?? unlockTargetSlot.slotNumber}
+                        </h3>
+                        <p className="text-[0.68rem] text-muted-foreground mt-0.5">
+                          {unlockTargetSlot.businessName || unlockTargetSlot.categoryName || 'Comercio Local'} · Pagado (${unlockTargetSlot.priceUsd})
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setUnlockTargetSlot(null)}
+                      className="rounded p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
+                      title="Cerrar modal"
+                      aria-label="Cerrar"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    ¿Qué deseas hacer con este espacio actualmente registrado como pagado?
+                  </p>
+
+                  <div className="space-y-3">
+                    {/* Option 1: Desbloquear cobro (Pasar a Reservado) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const num = unlockTargetSlot.slotNumber;
+                        setUnlockTargetSlot(null);
+                        onUndoPayment?.(num, 'RESERVED', false);
+                      }}
+                      className="w-full text-left p-3.5 rounded-lg border-2 border-live/40 bg-live/5 hover:bg-live/15 hover:border-live transition-all cursor-pointer group flex items-start gap-3"
+                    >
+                      <div className="mt-0.5 p-2 rounded-full bg-live/20 text-live shrink-0 group-hover:scale-105 transition-transform">
+                        <Unlock className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-xs font-bold text-live flex items-center justify-between">
+                          <span>Desbloquear cobro (Pasar a Reservado)</span>
+                          <span className="text-[0.62rem] font-bold uppercase tracking-wider text-live/80 bg-live/10 px-1.5 py-0.5 rounded border border-live/30">Seguro</span>
+                        </div>
+                        <div className="text-[0.72rem] text-muted-foreground leading-snug mt-1 group-hover:text-foreground">
+                          Conserva al anunciante y sus datos en la casilla. Anula el registro de pago para permitir editar el nombre, titular o renegociar las condiciones comerciales.
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Option 2: Dar de baja total (Rollback a Vacante) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const num = unlockTargetSlot.slotNumber;
+                        setUnlockTargetSlot(null);
+                        onUndoPayment?.(num, 'VACANT', true);
+                      }}
+                      className="w-full text-left p-3.5 rounded-lg border-2 border-due/40 bg-due/5 hover:bg-due/15 hover:border-due transition-all cursor-pointer group flex items-start gap-3"
+                    >
+                      <div className="mt-0.5 p-2 rounded-full bg-due/20 text-due shrink-0 group-hover:scale-105 transition-transform">
+                        <RotateCcw className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-xs font-bold text-due flex items-center justify-between">
+                          <span>Dar de baja total (Rollback a Vacante)</span>
+                          <span className="text-[0.62rem] font-bold uppercase tracking-wider text-due/80 bg-due/10 px-1.5 py-0.5 rounded border border-due/30">Desvincular</span>
+                        </div>
+                        <div className="text-[0.72rem] text-muted-foreground leading-snug mt-1 group-hover:text-foreground">
+                          El cliente desistió: anula el pago y borra al anunciante de la base de datos, dejando la casilla completamente vacante y disponible para prospectar a otro negocio.
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="pt-2 border-t border-border flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setUnlockTargetSlot(null)}
+                      className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground border border-border rounded-md bg-secondary/60 hover:bg-secondary transition-colors cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </DndContext>
         </div>
       </div>
@@ -577,6 +700,7 @@ interface ModularSlotCardProps {
   onRelease: (slotNumber: number) => void;
   onUpdateStatus: (slotNumber: number, status: SlotStatus) => void;
   onUndoPayment?: (slotNumber: number, targetStatus?: SlotStatus, clearBusiness?: boolean) => void;
+  onPromptUnlock?: (slot: SlotState) => void;
   busy?: boolean;
   onNextCandidate?: (slotNumber: number) => void;
   menuOpen: boolean;
@@ -595,6 +719,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   onRelease,
   onUpdateStatus,
   onUndoPayment,
+  onPromptUnlock,
   busy,
   onNextCandidate,
   menuOpen,
@@ -607,7 +732,6 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   const isProspecting = slot.status === 'PROSPECTING';
   const isVacant = slot.status === 'VACANT';
   const isExpired = isReservationExpired(slot);
-  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
   const format: SlotFormat =
     slot.format ||
@@ -772,7 +896,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
               </span>
               <button
                 type="button"
-                onClick={() => setShowUnlockModal(true)}
+                onClick={() => (onPromptUnlock ? onPromptUnlock(slot) : onUndoPayment?.(slot.slotNumber, 'RESERVED', false))}
                 className="ml-1 text-[0.58rem] shrink-0 flex items-center gap-0.5 font-black text-due hover:underline hover:text-due-dark bg-due/10 border border-due/30 px-1.5 py-0.2 rounded cursor-pointer transition-colors"
                 title="Desbloquear este slot o hacer rollback si el cliente canceló"
               >
@@ -976,83 +1100,6 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
           <option value="PAID">Pagado (${slot.priceUsd})</option>
         </select>
       </div>
-
-      {/* Inline Unlock / Rollback Modal */}
-      {showUnlockModal && (
-        <div
-          className="absolute inset-0 z-40 bg-card/95 backdrop-blur-xs p-2 sm:p-2.5 flex flex-col justify-between border-2 border-due shadow-xl rounded"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div>
-            <div className="flex items-center justify-between border-b border-border pb-1 mb-1.5">
-              <div className="flex items-center gap-1 text-[0.68rem] font-black text-foreground">
-                <Unlock className="h-3.5 w-3.5 text-due shrink-0" />
-                <span>Desbloquear #{slot.displayNumber ?? slot.slotNumber}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowUnlockModal(false)}
-                className="text-muted-foreground hover:text-foreground text-xs font-bold p-0.5 cursor-pointer"
-                title="Cerrar"
-              >
-                ✕
-              </button>
-            </div>
-
-            <p className="text-[0.6rem] text-muted-foreground mb-2 leading-tight">
-              ¿Qué deseas hacer con este espacio pagado?
-            </p>
-
-            <div className="space-y-1.5">
-              {/* Option 1: Desbloquear cobro (Mantener comercio) */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowUnlockModal(false);
-                  onUndoPayment?.(slot.slotNumber, 'RESERVED', false);
-                }}
-                className="w-full text-left p-1.5 rounded border border-live/50 bg-live/10 hover:bg-live/20 transition-colors cursor-pointer group"
-                title="Quitar cobro pero mantener al cliente para editar datos o renegociar"
-              >
-                <div className="text-[0.64rem] font-bold text-live flex items-center gap-1">
-                  <Unlock className="h-3 w-3 shrink-0" />
-                  <span>Desbloquear cobro (Pasar a Reservado)</span>
-                </div>
-                <div className="text-[0.56rem] text-muted-foreground leading-tight mt-0.5 group-hover:text-foreground">
-                  Conserva el anunciante. Permite editarlo o renegociar.
-                </div>
-              </button>
-
-              {/* Option 2: Dar de baja total (Rollback / Unregister) */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowUnlockModal(false);
-                  onUndoPayment?.(slot.slotNumber, 'VACANT', true);
-                }}
-                className="w-full text-left p-1.5 rounded border border-due/50 bg-due/10 hover:bg-due/20 transition-colors cursor-pointer group"
-                title="Rollback total: anula el pago y borra al anunciante de la BD"
-              >
-                <div className="text-[0.64rem] font-bold text-due flex items-center gap-1">
-                  <RotateCcw className="h-3 w-3 shrink-0" />
-                  <span>Dar de baja total (Rollback a Vacante)</span>
-                </div>
-                <div className="text-[0.56rem] text-muted-foreground leading-tight mt-0.5 group-hover:text-foreground">
-                  El cliente desistió: quita el pago y libera el slot en la BD.
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowUnlockModal(false)}
-            className="w-full text-center py-1 mt-1 text-[0.6rem] font-semibold text-muted-foreground hover:text-foreground border border-border rounded bg-secondary/50 cursor-pointer"
-          >
-            Cancelar
-          </button>
-        </div>
-      )}
     </div>
   );
 };

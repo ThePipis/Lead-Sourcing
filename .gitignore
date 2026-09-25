@@ -15,8 +15,15 @@ coverage/
 .claude/
 .serena/
 .impeccable/
+.kilo/
 tasks/
 skills-lock.json
+
+# Local Scripts & Utilities
+scripts/
+
+# Process & Server PID Cache
+.server_pids.json
 
 # IDE & Editors
 .vscode/

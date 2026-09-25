@@ -11,12 +11,6 @@ import {
   updateCosts,
 } from '../services/costService.ts';
 import { SlotState } from '../types.ts';
-import {
-  computeCurrentGrossRevenue,
-  computeMarginPercent,
-  computeScaledPricesForMargin,
-  MODULAR_PRICES,
-} from '../utils/modularGrid.ts';
 
 interface CostPanelProps {
   mode: AppMode;
@@ -162,55 +156,6 @@ export const CostPanel: React.FC<CostPanelProps> = ({
   const currentUnitCost = costs?.unitCost ?? 0.615;
   const currentTotalCost = costs?.previewTotalCost ?? (currentUnitCost * households + (costs?.fixedCost || 0));
 
-  // 1. Ingresos brutos actuales calculados dinámicamente de los slots
-  const currentGrossRevenue = React.useMemo(() => computeCurrentGrossRevenue(slots), [slots]);
-
-  // 2. Margen real actual calculado en base a costos operativos e ingresos de slots
-  const actualCalculatedMargin = React.useMemo(
-    () => computeMarginPercent(currentGrossRevenue, currentTotalCost),
-    [currentGrossRevenue, currentTotalCost]
-  );
-
-  // 3. Estado local del input de margen
-  const [marginInput, setMarginInput] = useState<number>(actualCalculatedMargin);
-  const [isTypingMargin, setIsTypingMargin] = useState(false);
-  const syncTimer = useRef<number | undefined>(undefined);
-
-  // Auto-sincronizar el campo cuando cambia el margen real (si el usuario no está tecleando activamente)
-  useEffect(() => {
-    if (!isTypingMargin) {
-      setMarginInput(actualCalculatedMargin);
-    }
-  }, [actualCalculatedMargin, isTypingMargin]);
-
-  // 4. Tarifas proporcionales en vivo según el margen activo en pantalla
-  const scaledTariffs = React.useMemo(
-    () => computeScaledPricesForMargin(slots, marginInput, currentTotalCost, 5),
-    [slots, marginInput, currentTotalCost]
-  );
-
-  const handleTargetMarginChange = (raw: string) => {
-    const val = Number(raw);
-    setMarginInput(val);
-    setIsTypingMargin(true);
-
-    if (!Number.isFinite(val) || val < 5 || val > 95) return;
-
-    // Calcular tarifas proporcionales de inmediato
-    const scaled = computeScaledPricesForMargin(slots, val, currentTotalCost, 5);
-
-    // Sincronizar inmediatamente los slots de la campaña
-    onApplySuggested(scaled.pricesBySlot);
-
-    // Debounce para guardar el target_margin en backend sin saturar
-    window.clearTimeout(syncTimer.current);
-    syncTimer.current = window.setTimeout(() => {
-      setCosts((prev) => (prev ? { ...prev, targetMargin: val / 100 } : prev));
-      savePatch({ targetMargin: val / 100 });
-      setIsTypingMargin(false);
-    }, 450);
-  };
-
   const currentPartner = DIRECT_MAIL_PARTNERS.find((p) => p.id === selectedPartnerId) || DIRECT_MAIL_PARTNERS[0];
 
   return (
@@ -304,8 +249,8 @@ export const CostPanel: React.FC<CostPanelProps> = ({
             </div>
           </div>
 
-          {/* 2. Parámetros Clave: Costo por flyer y Margen */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 border-t border-rule pt-4">
+          {/* 2. Parámetros Clave: Costo por flyer y Hogares */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-rule pt-4">
             <div>
               <label htmlFor="cost-per-piece-input" className="block text-xs font-semibold text-ink mb-1.5">
                 Costo por Flyer Todo Incluido ($)
@@ -329,51 +274,6 @@ export const CostPanel: React.FC<CostPanelProps> = ({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label htmlFor="target-margin-input" className="block text-xs font-semibold text-ink">
-                  Margen de Beneficio Objetivo (%)
-                </label>
-                <span className="text-[0.66rem] font-semibold text-live">
-                  Sincronizado con slots
-                </span>
-              </div>
-              <div className="relative">
-                <input
-                  id="target-margin-input"
-                  type="number"
-                  step="1"
-                  min="5"
-                  max="95"
-                  value={marginInput}
-                  onChange={(e) => handleTargetMarginChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-rule bg-background text-sm font-semibold text-ink focus:border-live focus:outline-none"
-                />
-                <span className="absolute right-3 top-2.5 text-xs text-ink-dim">%</span>
-              </div>
-              <span className="text-[0.67rem] text-ink-dim mt-1 block">
-                Porcentaje de ganancia bruta sobre los ingresos totales recaudados
-              </span>
-
-              {/* Tarifas proporcionales sincronizadas en tiempo real */}
-              <div className="mt-2.5 p-2 rounded bg-secondary/30 border border-rule/70 space-y-1">
-                <div className="text-[0.65rem] uppercase font-bold text-ink-dim tracking-wider">
-                  Tarifas proporcionales por tamaño:
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5 text-[0.72rem] font-mono">
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-background border border-rule text-ink">
-                    🟩 Chico (1×1): <strong className="text-live">${scaledTariffs.smallPrice}</strong>
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-background border border-rule text-ink">
-                    🟦 Mediano (1×2): <strong className="text-live">${scaledTariffs.mediumPrice}</strong>
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-background border border-rule text-ink">
-                    🟪 Grande (2×2): <strong className="text-live">${scaledTariffs.largePrice}</strong>
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div>
               <label className="block text-xs font-semibold text-ink mb-1.5">
                 Hogares de la Tirada
               </label>
@@ -382,21 +282,6 @@ export const CostPanel: React.FC<CostPanelProps> = ({
               </div>
               <span className="text-[0.67rem] text-ink-dim mt-1 block">
                 Volumen validado según las Carrier Routes de la microzona
-              </span>
-            </div>
-          </div>
-
-          {/* Margen Operativo */}
-          <div className="pt-2">
-            <div className="border border-rule bg-secondary/20 p-3 max-w-xs">
-              <span className="text-[0.68rem] uppercase font-bold text-ink-dim block mb-1">
-                Margen Operativo
-              </span>
-              <span className="text-base font-black text-clear">
-                {actualCalculatedMargin}%
-              </span>
-              <span className="text-[0.63rem] text-ink-dim block mt-0.5">
-                Retorno sobre facturación
               </span>
             </div>
           </div>

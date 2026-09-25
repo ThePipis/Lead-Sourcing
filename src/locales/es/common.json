@@ -296,7 +296,12 @@
     "floorMet": "Piso operativo alcanzado",
     "floorMissing": "Faltan {{missing}} espacios para el piso de {{floor}}",
     "floorMissingCost": "Faltan ${{missing}} para cubrir la tirada de {{households}} hogares",
-    "fromRoutes": "Sobre {{households}} piezas reales de {{routes}} rutas"
+    "targetMargin": "Margen Objetivo",
+    "targetMarginSub": "Sincronizado con slots",
+    "proportionalTariffs": "Tarifas proporcionales:",
+    "smallSize": "Chico (1×1)",
+    "mediumSize": "Mediano (1×2)",
+    "largeSize": "Grande (2×2)"
   },
   "tour": {
     "label": "Tutorial guiado",

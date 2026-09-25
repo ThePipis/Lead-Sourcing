@@ -53,6 +53,7 @@ import { useTheme } from './hooks/useTheme.ts';
 import { useExpertMode } from './hooks/useExpertMode.ts';
 import { useAppMode } from './hooks/useAppMode.ts';
 import { ModeSwitch } from './components/ModeSwitch.tsx';
+import { updateCosts } from './services/costService.ts';
 import { Assistant } from './components/Assistant.tsx';
 import { Settings } from './components/Settings.tsx';
 import {
@@ -1055,7 +1056,18 @@ export default function App() {
               onDraftChange={setDraftReach}
               isSaving={isSaving}
             />
-            <FinancialMetrics campaign={shown} />
+            <FinancialMetrics
+              campaign={shown}
+              onApplySuggested={handleApplySuggestedPrices}
+              onTargetMarginSave={async (val) => {
+                try {
+                  await updateCosts(mode, billableHouseholds(shown), { targetMargin: val / 100 });
+                } catch (err) {
+                  console.error('Failed to persist target margin:', err);
+                }
+              }}
+              isSaving={isSaving}
+            />
             <CostPanel
               key={`costs-${costsVersion}`}
               mode={mode}

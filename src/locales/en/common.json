@@ -296,7 +296,12 @@
     "floorMet": "Operating floor reached",
     "floorMissing": "{{missing}} slots short of the floor of {{floor}}",
     "floorMissingCost": "${{missing}} short of covering the {{households}}-household drop",
-    "fromRoutes": "On {{households}} real pieces across {{routes}} routes"
+    "targetMargin": "Target Margin",
+    "targetMarginSub": "Synced with slots",
+    "proportionalTariffs": "Proportional rates:",
+    "smallSize": "Small (1×1)",
+    "mediumSize": "Medium (1×2)",
+    "largeSize": "Large (2×2)"
   },
   "tour": {
     "label": "Guided walkthrough",

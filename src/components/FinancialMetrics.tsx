@@ -9,9 +9,17 @@ import {
   contractedUsd,
   dropCostUsd,
 } from '../workflow.ts';
+import {
+  computeCurrentGrossRevenue,
+  computeMarginPercent,
+  computeScaledPricesForMargin,
+} from '../utils/modularGrid.ts';
 
 interface FinancialMetricsProps {
   campaign: Campaign;
+  onApplySuggested?: (prices: Record<number, number>) => void;
+  onTargetMarginSave?: (marginPercent: number) => void;
+  isSaving?: boolean;
 }
 
 const money = (n: number) =>
@@ -27,7 +35,12 @@ const money = (n: number) =>
  * screen. The floor is drawn as a notch on the scale because 12 paid slots is
  * a physical threshold, not a number to remember.
  */
-export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ campaign }) => {
+export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
+  campaign,
+  onApplySuggested,
+  onTargetMarginSave,
+  isSaving,
+}) => {
   const { t } = useTranslation(['common']);
   const partnersInputRef = useRef<HTMLInputElement>(null);
 
@@ -80,6 +93,49 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ campaign }) 
 
   const validPartners = Math.max(1, partnersCount);
   const profitPerPartner = Math.round(netProfit / validPartners);
+
+  // Margen real y control interactivo de tarifas proporcionales
+  const currentTotalCost = cost;
+  const currentGrossRevenue = React.useMemo(
+    () => computeCurrentGrossRevenue(campaign.slots),
+    [campaign.slots],
+  );
+  const actualCalculatedMargin = React.useMemo(
+    () => computeMarginPercent(currentGrossRevenue, currentTotalCost),
+    [currentGrossRevenue, currentTotalCost],
+  );
+
+  const [marginInput, setMarginInput] = useState<number>(actualCalculatedMargin);
+  const [isTypingMargin, setIsTypingMargin] = useState(false);
+  const syncTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!isTypingMargin) {
+      setMarginInput(actualCalculatedMargin);
+    }
+  }, [actualCalculatedMargin, isTypingMargin]);
+
+  const scaledTariffs = React.useMemo(
+    () => computeScaledPricesForMargin(campaign.slots, marginInput, currentTotalCost, 5),
+    [campaign.slots, marginInput, currentTotalCost],
+  );
+
+  const handleTargetMarginChange = (raw: string) => {
+    const val = Number(raw);
+    setMarginInput(val);
+    setIsTypingMargin(true);
+
+    if (!Number.isFinite(val) || val < 5 || val > 95) return;
+
+    const scaled = computeScaledPricesForMargin(campaign.slots, val, currentTotalCost, 5);
+    onApplySuggested?.(scaled.pricesBySlot);
+
+    window.clearTimeout(syncTimer.current);
+    syncTimer.current = window.setTimeout(() => {
+      onTargetMarginSave?.(val);
+      setIsTypingMargin(false);
+    }, 450);
+  };
 
   const pct = (n: number) => `${Math.min(100, Math.max(0, (n / TOTAL_SLOTS) * 100))}%`;
 
@@ -171,6 +227,61 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ campaign }) 
           </div>
         </div>
       </dl>
+
+      {/* Dynamic Margin & Proportional Tariffs Ribbon */}
+      <div className="border-t border-rule bg-secondary/35 px-4 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 select-none">
+        {/* Left: Target margin control + sync indicator */}
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="target-margin-input"
+            className="field-label text-[0.68rem] font-bold text-ink cursor-pointer uppercase tracking-wider"
+          >
+            {t('common:finance.targetMargin', 'Margen Objetivo')}:
+          </label>
+          <div className="relative flex items-center">
+            <input
+              id="target-margin-input"
+              type="number"
+              step={1}
+              min={5}
+              max={95}
+              value={marginInput}
+              disabled={isSaving}
+              onChange={(e) => handleTargetMarginChange(e.target.value)}
+              className="h-6 w-14 border border-rule bg-card px-1.5 pr-4 text-center font-mono text-xs font-bold text-ink focus-visible:ring-1 focus-visible:ring-live focus:outline-none"
+              title="Margen de beneficio objetivo porcentual sobre la recaudación bruta"
+            />
+            <span className="pointer-events-none absolute right-1.5 font-mono text-[0.62rem] text-ink-dim">
+              %
+            </span>
+          </div>
+          <span className="inline-flex items-center gap-1 font-mono text-[0.62rem] font-bold uppercase tracking-wider text-live">
+            <span className="h-1.5 w-1.5 rounded-full bg-live animate-pulse" aria-hidden="true" />
+            <span className="hidden xs:inline">{t('common:finance.targetMarginSub', 'Sincronizado con slots')}</span>
+          </span>
+        </div>
+
+        {/* Right: Proportional Tariffs per Size */}
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <span className="field-label text-[0.62rem] text-ink-dim hidden md:inline uppercase tracking-wider">
+            {t('common:finance.proportionalTariffs', 'Tarifas proporcionales:')}
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5 font-mono text-[0.68rem]">
+            <span className="inline-flex items-center gap-1 border border-rule bg-card px-2 py-0.5 text-ink shadow-xs">
+              <span className="h-2 w-2 rounded-xs bg-emerald-500" aria-hidden="true" />
+              {t('common:finance.smallSize', 'Chico (1×1)')}: <strong className="font-bold text-live">${scaledTariffs.smallPrice}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1 border border-rule bg-card px-2 py-0.5 text-ink shadow-xs">
+              <span className="h-2 w-2 rounded-xs bg-blue-500" aria-hidden="true" />
+              {t('common:finance.mediumSize', 'Mediano (1×2)')}: <strong className="font-bold text-live">${scaledTariffs.mediumPrice}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1 border border-rule bg-card px-2 py-0.5 text-ink shadow-xs">
+              <span className="h-2 w-2 rounded-xs bg-purple-500" aria-hidden="true" />
+              {t('common:finance.largeSize', 'Grande (2×2)')}: <strong className="font-bold text-live">${scaledTariffs.largePrice}</strong>
+            </span>
+          </div>
+        </div>
+      </div>
 
       <div className="px-4 py-3">
         <div className="flex items-baseline justify-between gap-3">

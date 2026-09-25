@@ -256,25 +256,27 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
     <section data-tour="reach" className="mb-5 border border-rule bg-background shadow-xs">
       {/* ========================================================= 1. VISTA MINIMIZADA / PLEGADA (DEFAULT) ========================================================= */}
       {!isExpanded && (
-        <div id="financial-metrics-compact" className="flex flex-col select-none">
+        <div
+          id="financial-metrics-compact"
+          onClick={toggleExpanded}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggleExpanded();
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-expanded={false}
+          aria-controls="financial-metrics-details"
+          title="Clic en cualquier parte de esta barra para ver desglose completo y configuración"
+          className="flex flex-col select-none cursor-pointer group transition-colors focus-visible:ring-2 focus-visible:ring-live focus-visible:outline-none"
+        >
           {/* Fila 1: Tira Financiera Ejecutiva en Una Sola Línea */}
-          <div className="border-b border-rule bg-secondary/35 px-3 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            {/* Bloque Izquierdo: Botón Expandir + Badge Alcance de la Tirada */}
+          <div className="border-b border-rule bg-secondary/35 group-hover:bg-secondary/60 px-3 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 transition-colors">
+            {/* Bloque Izquierdo: Badge Alcance de la Tirada */}
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                id="btn-toggle-finance-expand"
-                onClick={toggleExpanded}
-                aria-expanded={false}
-                aria-controls="financial-metrics-details"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[0.69rem] font-bold border border-rule bg-card hover:bg-secondary text-ink transition-colors cursor-pointer focus-visible:ring-1 focus-visible:ring-live focus-visible:outline-none shadow-2xs"
-                title={t('common:finance.fullBreakdown', 'Configuración y Tarifas')}
-              >
-                <ChevronDown className="h-3.5 w-3.5 text-ink-dim" aria-hidden="true" />
-                <span>{t('common:finance.fullBreakdown', 'Configuración y Tarifas')}</span>
-              </button>
-
-              <div className="inline-flex items-center gap-1.5 border border-rule bg-card px-2.5 py-1 text-xs font-mono shadow-2xs">
+              <div className="inline-flex items-center gap-1.5 border border-rule bg-card px-2.5 py-1 text-xs font-mono shadow-2xs group-hover:border-live/40 transition-colors">
                 <span className="field-label text-[0.60rem] text-ink-dim uppercase">
                   {t('common:reach.label', 'Tirada')}:
                 </span>
@@ -294,7 +296,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
               )}
             </div>
 
-            {/* Bloque Derecho / Central: Cifras Clave de Decisión */}
+            {/* Bloque Derecho / Central: Cifras Clave de Decisión + Indicador Desplegable */}
             <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 font-mono text-xs">
               {/* Cobrado */}
               <div className="flex items-baseline gap-1" title={t('common:finance.collectedSub')}>
@@ -344,7 +346,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
 
               {/* Ganancia por Socio Destacada */}
               <div
-                className="inline-flex items-baseline gap-1.5 bg-live/10 border border-live/30 px-2 py-0.5 shadow-2xs"
+                className="inline-flex items-baseline gap-1.5 bg-live/10 border border-live/30 px-2 py-0.5 shadow-2xs group-hover:border-live/60 transition-colors"
                 title={`${t('common:finance.perPartnerSub', 'Cada socio')} (${validPartners})`}
               >
                 <span className="field-label text-[0.60rem] font-bold text-live uppercase">
@@ -355,11 +357,17 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                   <span className="text-[0.65rem] font-bold text-ink-dim ml-0.5">c/u</span>
                 </span>
               </div>
+
+              {/* Indicador sutil de clic para expandir */}
+              <div className="inline-flex items-center gap-1 pl-1 text-[0.68rem] font-mono font-bold text-ink-dim group-hover:text-live transition-colors">
+                <span className="hidden xl:inline">{t('common:finance.fullBreakdown', 'Configuración')}</span>
+                <ChevronDown className="h-3.5 w-3.5 group-hover:translate-y-0.5 transition-transform" aria-hidden="true" />
+              </div>
             </div>
           </div>
 
           {/* Fila 2: Barra de Umbral Operativo / Break-even Compacta */}
-          <div className="px-3 py-2 bg-background flex flex-col gap-1.5">
+          <div className="px-3 py-2 bg-background group-hover:bg-card/60 transition-colors flex flex-col gap-1.5">
             <div className="flex items-baseline justify-between gap-3 text-xs">
               <span className="field-label text-[0.65rem] font-bold">
                 {floorMet
@@ -407,22 +415,29 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
       {/* ========================================================= 2. VISTA DETALLADA / EXPANDIDA ========================================================= */}
       {isExpanded && (
         <div id="financial-metrics-details" className="flex flex-col">
-          {/* Cabecera de vista detallada con botón para plegar */}
-          <div className="border-b border-rule bg-secondary/35 px-4 py-2 flex items-center justify-between gap-3 select-none">
+          {/* Cabecera de vista detallada: barra horizontal clickeable para plegar */}
+          <div
+            onClick={toggleExpanded}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleExpanded();
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-expanded={true}
+            aria-controls="financial-metrics-details"
+            title="Clic en cualquier parte de esta barra para plegar"
+            className="border-b border-rule bg-secondary/35 hover:bg-secondary/60 px-4 py-2 flex items-center justify-between gap-3 select-none cursor-pointer transition-colors group focus-visible:ring-2 focus-visible:ring-live focus-visible:outline-none"
+          >
             <span className="field-label text-[0.68rem] font-bold text-ink uppercase tracking-wider">
               {t('common:finance.fullBreakdown', 'Configuración Operativa y Tarifas')}
             </span>
-            <button
-              type="button"
-              id="btn-toggle-finance-collapse"
-              onClick={toggleExpanded}
-              aria-expanded={true}
-              aria-controls="financial-metrics-details"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[0.69rem] font-bold border border-rule bg-card hover:bg-secondary text-ink transition-colors cursor-pointer focus-visible:ring-1 focus-visible:ring-live focus-visible:outline-none shadow-2xs"
-            >
-              <ChevronUp className="h-3.5 w-3.5 text-ink-dim" aria-hidden="true" />
+            <div className="flex items-center gap-1 text-[0.68rem] font-mono font-bold text-ink-dim group-hover:text-live transition-colors">
               <span>{t('common:finance.collapse', 'Plegar')}</span>
-            </button>
+              <ChevronUp className="h-3.5 w-3.5 group-hover:-translate-y-0.5 transition-transform" aria-hidden="true" />
+            </div>
           </div>
 
           {/* 1. Barra Superior: Configuración Operativa (Alcance, Margen y Tarifas) */}
@@ -696,16 +711,22 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
             </div>
           </div>
 
-          {/* Pie de cierre para plegar fácilmente */}
-          <div className="border-t border-rule bg-secondary/20 px-4 py-1.5 flex justify-end">
-            <button
-              type="button"
-              onClick={toggleExpanded}
-              className="text-[0.65rem] font-mono font-bold text-ink-dim hover:text-ink transition-colors inline-flex items-center gap-1 cursor-pointer"
-            >
-              <ChevronUp className="h-3 w-3" />
-              <span>{t('common:finance.collapse', 'Plegar a vista compacta')}</span>
-            </button>
+          {/* Pie de cierre: barra horizontal clickeable para plegar */}
+          <div
+            onClick={toggleExpanded}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleExpanded();
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            title="Clic en cualquier parte de esta barra para plegar"
+            className="border-t border-rule bg-secondary/25 hover:bg-secondary/60 px-4 py-2 flex items-center justify-center gap-1.5 cursor-pointer transition-colors text-ink-dim hover:text-live text-[0.68rem] font-mono font-bold select-none group focus-visible:ring-2 focus-visible:ring-live focus-visible:outline-none"
+          >
+            <ChevronUp className="h-3.5 w-3.5 group-hover:-translate-y-0.5 transition-transform" aria-hidden="true" />
+            <span>{t('common:finance.collapse', 'Plegar a vista compacta')}</span>
           </div>
         </div>
       )}

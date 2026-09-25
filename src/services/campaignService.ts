@@ -1,5 +1,6 @@
 import { Campaign, SlotState, SlotStatus, Household, CurationSummary } from '../types.ts';
 import { CLOSED_CATEGORIES } from '../data/categories.ts';
+import { normalizeModularSlots } from '../utils/modularGrid.ts';
 
 const API_BASE = '/api';
 
@@ -84,9 +85,11 @@ export function mapFrontendSlotToBackend(data: Partial<SlotState>): Record<strin
  * Maps a backend CampaignResponse to frontend Campaign
  */
 export function mapBackendCampaignToFrontend(raw: any): Campaign {
-  const slots: SlotState[] = (raw.slots || [])
+  const rawSlots: SlotState[] = (raw.slots || [])
     .map(mapBackendSlotToFrontend)
     .sort((a: SlotState, b: SlotState) => a.slotNumber - b.slotNumber);
+
+  const slots = normalizeModularSlots(rawSlots);
 
   const paidSlots = slots.filter((s) => s.status === 'PAID');
   const paidCount = raw.paid_count ?? paidSlots.length;

@@ -155,7 +155,7 @@ async def track_qr_redirect(
     # 5. Resolver número de slot (ej. "slot-1", "slot_2", "3", "1")
     digit_match = re.search(r"\d+", str(slot_id))
     slot_num = int(digit_match.group(0)) if digit_match else 1
-    if slot_num < 1 or slot_num > 14:
+    if slot_num < 1 or slot_num > 32:
         slot_num = 1
 
     slot = db.query(Slot).filter(Slot.campaign_id == camp.id, Slot.slot_number == slot_num).first()

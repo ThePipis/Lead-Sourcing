@@ -19,15 +19,10 @@ PER_PIECE_FIELDS = (
     "finishing_per_piece",
 )
 
-# Slot rates at a 5,000-household drop, used only as relative weights: the hero
-# is worth more than a standard box, and that ratio holds whatever we charge.
+# Modular slot weights: 31 commercial slots at $350 base each (plus slot 32 USPS at $0)
 SLOT_WEIGHTS: Dict[int, float] = {
-    1: 850.0,
-    **{n: 497.0 for n in range(2, 14)},
-    # The back panel is 28% larger than the boxes beside it and is priced above
-    # them, not below. It used to carry 450 here, which quietly told the
-    # operator to sell the biggest box on the reverse for the least money.
-    14: 640.0,
+    **{n: 350.0 for n in range(1, 32)},
+    32: 0.0,
 }
 
 # Market rates published in September 2026 (see routers/datasources.py for the

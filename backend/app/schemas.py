@@ -3,7 +3,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 
 class SlotBase(BaseModel):
-    slot_number: int = Field(..., ge=1, le=14)
+    slot_number: int = Field(..., ge=1, le=32)
     category_id: int
     category_name: str
     side: str

@@ -79,16 +79,16 @@
     "resetLayoutTitle": "Sends every niche back to its original box (dentistry to the hero, and so on). Businesses travel with their niche: nothing is lost.",
     "resetWipe": "Blank the card",
     "resetWipeTitle": "Back to day one: every niche in its home box and every box empty, with no advertisers and no payments. Practice file only.",
-    "resetWipeConfirm": "Empty all 14 boxes?",
+    "resetWipeConfirm": "Empty all boxes?",
     "resetWipeYes": "YES, EMPTY",
     "resetWipeNo": "NO",
-    "autofill": "Fill all 14 slots",
+    "autofill": "Fill all slots",
     "autofilling": "Finding real businesses…",
     "autofillTitle": "Finds one real business per niche in the microzone and drops it in with its phone number, ready to call. Only touches empty boxes.",
     "markAllPaid": "Mark all paid",
-    "markAllPaidTitle": "Practice file only: stamps the uncollected boxes so section 2 opens without recording fourteen payments by hand."
+    "markAllPaidTitle": "Practice file only: stamps the uncollected boxes so section 2 opens without recording payments by hand."
   },
-  "demoFill": "Auto-fill 14 PAID (Demo)",
+  "demoFill": "Auto-fill PAID (Demo)",
   "savingSqlite": "Saving to SQLite…",
   "executeCuration": "Execute Postal Curation",
   "usps": {

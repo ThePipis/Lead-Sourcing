@@ -18,22 +18,15 @@ import { Campaign } from './types.ts';
  * 2. At least twelve of the fourteen slots are paid, so the card never goes
  *    out looking half empty.
  */
-export const OPERATING_FLOOR = 12;
-export const TOTAL_SLOTS = 14;
+export const OPERATING_FLOOR = 10;
+export const TOTAL_SLOTS = 31;
 /** The reach the printed slot rates are quoted against. */
 export const BASELINE_HOUSEHOLDS = 5000;
 
 /**
- * What each position on the card is worth, relative to the others: the hero
- * band, the twelve standard boxes, the wide panel on the reverse.
- *
- * These are weights, not prices. The price of a box comes from what the drop
- * costs — see the backend's cost model — grossed up to the target margin and
- * split by these. Scaling a printed rate card by the reach instead looks right
- * at five thousand households and gives fifty cents a box at five, because the
- * setup and delivery fees do not shrink with the mailing.
+ * Modular base weight per atomic small slot ($350 each).
  */
-export const SLOT_WEIGHTS = [850, ...Array(12).fill(497), 640];
+export const SLOT_WEIGHTS = Array(31).fill(350);
 
 export type PhaseId = 'slots' | 'curation' | 'manifest' | 'production';
 
@@ -70,7 +63,7 @@ export interface CampaignProgress {
 const isInProduction = (c: Campaign) => c.status === 'IN_PRODUCTION' || c.status === 'MAILED';
 
 export function computeProgress(campaign: Campaign, curatedCount: number): CampaignProgress {
-  const paid = campaign.slots.filter((s) => s.status === 'PAID').length;
+  const paid = campaign.slots.filter((s) => s.status === 'PAID' && s.slotNumber !== 32).length;
   const collected = collectedUsd(campaign);
   const cost = dropCostUsd(campaign);
   const costCovered = collected >= cost;
@@ -232,7 +225,8 @@ export function scaleCampaignToReach(campaign: Campaign, households: number): Ca
       // A paid slot keeps its price: that figure is a transaction, not an
       // estimate, and a preview must not pretend otherwise.
       if (s.status === 'PAID') return s;
-      const weight = SLOT_WEIGHTS[s.slotNumber - 1] ?? 0;
+      const defaultWeight = s.format === 'LARGE' ? 1200 : s.format === 'MEDIUM' ? 650 : 350;
+      const weight = SLOT_WEIGHTS[s.slotNumber - 1] ?? defaultWeight;
       return { ...s, priceUsd: Math.round((requiredRevenue * weight) / weightSum) };
     }),
   };

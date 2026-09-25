@@ -79,16 +79,16 @@
     "resetLayoutTitle": "Devuelve cada giro a su casilla original (odontología al hero, etc.). Los comercios viajan con su giro: no se pierde nada.",
     "resetWipe": "Vaciar tarjeta",
     "resetWipeTitle": "Devuelve la tarjeta al día uno: cada giro a su casilla original y todos los espacios vacíos, sin comercios ni cobros. Solo en simulación.",
-    "resetWipeConfirm": "¿Vaciar los 14 espacios?",
+    "resetWipeConfirm": "¿Vaciar todos los espacios?",
     "resetWipeYes": "SÍ, VACIAR",
     "resetWipeNo": "NO",
-    "autofill": "Llenar los 14 espacios",
+    "autofill": "Llenar todos los espacios",
     "autofilling": "Buscando comercios reales…",
     "autofillTitle": "Busca un comercio real por cada giro en la microzona y lo coloca con su teléfono, listo para llamar. Solo toca los espacios vacíos.",
     "markAllPaid": "Marcar todo pagado",
-    "markAllPaidTitle": "Solo en simulación: sella los espacios sin cobrar para llegar a la curación sin registrar catorce pagos a mano."
+    "markAllPaidTitle": "Solo en simulación: sella todos los espacios sin cobrar para llegar a la curación sin registrar cobros a mano."
   },
-  "demoFill": "Autollenar 14 PAID (Demo)",
+  "demoFill": "Autollenar PAID (Demo)",
   "savingSqlite": "Guardando en SQLite…",
   "executeCuration": "Ejecutar Curación Postal",
   "usps": {

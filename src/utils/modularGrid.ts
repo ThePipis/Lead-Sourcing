@@ -98,8 +98,20 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
     }
 
     if (existing) {
-      const format = existing.format || (existing.rowSpan === 2 && existing.colSpan === 2 ? 'LARGE' : existing.rowSpan === 2 ? 'MEDIUM' : 'SMALL');
+      const format: SlotFormat =
+        existing.format ||
+        (existing.rowSpan === 2 && existing.colSpan === 2 ? 'LARGE' : existing.rowSpan === 2 ? 'MEDIUM' : 'SMALL');
       const basePrice = MODULAR_PRICES[format] || (format === 'LARGE' ? 1200 : format === 'MEDIUM' ? 650 : 350);
+
+      const rowSpan = format === 'LARGE' || format === 'MEDIUM' ? 2 : 1;
+      const colSpan = format === 'LARGE' ? 2 : 1;
+
+      const priceUsd =
+        format === 'MEDIUM'
+          ? (existing.priceUsd && existing.priceUsd > 350 ? existing.priceUsd : 650)
+          : format === 'LARGE'
+          ? (existing.priceUsd && existing.priceUsd > 350 ? existing.priceUsd : 1200)
+          : (existing.priceUsd || 350);
 
       return {
         ...existing,
@@ -107,9 +119,9 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
         side: def.side,
         gridRow: def.gridRow,
         gridCol: def.gridCol,
-        rowSpan: existing.rowSpan ?? (format === 'LARGE' ? 2 : format === 'MEDIUM' ? 2 : 1),
-        colSpan: existing.colSpan ?? (format === 'LARGE' ? 2 : 1),
-        priceUsd: existing.priceUsd || basePrice,
+        rowSpan,
+        colSpan,
+        priceUsd,
         categoryName: existing.categoryName || cat.name,
         offerHeadline: existing.offerHeadline || cat.defaultHeadline,
       };
@@ -141,6 +153,7 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
 export function canMergeVertical(slot: SlotState, slots: SlotState[]): boolean {
   if (slot.format === 'MEDIUM' || slot.format === 'LARGE' || slot.format === 'USPS') return false;
   if (!slot.gridRow || !slot.gridCol) return false;
+  if (slot.notes?.startsWith('Covered by')) return false;
 
   // We can merge top half (row 1 with row 2) or bottom half (row 3 with row 4)
   const targetRow = slot.gridRow === 1 ? 2 : slot.gridRow === 3 ? 4 : null;
@@ -152,6 +165,7 @@ export function canMergeVertical(slot: SlotState, slots: SlotState[]): boolean {
 
   if (!partner) return false;
   if (partner.format === 'USPS' || partner.format === 'LARGE' || partner.format === 'MEDIUM') return false;
+  if (partner.notes?.startsWith('Covered by')) return false;
   // Can merge if partner is VACANT or belongs to the same advertiser
   return partner.status === 'VACANT' || (partner.businessName === slot.businessName && slot.status !== 'PAID');
 }
@@ -162,6 +176,7 @@ export function canMergeVertical(slot: SlotState, slots: SlotState[]): boolean {
 export function canMergeLarge(slot: SlotState, slots: SlotState[]): boolean {
   if (slot.format === 'LARGE' || slot.format === 'USPS') return false;
   if (!slot.gridRow || !slot.gridCol) return false;
+  if (slot.notes?.startsWith('Covered by')) return false;
 
   // Origin can be (row 1, col 1), (row 1, col 3), (row 3, col 1), (row 3, col 3)
   const validRows = [1, 3];
@@ -183,7 +198,10 @@ export function canMergeLarge(slot: SlotState, slots: SlotState[]): boolean {
     const target = slots.find((s) => s.side === slot.side && s.gridRow === req.row && s.gridCol === req.col);
     if (!target) return false;
     if (target.format === 'USPS') return false;
-    if (target.slotNumber !== slot.slotNumber && target.status === 'PAID') return false;
+    if (target.slotNumber !== slot.slotNumber) {
+      if (target.status === 'PAID') return false;
+      if (target.format === 'MEDIUM' || target.format === 'LARGE' || target.notes?.startsWith('Covered by')) return false;
+    }
   }
   return true;
 }
@@ -196,8 +214,10 @@ export function mergeModularSlot(
   targetFormat: 'MEDIUM' | 'LARGE',
   slots: SlotState[]
 ): SlotState[] {
-  const primary = slots.find((s) => s.slotNumber === primarySlotNum);
-  if (!primary || !primary.gridRow || !primary.gridCol) return slots;
+  // Ensure slots are normalized with coordinates and full 32-slot layout
+  const normalized = normalizeModularSlots(slots);
+  const primary = normalized.find((s) => s.slotNumber === primarySlotNum);
+  if (!primary || !primary.gridRow || !primary.gridCol) return normalized;
 
   const row = primary.gridRow;
   const col = primary.gridCol;
@@ -205,9 +225,11 @@ export function mergeModularSlot(
 
   if (targetFormat === 'MEDIUM') {
     const partnerRow = row === 1 ? 2 : row === 3 ? 4 : row;
-    const partner = slots.find((s) => s.side === side && s.gridCol === col && s.gridRow === partnerRow && s.slotNumber !== primarySlotNum);
+    const partner = normalized.find(
+      (s) => s.side === side && s.gridCol === col && s.gridRow === partnerRow && s.slotNumber !== primarySlotNum
+    );
 
-    return slots.map((s) => {
+    return normalized.map((s) => {
       if (s.slotNumber === primarySlotNum) {
         return {
           ...s,
@@ -241,7 +263,7 @@ export function mergeModularSlot(
       { r: originRow + 1, c: originCol + 1 },
     ];
 
-    return slots.map((s) => {
+    return normalized.map((s) => {
       if (s.slotNumber === primarySlotNum) {
         return {
           ...s,
@@ -265,32 +287,39 @@ export function mergeModularSlot(
     });
   }
 
-  return slots;
+  return normalized;
 }
 
 /**
  * Splits a merged MEDIUM or LARGE slot back into atomic SMALL ($350) slots
  */
 export function splitModularSlot(primarySlotNum: number, slots: SlotState[]): SlotState[] {
-  const primary = slots.find((s) => s.slotNumber === primarySlotNum);
-  if (!primary) return slots;
+  const normalized = normalizeModularSlots(slots);
+  const primary = normalized.find((s) => s.slotNumber === primarySlotNum);
+  if (!primary) return normalized;
 
-  return slots.map((s) => {
+  return normalized.map((s) => {
     if (s.slotNumber === primarySlotNum) {
+      const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === primarySlotNum);
       return {
         ...s,
         format: 'SMALL',
         rowSpan: 1,
         colSpan: 1,
+        gridRow: def?.gridRow ?? s.gridRow,
+        gridCol: def?.gridCol ?? s.gridCol,
         priceUsd: MODULAR_PRICES.SMALL,
       };
     }
     if (s.notes?.includes(`Covered by`) && s.notes?.includes(`#${primarySlotNum}`)) {
+      const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === s.slotNumber);
       return {
         ...s,
         format: 'SMALL',
         rowSpan: 1,
         colSpan: 1,
+        gridRow: def?.gridRow ?? s.gridRow,
+        gridCol: def?.gridCol ?? s.gridCol,
         status: 'VACANT',
         priceUsd: MODULAR_PRICES.SMALL,
         notes: undefined,
@@ -334,3 +363,95 @@ export function formatReservationCountdown(slot: SlotState): string {
   const minutes = totalMinutes % 60;
   return `${hours}h ${minutes}m`;
 }
+
+/**
+ * Calculates total gross revenue if all commercial slots sell at their base default prices:
+ * - SMALL (1x1): $350
+ * - MEDIUM (1x2): $650
+ * - LARGE (2x2): $1,200
+ */
+export function computeBaseGrossRevenue(slots: SlotState[]): number {
+  return slots.reduce((sum, s) => {
+    if (s.format === 'USPS' || s.slotNumber === 32 || s.notes?.includes('Covered by')) return sum;
+    const base = MODULAR_PRICES[s.format] || (s.rowSpan === 2 && s.colSpan === 2 ? 1200 : s.rowSpan === 2 ? 650 : 350);
+    return sum + base;
+  }, 0);
+}
+
+/**
+ * Calculates total gross revenue from current slot prices
+ */
+export function computeCurrentGrossRevenue(slots: SlotState[]): number {
+  return slots.reduce((sum, s) => {
+    if (s.format === 'USPS' || s.slotNumber === 32 || s.notes?.includes('Covered by')) return sum;
+    return sum + (s.priceUsd || 0);
+  }, 0);
+}
+
+/**
+ * Calculates gross margin percentage: ((revenue - cost) / revenue) * 100
+ */
+export function computeMarginPercent(revenue: number, operatingCost: number): number {
+  if (revenue <= 0 || !Number.isFinite(revenue) || !Number.isFinite(operatingCost)) return 50;
+  const margin = ((revenue - operatingCost) / revenue) * 100;
+  return Math.min(95, Math.max(5, Math.round(margin)));
+}
+
+export interface ScaledPricesResult {
+  pricesBySlot: Record<number, number>;
+  smallPrice: number;
+  mediumPrice: number;
+  largePrice: number;
+  scaleFactor: number;
+  projectedRevenue: number;
+}
+
+/**
+ * Derives proportional prices for each slot size to achieve exactly the target margin:
+ * - Small  = round(350 * k)
+ * - Medium = round(650 * k)
+ * - Large  = round(1200 * k)
+ * preserving exact proportionality across sizes.
+ */
+export function computeScaledPricesForMargin(
+  slots: SlotState[],
+  targetMarginPercent: number,
+  operatingCost: number,
+  roundStep = 5
+): ScaledPricesResult {
+  const safeMargin = Math.min(95, Math.max(5, targetMarginPercent)) / 100;
+  const safeCost = Math.max(100, operatingCost);
+  const requiredRevenue = safeCost / Math.max(0.05, 1 - safeMargin);
+  
+  const baseRevenue = computeBaseGrossRevenue(slots);
+  const scaleFactor = baseRevenue > 0 ? requiredRevenue / baseRevenue : 1.0;
+
+  const smallPrice = Math.max(50, Math.round((MODULAR_PRICES.SMALL * scaleFactor) / roundStep) * roundStep);
+  const mediumPrice = Math.max(100, Math.round((MODULAR_PRICES.MEDIUM * scaleFactor) / roundStep) * roundStep);
+  const largePrice = Math.max(200, Math.round((MODULAR_PRICES.LARGE * scaleFactor) / roundStep) * roundStep);
+
+  const pricesBySlot: Record<number, number> = {};
+  for (const s of slots) {
+    if (s.format === 'USPS' || s.slotNumber === 32 || s.notes?.includes('Covered by')) {
+      pricesBySlot[s.slotNumber] = 0;
+      continue;
+    }
+    if (s.format === 'LARGE' || (s.rowSpan === 2 && s.colSpan === 2)) {
+      pricesBySlot[s.slotNumber] = largePrice;
+    } else if (s.format === 'MEDIUM' || s.rowSpan === 2) {
+      pricesBySlot[s.slotNumber] = mediumPrice;
+    } else {
+      pricesBySlot[s.slotNumber] = smallPrice;
+    }
+  }
+
+  return {
+    pricesBySlot,
+    smallPrice,
+    mediumPrice,
+    largePrice,
+    scaleFactor,
+    projectedRevenue: requiredRevenue,
+  };
+}
+

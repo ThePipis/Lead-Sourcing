@@ -380,9 +380,18 @@ export default function App() {
   const handleApplySuggestedPrices = async (prices: Record<number, number>) => {
     if (!campaign) return;
     const updates = campaign.slots
-      .filter((s) => s.status !== 'PAID' && prices[s.slotNumber] > 0)
+      .filter((s) => s.status !== 'PAID' && prices[s.slotNumber] !== undefined && prices[s.slotNumber] > 0)
       .map((s) => ({ slotNumber: s.slotNumber, priceUsd: prices[s.slotNumber] }));
     if (updates.length === 0) return;
+
+    // Actualización optimista inmediata en memoria para UI ultra fluida
+    patchSlots(campaign.id, (slots) =>
+      slots.map((s) =>
+        s.status !== 'PAID' && prices[s.slotNumber] !== undefined && prices[s.slotNumber] > 0
+          ? { ...s, priceUsd: prices[s.slotNumber] }
+          : s,
+      ),
+    );
 
     setIsSaving(true);
     try {
@@ -1063,6 +1072,7 @@ export default function App() {
               mode={mode}
               households={billableHouseholds(shown)}
               openSlots={campaign.slots.filter((s) => s.status !== 'PAID').map((s) => s.slotNumber)}
+              slots={shown.slots}
               onApplySuggested={handleApplySuggestedPrices}
               onCostsChange={handleCostsChange}
               isSaving={isSaving}

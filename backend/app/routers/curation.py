@@ -16,12 +16,12 @@ async def execute_curation(req: CurationRequest, db: Session = Depends(get_db)):
     if not camp:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # Enforce Business Rule: Campaign must have >= 12 paid slots (salvo en simulación/mock)
-    paid_count = db.query(Slot).filter(Slot.campaign_id == camp.id, Slot.status == "PAID").count()
-    if paid_count < 12 and not req.mock_mode:
+    # Enforce Business Rule: Campaign must have >= 10 paid commercial slots (salvo en simulación/mock)
+    paid_count = db.query(Slot).filter(Slot.campaign_id == camp.id, Slot.status == "PAID", Slot.slot_number != 32).count()
+    if paid_count < 10 and not req.mock_mode:
         raise HTTPException(
             status_code=400,
-            detail=f"Cash Rule Violation: Campaign has only {paid_count}/14 PAID slots. Minimum 12 paid slots required to unlock algorithmic curation."
+            detail=f"Regla de Cobro: La campaña tiene solo {paid_count}/31 espacios PAGADOS. Se requiere un mínimo de 10 espacios pagados para desbloquear la curación algorítmica."
         )
 
     # Use custom weights matrix if provided, otherwise default taxonomy matrix

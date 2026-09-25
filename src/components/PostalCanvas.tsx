@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   CheckCircle2,
@@ -377,6 +377,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         onNextCandidate={onNextCandidate}
                         menuOpen={formatMenuSlot === slot.slotNumber}
                         onToggleMenu={(num) => setFormatMenuSlot(formatMenuSlot === num ? null : num)}
+                        onCloseMenu={() => setFormatMenuSlot(null)}
                         blockRowOffset={0}
                       />
                     ))}
@@ -413,6 +414,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         onNextCandidate={onNextCandidate}
                         menuOpen={formatMenuSlot === slot.slotNumber}
                         onToggleMenu={(num) => setFormatMenuSlot(formatMenuSlot === num ? null : num)}
+                        onCloseMenu={() => setFormatMenuSlot(null)}
                         blockRowOffset={2}
                       />
                     ))}
@@ -438,6 +440,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         onNextCandidate={onNextCandidate}
                         menuOpen={formatMenuSlot === slot.slotNumber}
                         onToggleMenu={(num) => setFormatMenuSlot(formatMenuSlot === num ? null : num)}
+                        onCloseMenu={() => setFormatMenuSlot(null)}
                         blockRowOffset={0}
                       />
                     ))}
@@ -731,8 +734,11 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                   {canMergeMed && (
                     <button
                       type="button"
-                      onClick={() => onMerge(slot.slotNumber, 'MEDIUM')}
-                      className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-live font-bold"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMerge(slot.slotNumber, 'MEDIUM');
+                      }}
+                      className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-live font-bold cursor-pointer"
                     >
                       <span>Mediano (1×2)</span>
                       <span>$650</span>
@@ -741,8 +747,11 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                   {canMergeLg && (
                     <button
                       type="button"
-                      onClick={() => onMerge(slot.slotNumber, 'LARGE')}
-                      className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-purple-600 font-bold"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMerge(slot.slotNumber, 'LARGE');
+                      }}
+                      className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-purple-600 font-bold cursor-pointer"
                     >
                       <span>Grande (2×2)</span>
                       <span>$1,200</span>
@@ -759,8 +768,11 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
           ) : (
             <button
               type="button"
-              onClick={() => onSplit(slot.slotNumber)}
-              className="flex items-center gap-0.5 text-[0.6rem] font-bold text-ink-dim hover:text-due border border-rule px-1.5 py-0.5 rounded bg-background"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSplit(slot.slotNumber);
+              }}
+              className="flex items-center gap-0.5 text-[0.6rem] font-bold text-ink-dim hover:text-due border border-rule px-1.5 py-0.5 rounded bg-background cursor-pointer"
               title="Dividir de vuelta en espacios individuales chicos ($350)"
             >
               <Minimize2 className="h-2.5 w-2.5 text-due" />

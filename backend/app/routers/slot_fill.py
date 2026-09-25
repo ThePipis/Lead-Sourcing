@@ -341,20 +341,32 @@ def mark_all_paid(campaign_id: str, db: Session = Depends(get_db)):
             ),
         )
 
+    from .campaigns import ensure_campaign_slots
+    ensure_campaign_slots(camp, db)
+
     import datetime
 
     stamped = []
     for slot in camp.slots:
+        if slot.slot_number == 32 or slot.slot_type == "USPS":
+            slot.status = "PAID"
+            slot.price_usd = 0.0
+            continue
         if slot.status == "PAID":
             continue
         slot.status = "PAID"
         slot.paid_at = datetime.datetime.utcnow()
-        slot.amount_collected_usd = slot.price_usd
+        slot.amount_collected_usd = slot.price_usd or 350.0
         slot.payment_ref = "SIMULACIÓN"
         stamped.append(slot.slot_number)
 
+    camp.status = "LOCKED_READY"
+    camp.paid_count = len([s for s in camp.slots if s.status == "PAID" and s.slot_number != 32])
+    camp.total_collected_usd = sum(s.amount_collected_usd or s.price_usd or 0 for s in camp.slots if s.status == "PAID")
+
     db.commit()
+    db.refresh(camp)
     return {
         "stamped": stamped,
-        "collected": sum(s.amount_collected_usd or 0 for s in camp.slots if s.status == "PAID"),
+        "collected": camp.total_collected_usd,
     }

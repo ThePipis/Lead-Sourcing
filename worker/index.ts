@@ -20,20 +20,41 @@ interface SlotDef {
 }
 
 const INITIAL_SLOT_DEFS: SlotDef[] = [
-  { slot_number: 1, name: "Odontología Familiar", face: "FRONT", format: "HERO", width_in: 12.0, height_in: 3.2, base_price: 850.0, default_ticket: 1250.0, default_headline: "Sonrisas Saludables para Toda la Familia | $79 Examen + Limpieza + Rayos X" },
-  { slot_number: 2, name: "HVAC / Aire Acondicionado", face: "FRONT", format: "STANDARD_FRONT", width_in: 4.3, height_in: 4.2, base_price: 497.0, default_ticket: 4500.0, default_headline: "Evite el Golpe de Calor en el IE | $49 A/C Super Tune-Up + 15% Off" },
-  { slot_number: 3, name: "Hospital Veterinario", face: "FRONT", format: "STANDARD_FRONT", width_in: 4.3, height_in: 4.2, base_price: 497.0, default_ticket: 450.0, default_headline: "Cuidado Médico Compasivo 7 Días | 50% de Descuento en Primera Consulta" },
-  { slot_number: 4, name: "Plomería Residencial", face: "FRONT", format: "STANDARD_FRONT", width_in: 4.3, height_in: 4.2, base_price: 497.0, default_ticket: 780.0, default_headline: "Plomeros de Confianza 24/7 | $50 Off Desazolve o Inspección con Cámara Gratis" },
-  { slot_number: 5, name: "Taller Mecánico / Frenos", face: "FRONT", format: "STANDARD_FRONT", width_in: 4.3, height_in: 4.2, base_price: 497.0, default_ticket: 550.0, default_headline: "Cambio de Frenos Premium $99 por Eje + Diagnóstico Computarizado Gratis" },
-  { slot_number: 6, name: "Pizzería Artesanal", face: "FRONT", format: "STANDARD_FRONT", width_in: 4.3, height_in: 4.2, base_price: 497.0, default_ticket: 55.0, default_headline: "Sabor a la Leña Auténtico | 1 Pizza Grande + 1 Mediana al 50% de Descuento" },
-  { slot_number: 7, name: "Gimnasio Boutique / Fitness", face: "FRONT", format: "STANDARD_FRONT", width_in: 4.3, height_in: 4.2, base_price: 497.0, default_ticket: 140.0, default_headline: "Transforma tu Cuerpo en 60 Días | 14 Días VIP Pass Ilimitado por solo $19" },
-  { slot_number: 8, name: "Techado y Paneles Solares", face: "BACK", format: "STANDARD_BACK", width_in: 4.3, height_in: 3.8, base_price: 497.0, default_ticket: 14500.0, default_headline: "Cero Pago Inicial en Energía Solar + Inspección de Techo 100% Sin Costo" },
-  { slot_number: 9, name: "Quiropráctico / Fisioterapia", face: "BACK", format: "STANDARD_BACK", width_in: 4.3, height_in: 3.8, base_price: 497.0, default_ticket: 480.0, default_headline: "Alivio Inmediato del Dolor de Espalda y Cuello | Consulta y Primer Ajuste $39" },
-  { slot_number: 10, name: "Limpieza de Alfombras y Pisos", face: "BACK", format: "STANDARD_BACK", width_in: 4.3, height_in: 3.8, base_price: 497.0, default_ticket: 320.0, default_headline: "Vapor a Alta Presión 3 Habitaciones por $119 | Secado Rápido y Desinfección" },
-  { slot_number: 11, name: "Detailing Móvil de Autos", face: "BACK", format: "STANDARD_BACK", width_in: 4.3, height_in: 3.8, base_price: 497.0, default_ticket: 220.0, default_headline: "Detailing Profesional a Domicilio | Paquete Interior + Exterior con 25% Off" },
-  { slot_number: 12, name: "Peluquería Canina", face: "BACK", format: "STANDARD_BACK", width_in: 4.3, height_in: 3.8, base_price: 497.0, default_ticket: 85.0, default_headline: "El Mejor Consentimiento para tu Mascota | Baño, Corte y Uñas $10 Off" },
-  { slot_number: 13, name: "Restaurante Mexicano", face: "BACK", format: "STANDARD_BACK", width_in: 4.3, height_in: 3.8, base_price: 497.0, default_ticket: 68.0, default_headline: "Auténtica Cocina Tradicional | Botana de Cortesía en la Compra de 2 Entrees" },
-  { slot_number: 14, name: "Agencia de Seguros", face: "BACK", format: "MEDIUM_BACK", width_in: 7.0, height_in: 3.0, base_price: 640.0, default_ticket: 1400.0, default_headline: "Ahorra hasta $650 al Año Combinando tus Pólizas de Auto y Casa en el IE" }
+  // FRONT FACE (1..16)
+  { slot_number: 1, name: "Odontología Familiar", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 1250.0, default_headline: "Sonrisas Saludables para Toda la Familia | $79 Examen + Limpieza + Rayos X" },
+  { slot_number: 2, name: "HVAC / Aire Acondicionado", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 4500.0, default_headline: "Evite el Golpe de Calor en el IE | $49 A/C Super Tune-Up + 15% Descuento Sistema Completo" },
+  { slot_number: 3, name: "Hospital Veterinario", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 450.0, default_headline: "Cuidado Médico Compasivo 7 Días | 50% de Descuento en Primera Consulta Preventiva" },
+  { slot_number: 4, name: "Plomería Residencial", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 780.0, default_headline: "Plomeros de Confianza 24/7 | $50 Off Desazolve de Drenaje o Inspección con Cámara Gratis" },
+  { slot_number: 5, name: "Taller Mecánico / Frenos", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 550.0, default_headline: "Viaje Seguro por la Autopista | $99 Frenos Completos Por Eje + Diagnóstico Computarizado" },
+  { slot_number: 6, name: "Pizzería Artesanal", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 55.0, default_headline: "Masa Madre al Horno de Piedra | Compra 1 Pizza Grande y Lleva la Segunda al 50%" },
+  { slot_number: 7, name: "Gimnasio Boutique / Fitness", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 140.0, default_headline: "Transforme su Salud Este Mes | 14 Días VIP Pass Ilimitado + Sesión de Coaching Gratis" },
+  { slot_number: 8, name: "Techado y Paneles Solares", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 14500.0, default_headline: "Ahorre Hasta 80% en Electricidad SCE | Reemplazo de Techo con $0 de Pago Inicial" },
+  { slot_number: 9, name: "Quiropráctico / Fisioterapia", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 480.0, default_headline: "Alivio Inmediato del Dolor de Espalda | $29 Consulta + Ajuste Vertebral + Terapia Térmica" },
+  { slot_number: 10, name: "Limpieza de Alfombras y Pisos", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 320.0, default_headline: "Hogar Impecable y Libre de Alérgenos | 3 Habitaciones Limpieza a Vapor Profunda por $99" },
+  { slot_number: 11, name: "Detailing Móvil de Autos", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 220.0, default_headline: "Llegamos a la Puerta de su Casa | $89 Lavado Premium de Espuma + Cera Cerámica Express" },
+  { slot_number: 12, name: "Peluquería Canina", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 85.0, default_headline: "Consienta a su Mejor Amigo | $15 Descuento Baño Spa Completo + Corte de Uñas Gratis" },
+  { slot_number: 13, name: "Restaurante Mexicano", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 68.0, default_headline: "Sabor Casero & Tradición Familiar | 2 Platillos Fuertes + Margaritas al 2x1 Martes y Jueves" },
+  { slot_number: 14, name: "Agencia de Seguros", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 1400.0, default_headline: "Proteja lo que Más Quiere | Paquete Auto + Hogar con Ahorro Anual Promedio de $640" },
+  { slot_number: 15, name: "Control de Plagas y Fumigación", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 420.0, default_headline: "Hogar 100% Libre de Plagas | $49 Primera Fumigación + Barrera Perimetral Gratis" },
+  { slot_number: 16, name: "Paisajismo y Sistemas de Riego", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 550.0, default_headline: "Jardín Siempre Verde y Cuida tu Agua | 20% Off en Reparación de Riego o Césped" },
+
+  // BACK FACE (17..31 Commercial + 32 USPS)
+  { slot_number: 17, name: "Limpieza Residencial de Casas", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 260.0, default_headline: "Disfruta tu Tiempo Libre | $35 Off en tu Primera Limpieza Profunda Residencial" },
+  { slot_number: 18, name: "Puertas de Garaje y Portones", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 850.0, default_headline: "Reparación de Garage el Mismo Día | $89 Tune-Up Completo + $50 Off en Resortes" },
+  { slot_number: 19, name: "Pintura Residencial Int/Ext", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 3200.0, default_headline: "Renueva el Color de tu Hogar | $300 Off en Pintura Exterior Completa + Consulta Color" },
+  { slot_number: 20, name: "Ventanas y Persianas a Medida", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 2800.0, default_headline: "Reduce tu Recibo de Luz | Compra 3 Ventanas Doble Panel y Recibe 1 Gratis" },
+  { slot_number: 21, name: "Remodelación Cocinas y Baños", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 8500.0, default_headline: "La Cocina de tus Sueños | $1,000 Off en Proyecto Completo + Diseño 3D Gratis" },
+  { slot_number: 22, name: "Poda y Cuidado de Árboles", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 950.0, default_headline: "Protege tu Techo y Estructura | 15% de Descuento en Poda o Retiro de Árboles" },
+  { slot_number: 23, name: "Reparación de Electrodomésticos", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 320.0, default_headline: "No Cambies tu Aparato, Repáralo | Diagnóstico Gratis con Cualquier Reparación" },
+  { slot_number: 24, name: "Mantenimiento de Piscinas", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 240.0, default_headline: "Agua Cristalina Todo el Año | Primer Mes al 50% en Servicio Semanal de Piscina" },
+  { slot_number: 25, name: "Abogados de Lesiones Personales", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 4500.0, default_headline: "¿Tuviste un Accidente? | Consulta Gratuita 24/7 y Cero Cobro si no Ganamos" },
+  { slot_number: 26, name: "Agente Inmobiliario (Realtor)", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 12000.0, default_headline: "¿Cuánto Vale tu Casa Hoy? | Valuación Profesional de Mercado 100% Gratuita" },
+  { slot_number: 27, name: "Preparación de Impuestos y Tax", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 380.0, default_headline: "Maximiza tu Reembolso Fiscal | $50 de Descuento en tu Declaración de Impuestos" },
+  { slot_number: 28, name: "Centro Óptico y Oftalmología", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 320.0, default_headline: "Claridad para tu Vista | Examen Completo + Armazón de Diseñador con 30% Off" },
+  { slot_number: 29, name: "Tintorería y Dry Cleaning", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 85.0, default_headline: "Prendas Impecables Sin Salir de Casa | 20% Off en tu Primera Orden con Entrega Gratis" },
+  { slot_number: 30, name: "Taquería y Mariscos Tradicional", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 48.0, default_headline: "Martes de Tacos 2x1 y Ceviche Familiar | Bebida Grande de Cortesía en Orden de $25+" },
+  { slot_number: 31, name: "Salón de Belleza y Uñas (Nails)", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 120.0, default_headline: "Luce Espectacular | Manicure + Pedicure Spa con $15 Off en Primera Cita" },
+  { slot_number: 32, name: "USPS EDDM Technical Zone", face: "BACK", format: "USPS", width_in: 2.8, height_in: 1.8, base_price: 0.0, default_ticket: 0.0, default_headline: "Espacio técnico reservado por ley federal USPS. No se vende." }
 ];
 
 function scalePrice(base: number, hh: number): number {
@@ -78,24 +99,7 @@ function seedDefaultCampaign() {
   const op = 738.37;
   const net = 732.63;
 
-  const paidSlots = [
-    { slot_number: 1, name: "Odontología Familiar", face: "FRONT", format: "HERO", width_in: 12.0, height_in: 3.2, price: 168.0, ticket: 1250.0, business: "Eastvale Premier Dental Care", phone: "(951) 842-1200", addr: "12712 Limonite Ave, Eastvale" },
-    { slot_number: 2, name: "HVAC / Aire Acondicionado", face: "FRONT", format: "STANDARD_FRONT", width_in: 4.3, height_in: 4.2, price: 98.0, ticket: 4500.0, business: "Air Pro Solutions IE", phone: "(951) 734-8890", addr: "7056 Archibald Ave, Eastvale" },
-    { slot_number: 3, name: "Hospital Veterinario", face: "FRONT", format: "STANDARD_FRONT", width_in: 4.3, height_in: 4.2, price: 98.0, ticket: 450.0, business: "Eastvale Pet Hospital", phone: "(951) 479-5600", addr: "12363 Limonite Ave, Eastvale" },
-    { slot_number: 4, name: "Plomería Residencial", face: "FRONT", format: "STANDARD_FRONT", width_in: 4.3, height_in: 4.2, price: 98.0, ticket: 780.0, business: "Precision Plumbing IE", phone: "(951) 682-3344", addr: "14120 Schleisman Rd, Eastvale" },
-    { slot_number: 5, name: "Taller Mecánico / Frenos", face: "FRONT", format: "STANDARD_FRONT", width_in: 4.3, height_in: 4.2, price: 98.0, ticket: 550.0, business: "Corona Complete Auto & Brakes", phone: "(951) 371-2211", addr: "13394 Limonite Ave, Eastvale" },
-    { slot_number: 6, name: "Pizzería Artesanal", face: "FRONT", format: "STANDARD_FRONT", width_in: 4.3, height_in: 4.2, price: 98.0, ticket: 55.0, business: "Bella Napoli Pizza Artesanal", phone: "(951) 898-4455", addr: "12610 Limonite Ave, Eastvale" },
-    { slot_number: 7, name: "Gimnasio Boutique / Fitness", face: "FRONT", format: "STANDARD_FRONT", width_in: 4.3, height_in: 4.2, price: 98.0, ticket: 140.0, business: "Apex Performance Studio", phone: "(951) 582-9011", addr: "7125 Hamner Ave, Eastvale" },
-    { slot_number: 8, name: "Techado y Paneles Solares", face: "BACK", format: "STANDARD_BACK", width_in: 4.3, height_in: 3.8, price: 98.0, ticket: 14500.0, business: "California Sun & Solar IE", phone: "(951) 900-3412", addr: "12523 Limonite Ave, Eastvale" },
-    { slot_number: 9, name: "Quiropráctico / Fisioterapia", face: "BACK", format: "STANDARD_BACK", width_in: 4.3, height_in: 3.8, price: 98.0, ticket: 480.0, business: "Spine & Joint Wellness Center", phone: "(951) 817-9922", addr: "12614 Limonite Ave, Eastvale" },
-    { slot_number: 10, name: "Limpieza de Alfombras y Pisos", face: "BACK", format: "STANDARD_BACK", width_in: 4.3, height_in: 3.8, price: 98.0, ticket: 320.0, business: "EcoClean Steam Masters IE", phone: "(951) 427-8100", addr: "7010 Archibald Ave, Eastvale" },
-    { slot_number: 11, name: "Detailing Móvil de Autos", face: "BACK", format: "STANDARD_BACK", width_in: 4.3, height_in: 3.8, price: 98.0, ticket: 220.0, business: "Mirror Finish Mobile Spa", phone: "(951) 314-7788", addr: "12410 Schleisman Rd, Eastvale" },
-    { slot_number: 12, name: "Peluquería Canina", face: "BACK", format: "STANDARD_BACK", width_in: 4.3, height_in: 3.8, price: 98.0, ticket: 85.0, business: "Paws & Bubbles Grooming", phone: "(951) 736-5544", addr: "12750 Limonite Ave, Eastvale" },
-    { slot_number: 13, name: "Restaurante Mexicano", face: "BACK", format: "STANDARD_BACK", width_in: 4.3, height_in: 3.8, price: 98.0, ticket: 68.0, business: "Taquería & Cantina El Rancho", phone: "(951) 493-2288", addr: "12569 Limonite Ave, Eastvale" },
-    { slot_number: 14, name: "Agencia de Seguros", face: "BACK", format: "MEDIUM_BACK", width_in: 7.0, height_in: 3.0, price: 127.0, ticket: 1400.0, business: "Empire Shield Insurance Agency", phone: "(951) 898-1122", addr: "12716 Limonite Ave, Eastvale" }
-  ];
-
-  const slots = paidSlots.map((d, idx) => ({
+  const slots = INITIAL_SLOT_DEFS.map((d, idx) => ({
     id: idx + 1,
     campaign_id: "camp_ie-east-92880",
     slot_number: d.slot_number,
@@ -105,24 +109,26 @@ function seedDefaultCampaign() {
     slot_type: d.format,
     width_inches: d.width_in,
     height_inches: d.height_in,
-    business_name: d.business,
-    contact_person: "Gerente General",
-    phone: d.phone,
-    email: `contacto@${d.business.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
-    website: `https://www.${d.business.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
-    business_address: d.addr,
+    business_name: d.slot_number === 32 ? "" : `${d.name} Local`,
+    contact_person: d.slot_number === 32 ? "" : "Gerente General",
+    phone: d.slot_number === 32 ? "" : "(951) 842-1200",
+    email: d.slot_number === 32 ? "" : `contacto@${d.name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
+    website: d.slot_number === 32 ? "" : `https://www.${d.name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
+    business_address: d.slot_number === 32 ? "" : "Eastvale, CA 92880",
     status: "PAID",
-    price_usd: d.price,
-    avg_ticket_usd: d.ticket,
+    price_usd: d.base_price,
+    avg_ticket_usd: d.default_ticket,
     logo_url: "",
-    offer_headline: INITIAL_SLOT_DEFS[idx]?.default_headline || "",
+    offer_headline: d.default_headline,
     qr_code_url: "",
     short_url: "",
     scan_count: 0,
     payment_ref: "SIMULACIÓN",
     paid_at: "2026-09-20T23:42:19.856367",
-    amount_collected_usd: d.price
+    amount_collected_usd: d.base_price
   }));
+
+  const totalCollected = slots.reduce((acc, s) => acc + s.price_usd, 0);
 
   return {
     id: "camp_ie-east-92880",
@@ -132,17 +138,17 @@ function seedDefaultCampaign() {
     target_zip: "92880",
     radius_miles: 5.0,
     target_households: hh,
-    target_gross_revenue: gross,
+    target_gross_revenue: totalCollected,
     operating_cost_est: op,
-    net_margin_est: net,
+    net_margin_est: Math.max(0, totalCollected - op),
     unit_cost_usd: unitCost,
     fixed_cost_usd: fixedCost,
     target_margin: 0.5,
     status: "PROSPECTING",
     mode: "DEMO",
     slots,
-    paid_count: 14,
-    total_collected_usd: gross,
+    paid_count: 31,
+    total_collected_usd: totalCollected,
     curated_count: 0,
     production_at: null,
     mailed_at: null,
@@ -544,17 +550,56 @@ export default {
         const campId = markAllPaidMatch[1];
         const c = campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
+
+        // Ensure all 32 slots exist
+        const existingNums = new Set(c.slots.map((s: any) => s.slot_number));
+        for (const def of INITIAL_SLOT_DEFS) {
+          if (!existingNums.has(def.slot_number)) {
+            c.slots.push({
+              slot_number: def.slot_number,
+              category_id: def.slot_number,
+              category_name: def.name,
+              side: def.face,
+              slot_type: def.format,
+              width_inches: def.width_in,
+              height_inches: def.height_in,
+              business_name: def.slot_number === 32 ? "" : `${def.name} Local`,
+              contact_person: def.slot_number === 32 ? "" : "Gerente General",
+              phone: def.slot_number === 32 ? "" : "(951) 842-1200",
+              email: def.slot_number === 32 ? "" : `contacto@${def.name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
+              website: def.slot_number === 32 ? "" : `https://www.${def.name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
+              business_address: def.slot_number === 32 ? "" : "Eastvale, CA 92880",
+              status: "PAID",
+              price_usd: def.base_price,
+              avg_ticket_usd: def.default_ticket,
+              logo_url: "",
+              offer_headline: def.default_headline,
+              qr_code_url: "",
+              short_url: "",
+              scan_count: 0,
+              payment_ref: "SIMULACIÓN",
+              paid_at: new Date().toISOString(),
+              amount_collected_usd: def.base_price
+            });
+          }
+        }
+
         let total = 0;
         const stamped: number[] = [];
         for (const s of c.slots) {
+          if (s.slot_number === 32 || s.format === 'USPS' || s.slot_type === 'USPS') {
+            s.status = "PAID";
+            s.price_usd = 0;
+            continue;
+          }
           s.status = "PAID";
           s.paid_at = new Date().toISOString();
-          s.amount_collected_usd = s.price_usd;
+          s.amount_collected_usd = s.price_usd || 350;
           s.payment_ref = "SIMULACIÓN";
-          total += s.price_usd;
+          total += s.amount_collected_usd;
           stamped.push(s.slot_number);
         }
-        c.paid_count = c.slots.length;
+        c.paid_count = c.slots.filter((s: any) => s.status === 'PAID' && s.slot_number !== 32).length;
         c.total_collected_usd = total;
         c.status = "LOCKED_READY";
         return json({ stamped, collected: total });

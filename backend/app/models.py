@@ -51,7 +51,7 @@ class Slot(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     campaign_id = Column(String(64), ForeignKey("campaigns.id"), nullable=False, index=True)
-    slot_number = Column(Integer, nullable=False) # 1 to 14
+    slot_number = Column(Integer, nullable=False) # 1 to 32
     category_id = Column(Integer, nullable=False)
     category_name = Column(String(128), nullable=False)
     side = Column(String(8), nullable=False) # FRONT, BACK

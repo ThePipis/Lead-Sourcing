@@ -239,7 +239,19 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
     syncTimer.current = window.setTimeout(() => {
       onTargetMarginSave?.(val);
       setIsTypingMargin(false);
-    }, 450);
+    }, 500);
+  };
+
+  const handleTargetMarginBlur = () => {
+    window.clearTimeout(syncTimer.current);
+    let val = Math.round(Number(marginInput));
+    if (!Number.isFinite(val) || val < 5) val = 5;
+    if (val > 95) val = 95;
+    setMarginInput(val);
+    setIsTypingMargin(false);
+    const scaled = computeScaledPricesForMargin(campaign.slots, val, currentTotalCost, 5);
+    onApplySuggested?.(scaled.pricesBySlot);
+    onTargetMarginSave?.(val);
   };
 
   const pct = (n: number) => `${Math.min(100, Math.max(0, (n / TOTAL_SLOTS) * 100))}%`;
@@ -538,8 +550,15 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                     min={5}
                     max={95}
                     value={marginInput}
-                    disabled={isSaving}
+                    disabled={locked}
                     onChange={(e) => handleTargetMarginChange(e.target.value)}
+                    onBlur={handleTargetMarginBlur}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleTargetMarginBlur();
+                        e.currentTarget.blur();
+                      }
+                    }}
                     className="h-7 w-14 border border-rule bg-card px-1.5 pr-4 text-center font-mono text-xs font-bold text-ink focus-visible:ring-1 focus-visible:ring-live focus:outline-none"
                     title="Margen de beneficio objetivo porcentual sobre la recaudación bruta"
                   />

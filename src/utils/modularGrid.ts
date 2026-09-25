@@ -126,12 +126,12 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
       const rowSpan = format === 'LARGE' || format === 'MEDIUM' ? 2 : 1;
       const colSpan = format === 'LARGE' ? 2 : 1;
 
+      const defaultPrice =
+        MODULAR_PRICES[format] || (format === 'LARGE' ? 1200 : format === 'MEDIUM' ? 650 : 350);
       const priceUsd =
-        format === 'MEDIUM'
-          ? (existing.priceUsd && existing.priceUsd > 350 ? existing.priceUsd : 650)
-          : format === 'LARGE'
-          ? (existing.priceUsd && existing.priceUsd > 350 ? existing.priceUsd : 1200)
-          : 350;
+        typeof existing.priceUsd === 'number' && !isNaN(existing.priceUsd) && existing.priceUsd > 0
+          ? existing.priceUsd
+          : defaultPrice;
 
       return {
         ...existing,
@@ -263,6 +263,8 @@ export function mergeModularSlot(
     const partner = normalized.find(
       (s) => s.side === side && s.gridCol === col && s.gridRow === partnerRow && s.slotNumber !== primarySlotNum
     );
+    const existingMed = normalized.find((s) => s.format === 'MEDIUM' && s.priceUsd);
+    const medPrice = existingMed?.priceUsd ?? (primary.priceUsd ? Math.round((primary.priceUsd * 650) / 350 / 5) * 5 : MODULAR_PRICES.MEDIUM);
 
     return computeAdaptiveDisplayNumbers(normalized.map((s) => {
       if (s.slotNumber === primarySlotNum) {
@@ -271,7 +273,7 @@ export function mergeModularSlot(
           format: 'MEDIUM',
           rowSpan: 2,
           colSpan: 1,
-          priceUsd: MODULAR_PRICES.MEDIUM,
+          priceUsd: medPrice,
           notes: undefined,
         };
       }
@@ -319,6 +321,8 @@ export function mergeModularSlot(
           ) ?? primary;
 
     const mainSlotNumber = anchorSlot.slotNumber;
+    const existingLg = normalized.find((s) => s.format === 'LARGE' && s.priceUsd);
+    const lgPrice = existingLg?.priceUsd ?? (primary.priceUsd ? Math.round((primary.priceUsd * 1200) / 350 / 5) * 5 : MODULAR_PRICES.LARGE);
 
     return computeAdaptiveDisplayNumbers(normalized.map((s) => {
       if (s.slotNumber === mainSlotNumber) {
@@ -344,7 +348,7 @@ export function mergeModularSlot(
           colSpan: 2,
           gridRow: originRow,
           gridCol: originCol,
-          priceUsd: MODULAR_PRICES.LARGE,
+          priceUsd: lgPrice,
           notes: undefined,
         };
       }
@@ -375,6 +379,10 @@ export function splitModularSlot(primarySlotNum: number, slots: SlotState[]): Sl
   const primary = normalized.find((s) => s.slotNumber === primarySlotNum);
   if (!primary) return normalized;
 
+  const existingSmall = normalized.find((s) => s.format === 'SMALL' && s.priceUsd && s.slotNumber !== 32);
+  const activeSmallPrice = existingSmall?.priceUsd
+    ?? (primary.priceUsd ? Math.round((primary.priceUsd * 350) / (primary.format === 'LARGE' ? 1200 : 650) / 5) * 5 : MODULAR_PRICES.SMALL);
+
   return computeAdaptiveDisplayNumbers(normalized.map((s) => {
     if (s.slotNumber === primarySlotNum) {
       const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === primarySlotNum);
@@ -386,7 +394,7 @@ export function splitModularSlot(primarySlotNum: number, slots: SlotState[]): Sl
         colSpan: 1,
         gridRow: def?.gridRow ?? s.gridRow,
         gridCol: def?.gridCol ?? s.gridCol,
-        priceUsd: MODULAR_PRICES.SMALL,
+        priceUsd: activeSmallPrice,
         notes: undefined,
       };
     }
@@ -401,7 +409,7 @@ export function splitModularSlot(primarySlotNum: number, slots: SlotState[]): Sl
         gridRow: def?.gridRow ?? s.gridRow,
         gridCol: def?.gridCol ?? s.gridCol,
         status: 'VACANT',
-        priceUsd: MODULAR_PRICES.SMALL,
+        priceUsd: activeSmallPrice,
         categoryName: cat?.name ?? s.categoryName,
         offerHeadline: cat?.defaultHeadline ?? s.offerHeadline,
         notes: undefined,

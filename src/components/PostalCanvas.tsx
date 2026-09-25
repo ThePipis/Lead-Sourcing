@@ -175,6 +175,10 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
   const paidCount = slots.filter((s) => s.status === 'PAID' && s.format !== 'USPS').length;
   const isMasterUnlocked = paidCount >= 10;
 
+  const smallPrice = slots.find((s) => s.format === 'SMALL' && s.priceUsd && s.slotNumber !== 32)?.priceUsd || 350;
+  const mediumPrice = slots.find((s) => s.format === 'MEDIUM' && s.priceUsd)?.priceUsd || 650;
+  const largePrice = slots.find((s) => s.format === 'LARGE' && s.priceUsd)?.priceUsd || 1200;
+
   // Split slots into Front & Back and filter out slots covered by merged parents
   const visibleSlots = slots.filter((s) => {
     if (s.notes?.startsWith('Covered by')) return false;
@@ -351,9 +355,9 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
               </span>
               <span className="text-muted-foreground hidden sm:inline">|</span>
               <span className="flex items-center gap-3 hidden sm:flex text-ink">
-                <span>🟩 Chico: $350 (1×1)</span>
-                <span>🟦 Mediano: $650 (1×2)</span>
-                <span>🟪 Grande: $1,200 (2×2)</span>
+                <span>🟩 Chico: ${smallPrice} (1×1)</span>
+                <span>🟦 Mediano: ${mediumPrice} (1×2)</span>
+                <span>🟪 Grande: ${largePrice.toLocaleString('en-US')} (2×2)</span>
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -602,13 +606,12 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   const isExpired = isReservationExpired(slot);
 
   const format: SlotFormat =
-    slot.format && slot.format !== 'SMALL'
-      ? slot.format
-      : (slot.rowSpan === 2 && slot.colSpan === 2) || slot.priceUsd === 1200
+    slot.format ||
+    ((slot.rowSpan === 2 && slot.colSpan === 2)
       ? 'LARGE'
-      : slot.rowSpan === 2 || slot.priceUsd === 650
+      : slot.rowSpan === 2
       ? 'MEDIUM'
-      : slot.format || 'SMALL';
+      : 'SMALL');
 
   const colSpan = slot.colSpan || (format === 'LARGE' ? 2 : 1);
   const rowSpan = slot.rowSpan || (format === 'LARGE' || format === 'MEDIUM' ? 2 : 1);
@@ -669,10 +672,14 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
     ? 'border-live border-l-4 border-l-live bg-card'
     : 'border-dashed border-border border-l-4 border-l-muted-foreground/30 bg-card hover:border-muted-foreground/60';
 
+  const activeSmallPrice = allSlots?.find((s) => s.format === 'SMALL' && s.priceUsd && s.slotNumber !== 32)?.priceUsd || 350;
+  const activeMedPrice = allSlots?.find((s) => s.format === 'MEDIUM' && s.priceUsd)?.priceUsd || 650;
+  const activeLgPrice = allSlots?.find((s) => s.format === 'LARGE' && s.priceUsd)?.priceUsd || 1200;
+
   const formatBadge = {
-    SMALL: { label: 'Chico (1×1)', color: 'bg-secondary text-ink-dim', price: 350 },
-    MEDIUM: { label: 'Mediano (1×2)', color: 'bg-live/15 text-live font-bold', price: 650 },
-    LARGE: { label: 'Grande (2×2)', color: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 font-black', price: 1200 },
+    SMALL: { label: 'Chico (1×1)', color: 'bg-secondary text-ink-dim', price: activeSmallPrice },
+    MEDIUM: { label: 'Mediano (1×2)', color: 'bg-live/15 text-live font-bold', price: activeMedPrice },
+    LARGE: { label: 'Grande (2×2)', color: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 font-black', price: activeLgPrice },
     USPS: { label: 'USPS Postal', color: 'bg-secondary text-muted-foreground', price: 0 },
   }[format];
 
@@ -806,7 +813,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                       className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-live font-bold cursor-pointer"
                     >
                       <span>Mediano (1×2)</span>
-                      <span>$650</span>
+                      <span>${activeMedPrice}</span>
                     </button>
                   )}
                   {canMergeLg && (
@@ -819,7 +826,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                       className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-purple-600 font-bold cursor-pointer"
                     >
                       <span>Grande (2×2)</span>
-                      <span>$1,200</span>
+                      <span>${activeLgPrice.toLocaleString('en-US')}</span>
                     </button>
                   )}
                   {!canMergeMed && !canMergeLg && (
@@ -858,7 +865,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                       className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-purple-600 font-bold cursor-pointer"
                     >
                       <span>Grande (2×2)</span>
-                      <span>$1,200</span>
+                      <span>${activeLgPrice.toLocaleString('en-US')}</span>
                     </button>
                   )}
                   <button
@@ -870,7 +877,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                     className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-due font-bold cursor-pointer border-t border-border mt-0.5"
                   >
                     <span>Dividir en Chicos (1×1)</span>
-                    <span>$350</span>
+                    <span>${activeSmallPrice}</span>
                   </button>
                 </div>
               )}
@@ -883,7 +890,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                 onSplit(slot.slotNumber);
               }}
               className="flex items-center gap-0.5 text-[0.6rem] font-bold text-ink-dim hover:text-due border border-rule px-1.5 py-0.5 rounded bg-background cursor-pointer"
-              title="Dividir de vuelta en espacios individuales chicos ($350)"
+              title={`Dividir de vuelta en espacios individuales chicos ($${activeSmallPrice})`}
             >
               <Minimize2 className="h-2.5 w-2.5 text-due" />
               <span>Dividir</span>

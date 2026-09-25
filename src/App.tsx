@@ -442,8 +442,14 @@ export default function App() {
 
     setIsSaving(true);
     try {
-      const slots = await batchUpdateCampaignSlots(campaign.id, updates);
-      patchSlots(campaign.id, () => slots);
+      const updated = await batchUpdateCampaignSlots(campaign.id, updates);
+      const updatedMap = new Map(updated.map((s) => [s.slotNumber, s]));
+      patchSlots(campaign.id, (prevSlots) =>
+        prevSlots.map((s) => {
+          const fresh = updatedMap.get(s.slotNumber);
+          return fresh ? { ...s, ...fresh } : s;
+        }),
+      );
       setLoadError(null);
     } catch (err) {
       console.error('Failed to apply suggested prices:', err);

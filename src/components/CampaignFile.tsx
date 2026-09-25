@@ -584,8 +584,10 @@ const FileRow: React.FC<FileRowProps> = ({
   onDelete,
 }) => {
   const { t } = useTranslation(['common']);
-  const paid = campaign.slots.filter((s) => s.status === 'PAID').length;
-  const owed = TOTAL_SLOTS - paid;
+  const paid = campaign.slots.filter(
+    (s) => s.status === 'PAID' && s.format !== 'USPS' && s.slotNumber !== 32,
+  ).length;
+  const owed = Math.max(0, TOTAL_SLOTS - paid);
   const mailed = campaign.status === 'MAILED';
   const isArchived = Boolean(campaign.archivedAt);
 

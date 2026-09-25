@@ -10,7 +10,16 @@ interface PaymentStampProps {
   isSaving: boolean;
 }
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+/**
+ * Returns today's date in local YYYY-MM-DD format (respecting user's local timezone instead of UTC)
+ */
+const todayIso = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 /**
  * Payment methods accepted by local co-op direct mail campaigns.

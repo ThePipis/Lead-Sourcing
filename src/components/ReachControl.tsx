@@ -78,7 +78,9 @@ export const ReachControl: React.FC<ReachControlProps> = ({
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
-  const paid = campaign.slots.filter((s) => s.status === 'PAID').length;
+  const paid = campaign.slots.filter(
+    (s) => s.status === 'PAID' && s.format !== 'USPS' && s.slotNumber !== 32,
+  ).length;
   const inProduction = campaign.status === 'IN_PRODUCTION' || campaign.status === 'MAILED';
   const locked = paid > 0 || inProduction;
 

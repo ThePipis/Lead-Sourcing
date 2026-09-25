@@ -63,7 +63,9 @@ export interface CampaignProgress {
 const isInProduction = (c: Campaign) => c.status === 'IN_PRODUCTION' || c.status === 'MAILED';
 
 export function computeProgress(campaign: Campaign, curatedCount: number): CampaignProgress {
-  const paid = campaign.slots.filter((s) => s.status === 'PAID' && s.slotNumber !== 32).length;
+  const paid = campaign.slots.filter(
+    (s) => s.status === 'PAID' && s.slotNumber !== 32 && s.format !== 'USPS',
+  ).length;
   const collected = collectedUsd(campaign);
   const cost = dropCostUsd(campaign);
   const costCovered = collected >= cost;
@@ -75,10 +77,10 @@ export function computeProgress(campaign: Campaign, curatedCount: number): Campa
 
   const firstVacant = [...campaign.slots]
     .sort((a, b) => a.slotNumber - b.slotNumber)
-    .find((s) => s.status === 'VACANT');
+    .find((s) => s.status === 'VACANT' && s.slotNumber !== 32);
   const firstUnpaid = [...campaign.slots]
     .sort((a, b) => a.slotNumber - b.slotNumber)
-    .find((s) => s.status !== 'PAID');
+    .find((s) => s.status !== 'PAID' && s.slotNumber !== 32);
 
   const phases: PhaseState[] = [
     {
@@ -222,6 +224,8 @@ export function scaleCampaignToReach(campaign: Campaign, households: number): Ca
     ...campaign,
     totalTargetHouseholds: households,
     slots: campaign.slots.map((s) => {
+      // Slot 32 USPS EDDM Indicia technical zone is not commercial
+      if (s.format === 'USPS' || s.slotNumber === 32) return { ...s, priceUsd: 0 };
       // A paid slot keeps its price: that figure is a transaction, not an
       // estimate, and a preview must not pretend otherwise.
       if (s.status === 'PAID') return s;

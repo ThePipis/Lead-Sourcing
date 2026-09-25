@@ -91,8 +91,10 @@ export function mapBackendCampaignToFrontend(raw: any): Campaign {
 
   const slots = normalizeModularSlots(rawSlots);
 
-  const paidSlots = slots.filter((s) => s.status === 'PAID');
-  const paidCount = raw.paid_count ?? paidSlots.length;
+  const paidSlots = slots.filter(
+    (s) => s.status === 'PAID' && s.format !== 'USPS' && s.slotNumber !== 32,
+  );
+  const paidCount = raw.paid_count !== undefined && raw.paid_count <= 31 ? raw.paid_count : paidSlots.length;
   const totalCollectedUsd =
     raw.total_collected_usd ?? paidSlots.reduce((acc, s) => acc + s.priceUsd, 0);
   const calculatedGrossRevenue = slots.reduce((acc, s) => acc + s.priceUsd, 0);

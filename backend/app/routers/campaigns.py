@@ -309,7 +309,7 @@ def update_campaign_status(
         raise HTTPException(status_code=404, detail=f"Campaign {campaign_id} not found")
 
     if req.target_households is not None or req.unit_cost_usd is not None:
-        paid = [s for s in camp.slots if s.status == "PAID"]
+        paid = [s for s in camp.slots if s.status == "PAID" and s.slot_number != 32]
         if paid:
             raise HTTPException(
                 status_code=409,
@@ -615,7 +615,7 @@ def delete_campaign(campaign_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Campaign {campaign_id} not found")
 
     if (camp.mode or "DEMO").upper() == "LIVE":
-        paid = [s for s in camp.slots if s.status == "PAID"]
+        paid = [s for s in camp.slots if s.status == "PAID" and s.slot_number != 32]
         if paid or camp.status in PRODUCTION_STATUSES:
             raise HTTPException(
                 status_code=409,

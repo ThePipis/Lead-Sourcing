@@ -485,6 +485,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                           onNextCandidate={onNextCandidate}
                           menuOpen={formatMenuSlot === slot.slotNumber}
                           onToggleMenu={(num) => setFormatMenuSlot(formatMenuSlot === num ? null : num)}
+                          onCloseMenu={() => setFormatMenuSlot(null)}
                           blockRowOffset={2}
                         />
                       );
@@ -555,6 +556,7 @@ interface ModularSlotCardProps {
   onNextCandidate?: (slotNumber: number) => void;
   menuOpen: boolean;
   onToggleMenu: (slotNumber: number) => void;
+  onCloseMenu?: () => void;
   blockRowOffset: number;
 }
 
@@ -571,6 +573,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   onNextCandidate,
   menuOpen,
   onToggleMenu,
+  onCloseMenu,
   blockRowOffset,
 }) => {
   const isPaid = slot.status === 'PAID';
@@ -592,6 +595,41 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   const catDef = CLOSED_CATEGORIES.find((c) => c.id === slot.categoryId) ?? CLOSED_CATEGORIES[0];
   const canMergeMed = canMergeVertical(slot, allSlots);
   const canMergeLg = canMergeLarge(slot, allSlots);
+
+  // Ref and click-outside/escape listener for the "Modificar" dropdown
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const handlePointerDown = (e: PointerEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        if (onCloseMenu) {
+          onCloseMenu();
+        } else {
+          onToggleMenu(slot.slotNumber);
+        }
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (onCloseMenu) {
+          onCloseMenu();
+        } else {
+          onToggleMenu(slot.slotNumber);
+        }
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [menuOpen, onCloseMenu, onToggleMenu, slot.slotNumber]);
 
   // Status visual border
   const statusBorderClass = isPaid
@@ -712,7 +750,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
       {/* Bottom Footer: Format Modifiers & Status Dropdown */}
       <div className="pt-2 border-t border-border/70 flex items-center justify-between gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
         {/* Format Selector / Revert Button */}
-        <div className="relative">
+        <div ref={menuRef} className="relative">
           {format === 'SMALL' ? (
             <div>
               <button

@@ -30,7 +30,9 @@ const money = (n: number) =>
 export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({ campaign }) => {
   const { t } = useTranslation(['common']);
 
-  const paid = campaign.slots.filter((s) => s.status === 'PAID').length;
+  const paid = campaign.slots.filter(
+    (s) => s.status === 'PAID' && s.format !== 'USPS' && s.slotNumber !== 32,
+  ).length;
   const collected = collectedUsd(campaign);
   const contracted = contractedUsd(campaign);
   const cost = dropCostUsd(campaign);

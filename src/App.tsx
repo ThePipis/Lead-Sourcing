@@ -692,10 +692,26 @@ export default function App() {
     const existing = campaign.slots.find((s) => s.slotNumber === slotNumber);
     const targetStatus: SlotStatus =
       existing?.status === 'VACANT' ? 'RESERVED' : existing?.status || 'RESERVED';
+    const effectiveHeadline = headline !== undefined ? headline : (existing?.offerHeadline ?? '');
+
+    // 1. Optimistic update immediately so the canvas reacts in real time without lag
+    patchSlots(campaign.id, (slots) =>
+      slots.map((s) =>
+        s.slotNumber === slotNumber
+          ? {
+              ...s,
+              businessName,
+              offerHeadline: effectiveHeadline,
+              status: targetStatus,
+            }
+          : s,
+      ),
+    );
+
     try {
       const updated = await updateCampaignSlot(campaign.id, slotNumber, {
         businessName,
-        offerHeadline: headline || existing?.offerHeadline,
+        offerHeadline: effectiveHeadline,
         status: targetStatus,
       });
       patchSlots(campaign.id, (slots) =>
@@ -703,18 +719,6 @@ export default function App() {
       );
     } catch (err) {
       console.error('Failed to persist slot business to SQLite:', err);
-      patchSlots(campaign.id, (slots) =>
-        slots.map((s) =>
-          s.slotNumber === slotNumber
-            ? {
-                ...s,
-                businessName,
-                offerHeadline: headline || s.offerHeadline,
-                status: targetStatus,
-              }
-            : s,
-        ),
-      );
     } finally {
       setIsSaving(false);
     }

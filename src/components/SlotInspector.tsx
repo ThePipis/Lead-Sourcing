@@ -47,7 +47,7 @@ interface SlotInspectorProps {
 }
 
 /** How long a field sits still before it is written to disk. */
-const AUTOSAVE_MS = 700;
+const AUTOSAVE_MS = 400;
 
 /**
  * Everything one advertising box needs, beside the card instead of on top of it.
@@ -108,26 +108,58 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
   // What is already on disk, so a settled edit that changed nothing writes
   // nothing. The server's own copy is the reference, not the last keystroke.
   const saved = useRef({ name: slot.businessName ?? '', headline: slot.offerHeadline ?? '' });
+  const currentSlotNumber = useRef(slot.slotNumber);
+  const latestDraft = useRef({ name: slot.businessName ?? '', headline: slot.offerHeadline ?? '' });
+  latestDraft.current = { name, headline };
 
   // Follow the box the operator clicked, and never carry one box's draft into
   // the next one.
   useEffect(() => {
-    window.clearTimeout(timer.current);
-    setName(slot.businessName ?? '');
-    setHeadline(slot.offerHeadline ?? '');
-    saved.current = { name: slot.businessName ?? '', headline: slot.offerHeadline ?? '' };
-    setConfirmingClear(false);
-    setShowManualForm(false);
-    setShowAlternativeProspects(false);
+    const isNewSlot = currentSlotNumber.current !== slot.slotNumber;
+    currentSlotNumber.current = slot.slotNumber;
+
+    if (isNewSlot) {
+      window.clearTimeout(timer.current);
+      timer.current = undefined;
+      setName(slot.businessName ?? '');
+      setHeadline(slot.offerHeadline ?? '');
+      saved.current = { name: slot.businessName ?? '', headline: slot.offerHeadline ?? '' };
+      setConfirmingClear(false);
+      setShowManualForm(false);
+      setShowAlternativeProspects(false);
+    } else {
+      if (slot.businessName !== undefined && slot.businessName !== saved.current.name) {
+        setName(slot.businessName ?? '');
+        saved.current.name = slot.businessName ?? '';
+      }
+      if (slot.offerHeadline !== undefined && slot.offerHeadline !== saved.current.headline) {
+        setHeadline(slot.offerHeadline ?? '');
+        saved.current.headline = slot.offerHeadline ?? '';
+      }
+    }
+
     if (slot.businessName) {
       setJustReleasedName(null);
     }
   }, [slot.slotNumber, slot.businessName, slot.offerHeadline]);
 
+  // Flush pending commit on unmount
+  useEffect(() => {
+    return () => {
+      if (timer.current) {
+        window.clearTimeout(timer.current);
+        const d = latestDraft.current;
+        if (d.name !== saved.current.name || d.headline !== saved.current.headline) {
+          onUpdateBusiness(currentSlotNumber.current, d.name, d.headline);
+        }
+      }
+    };
+  }, [onUpdateBusiness]);
+
   const commit = (nextName: string, nextHeadline: string) => {
     window.clearTimeout(timer.current);
+    timer.current = undefined;
     if (nextName === saved.current.name && nextHeadline === saved.current.headline) return;
-    if (!nextName.trim() && !saved.current.name) return; // nothing to name yet
     saved.current = { name: nextName, headline: nextHeadline };
     onUpdateBusiness(slot.slotNumber, nextName, nextHeadline);
   };
@@ -411,6 +443,11 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                     setName(e.target.value);
                     schedule(e.target.value, headline);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                  }}
                   onBlur={() => commit(name, headline)}
                   className="mt-1 w-full border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-live focus:outline-none"
                 />
@@ -426,6 +463,12 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                   onChange={(e) => {
                     setHeadline(e.target.value);
                     schedule(name, e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      e.currentTarget.blur();
+                    }
                   }}
                   onBlur={() => commit(name, headline)}
                   className="mt-1 w-full resize-none border border-border bg-background px-2.5 py-1.5 text-xs leading-relaxed text-foreground focus:border-live focus:outline-none"

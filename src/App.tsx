@@ -13,7 +13,12 @@ import { PostalExportView } from './components/PostalExportView.tsx';
 import { ArchitectureViewer } from './components/ArchitectureViewer.tsx';
 import { GuidedTour, FILE_TOUR, FORM_TOUR, hasSeenTour } from './components/GuidedTour.tsx';
 import { CLOSED_CATEGORIES } from './data/categories.ts';
-import { mergeModularSlot, splitModularSlot, swapModularSlots } from './utils/modularGrid.ts';
+import {
+  computeAdaptiveDisplayNumbers,
+  mergeModularSlot,
+  splitModularSlot,
+  swapModularSlots,
+} from './utils/modularGrid.ts';
 import {
   Campaign,
   SlotState,
@@ -235,7 +240,8 @@ export default function App() {
   const patchSlots = useCallback(
     (id: string, update: (slots: SlotState[]) => SlotState[]) => {
       patchCampaign(id, (c) => {
-        const nextSlots = update(c.slots);
+        const rawNextSlots = update(c.slots);
+        const nextSlots = computeAdaptiveDisplayNumbers(rawNextSlots);
         const revenue = nextSlots.reduce((acc, s) => {
           if (s.format === 'USPS' || s.slotNumber === 32 || s.notes?.includes('Covered by')) return acc;
           return acc + (s.priceUsd || 0);

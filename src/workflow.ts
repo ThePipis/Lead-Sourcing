@@ -64,7 +64,7 @@ const isInProduction = (c: Campaign) => c.status === 'IN_PRODUCTION' || c.status
 
 export function computeProgress(campaign: Campaign, curatedCount: number): CampaignProgress {
   const paid = campaign.slots.filter(
-    (s) => s.status === 'PAID' && s.slotNumber !== 32 && s.format !== 'USPS',
+    (s) => s.status === 'PAID' && s.slotNumber !== 32 && s.format !== 'USPS' && !s.notes?.startsWith('Covered by'),
   ).length;
   const collected = collectedUsd(campaign);
   const cost = dropCostUsd(campaign);
@@ -75,12 +75,12 @@ export function computeProgress(campaign: Campaign, curatedCount: number): Campa
   const inProduction = isInProduction(campaign);
   const mailed = campaign.status === 'MAILED';
 
-  const firstVacant = [...campaign.slots]
-    .sort((a, b) => a.slotNumber - b.slotNumber)
-    .find((s) => s.status === 'VACANT' && s.slotNumber !== 32);
-  const firstUnpaid = [...campaign.slots]
-    .sort((a, b) => a.slotNumber - b.slotNumber)
-    .find((s) => s.status !== 'PAID' && s.slotNumber !== 32);
+  const visibleCommercialSlots = [...campaign.slots]
+    .filter((s) => !s.notes?.startsWith('Covered by') && s.slotNumber !== 32 && s.format !== 'USPS')
+    .sort((a, b) => (a.displayNumber ?? a.slotNumber) - (b.displayNumber ?? b.slotNumber));
+
+  const firstVacant = visibleCommercialSlots.find((s) => s.status === 'VACANT');
+  const firstUnpaid = visibleCommercialSlots.find((s) => s.status !== 'PAID');
 
   const phases: PhaseState[] = [
     {
@@ -136,13 +136,13 @@ export function computeProgress(campaign: Campaign, curatedCount: number): Campa
   if (!floorMet && firstVacant) {
     imperativeKey = 'form.imperative.fillSlot';
     imperativeParams = {
-      slot: String(firstVacant.slotNumber).padStart(2, '0'),
+      slot: String(firstVacant.displayNumber ?? firstVacant.slotNumber).padStart(2, '0'),
     };
     imperativeTarget = 'slots';
   } else if (!floorMet && firstUnpaid) {
     imperativeKey = 'form.imperative.collectSlot';
     imperativeParams = {
-      slot: String(firstUnpaid.slotNumber).padStart(2, '0'),
+      slot: String(firstUnpaid.displayNumber ?? firstUnpaid.slotNumber).padStart(2, '0'),
     };
     imperativeTarget = 'slots';
   } else if (!curated) {
@@ -158,7 +158,7 @@ export function computeProgress(campaign: Campaign, curatedCount: number): Campa
     // Mailed, but the card went out with empty space. Worth naming.
     imperativeKey = 'form.imperative.fillSlot';
     imperativeParams = {
-      slot: String(firstVacant.slotNumber).padStart(2, '0'),
+      slot: String(firstVacant.displayNumber ?? firstVacant.slotNumber).padStart(2, '0'),
     };
     imperativeTarget = 'slots';
   } else {

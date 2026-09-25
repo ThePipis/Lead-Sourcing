@@ -407,7 +407,7 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                       <div className="flex min-w-0 flex-1 items-center gap-3">
                         <img
                           src={qr.qrDataUrl}
-                          alt={t('export:qr.slotPrefix', { id: qr.slotNumber })}
+                          alt={t('export:qr.slotPrefix', { id: qr.displayNumber ?? qr.slotNumber })}
                           width={36}
                           height={36}
                           loading="lazy"
@@ -416,7 +416,7 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                         />
                         <div className="min-w-0">
                           <span className="text-[0.63rem] font-mono font-bold text-primary block">
-                            {t('export:qr.slotPrefix', { id: qr.slotNumber })}
+                            {t('export:qr.slotPrefix', { id: qr.displayNumber ?? qr.slotNumber })}
                           </span>
                           <h4 className="truncate text-xs font-bold text-foreground">
                             {qr.businessName}
@@ -444,7 +444,7 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                 <div>
                   <div className="flex items-center justify-between border-b border-border pb-2 mb-3">
                     <span className="text-xs font-bold text-primary font-mono">
-                      {t('export:qr.printHeader', { id: selectedQr.slotNumber })}
+                      {t('export:qr.printHeader', { id: selectedQr.displayNumber ?? selectedQr.slotNumber })}
                     </span>
                     <span className="text-[0.69rem] text-muted-foreground font-mono">
                       {t('export:qr.vectorDpi')}
@@ -454,7 +454,7 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                   <div className="flex flex-col items-center justify-center p-4 bg-secondary/40 border border-border">
                     <img
                       src={selectedQr.qrDataUrl}
-                      alt={t('export:qr.printHeader', { id: selectedQr.slotNumber })}
+                      alt={t('export:qr.printHeader', { id: selectedQr.displayNumber ?? selectedQr.slotNumber })}
                       width={192}
                       height={192}
                       decoding="async"
@@ -468,7 +468,7 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                     </p>
                     <a
                       href={selectedQr.qrDataUrl}
-                      download={`QR_${selectedQr.slotNumber}_${(selectedQr.businessName || 'Slot').replace(/[^a-zA-Z0-9]/g, '_')}.png`}
+                      download={`QR_Slot${selectedQr.displayNumber ?? selectedQr.slotNumber}_${(selectedQr.businessName || 'Slot').replace(/[^a-zA-Z0-9]/g, '_')}.png`}
                       className="mt-3 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-live text-primary-foreground text-xs font-bold transition-opacity hover:opacity-90 cursor-pointer shadow-sm"
                     >
                       <Download className="w-3.5 h-3.5" />
@@ -552,7 +552,7 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-primary font-mono">
                           {t('export:telemetry.slotPrefix', {
-                            id: evt.slotNumber,
+                            id: slots.find((s) => s.slotNumber === evt.slotNumber)?.displayNumber ?? evt.slotNumber,
                             business: evt.businessName,
                           })}
                         </span>

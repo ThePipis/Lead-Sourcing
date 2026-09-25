@@ -123,7 +123,7 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
       <form
         onSubmit={submit}
         className="w-full max-w-2xl border-2 border-live bg-card shadow-2xl relative flex flex-col focus:outline-none animate-in zoom-in-95 duration-150 rounded-none"
-        aria-label={t('common:payment.title', { slot: slot.slotNumber })}
+        aria-label={t('common:payment.title', { slot: slot.displayNumber ?? slot.slotNumber })}
       >
         {/* Header: Sello de Cobro Postal + Slot # + Formato + Close Button */}
         <div className="flex items-center justify-between gap-3 border-b border-rule bg-secondary/80 px-4 py-3 select-none">
@@ -135,7 +135,7 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
               <div className="flex items-center gap-2">
                 <h3 id="payment-modal-title" className="font-mono text-xs font-black uppercase tracking-wider text-live">
                   {t('common:payment.title', {
-                    slot: String(slot.slotNumber).padStart(2, '0'),
+                    slot: String(slot.displayNumber ?? slot.slotNumber).padStart(2, '0'),
                   })}
                 </h3>
                 <span className={`text-[0.62rem] px-1.5 py-0.5 rounded border ${formatBadge.color}`}>

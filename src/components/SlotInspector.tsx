@@ -338,14 +338,14 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
     <aside
       ref={panel}
       id="slot-inspector"
-      aria-label={t('canvas:inspector.aria', { id: slot.slotNumber })}
+      aria-label={t('canvas:inspector.aria', { id: slot.displayNumber ?? slot.slotNumber })}
       className="flex h-full min-h-0 flex-col border border-border/80 bg-card text-card-foreground shadow-sm overscroll-contain"
     >
       {/* ---------------------------------------------------------- header */}
       <header className="shrink-0 flex items-start justify-between gap-2 border-b border-border bg-secondary/70 px-3.5 py-2.5">
         <div className="min-w-0">
           <p className="font-mono text-[0.69rem] font-bold tabular-nums text-primary">
-            {t('canvas:inspector.slotLabel', { id: slot.slotNumber })} ·{' '}
+            {t('canvas:inspector.slotLabel', { id: slot.displayNumber ?? slot.slotNumber })} ·{' '}
             {niche.widthInches}&quot; × {niche.heightInches}&quot; ·{' '}
             {niche.side === 'FRONT' ? t('canvas:ruler.frontTab') : t('canvas:ruler.backTab')}
           </p>
@@ -449,7 +449,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                       return (
                         <option key={s.slotNumber} value={s.slotNumber}>
                           {t('canvas:modal.moveToOption', {
-                            id: s.slotNumber,
+                            id: s.displayNumber ?? s.slotNumber,
                             side:
                               (CLOSED_CATEGORIES.find((c) => c.id === s.slotNumber)?.side ?? 'FRONT') ===
                               'FRONT'
@@ -884,7 +884,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                             <Phone className="h-3 w-3" />
                             <span>
                               {isHere && slot.status === 'PROSPECTING'
-                                ? t('prospecting:crm.negotiatingInSlot', { slot: slot.slotNumber })
+                                ? t('prospecting:crm.negotiatingInSlot', { slot: slot.displayNumber ?? slot.slotNumber })
                                 : t('prospecting:crm.contacted')}
                             </span>
                           </button>
@@ -918,7 +918,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                             ? t('prospecting:crm.assigned')
                             : isHere && slot.status === 'PROSPECTING'
                               ? t('canvas:inspector.reserve', 'Apartar / Reservar')
-                              : t('canvas:inspector.assign', { id: slot.slotNumber })}
+                              : t('canvas:inspector.assign', { id: slot.displayNumber ?? slot.slotNumber })}
                         </button>
                       </div>
                     </li>

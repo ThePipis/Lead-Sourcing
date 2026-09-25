@@ -693,11 +693,21 @@ def reset_slot_layout(
             cat_id, cat_name = home.get(slot.slot_number, (slot.slot_number, slot.category_name))
             slot.category_id = cat_id
             slot.category_name = cat_name
+            slot.notes = None
+            slot.row_span = 1
+            slot.col_span = 1
+            slot.width_inches = 2.8
+            slot.height_inches = 1.8
             if slot.slot_number == 32 or slot.slot_type == "USPS":
                 slot.status = "PAID"
                 slot.price_usd = 0.0
+                slot.format = "USPS"
+                slot.slot_type = "USPS"
                 continue
             slot.status = "VACANT"
+            slot.format = "SMALL"
+            slot.slot_type = "SMALL"
+            slot.price_usd = 350.0
             for field in (
                 "business_name",
                 "contact_person",
@@ -715,6 +725,9 @@ def reset_slot_layout(
             slot.amount_collected_usd = 0.0
             slot.scan_count = 0
         camp.status = "PROSPECTING"
+        camp.operating_cost_est = drop_cost(camp, db)
+        camp.target_gross_revenue = sum(s.price_usd for s in camp.slots)
+        camp.net_margin_est = max(0.0, camp.target_gross_revenue - camp.operating_cost_est)
         db.commit()
         db.refresh(camp)
         return _populate_campaign_computed(camp, db)
@@ -744,11 +757,27 @@ def reset_slot_layout(
         slot.category_id = cat_id
         slot.category_name = cat_name
         payload = carried.get(cat_id)
-        if payload is None:
-            continue
-        for field, value in payload.items():
-            setattr(slot, field, value)
+        if payload is not None:
+            for field, value in payload.items():
+                setattr(slot, field, value)
+        slot.notes = None
+        slot.row_span = 1
+        slot.col_span = 1
+        slot.width_inches = 2.8
+        slot.height_inches = 1.8
+        if slot.slot_number == 32 or slot.slot_type == "USPS":
+            slot.status = "PAID"
+            slot.price_usd = 0.0
+            slot.format = "USPS"
+            slot.slot_type = "USPS"
+        else:
+            slot.format = "SMALL"
+            slot.slot_type = "SMALL"
+            slot.price_usd = 350.0
 
+    camp.operating_cost_est = drop_cost(camp, db)
+    camp.target_gross_revenue = sum(s.price_usd for s in camp.slots)
+    camp.net_margin_est = max(0.0, camp.target_gross_revenue - camp.operating_cost_est)
     db.commit()
     db.refresh(camp)
     return _populate_campaign_computed(camp, db)

@@ -89,7 +89,7 @@ export const ProductionSection: React.FC<ProductionSectionProps> = ({
               {best && best.scanCount > 0 && (
                 <p className="mt-3 max-w-[68ch] text-xs leading-relaxed text-ink-dim">
                   {t('common:production.renewalNote', {
-                    business: best.businessName || `Slot ${best.slotNumber}`,
+                    business: best.businessName || `Slot ${best.displayNumber ?? best.slotNumber}`,
                     count: best.scanCount,
                   })}
                 </p>
@@ -110,7 +110,7 @@ export const ProductionSection: React.FC<ProductionSectionProps> = ({
                     return (
                       <tr key={s.slotNumber} className="border-b border-rule">
                         <td className="field-value py-2 pr-3 text-xs text-ink-dim">
-                          {String(s.slotNumber).padStart(2, '0')}
+                          {String(s.displayNumber ?? s.slotNumber).padStart(2, '0')}
                         </td>
                         <td className="py-2 pr-3 text-xs text-ink">
                           {s.businessName || t('common:production.unnamed')}

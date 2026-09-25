@@ -29,6 +29,7 @@ export const MANIFEST_HEADERS = [
 
 export interface GeneratedQrData {
   slotNumber: number;
+  displayNumber?: number;
   businessName: string;
   shortUrl: string;
   qrDataUrl: string;
@@ -69,7 +70,8 @@ export async function generateCampaignQrCodes(
 
       qrResults.push({
         slotNumber: slot.slotNumber,
-        businessName: slot.businessName || `Slot ${slot.slotNumber}`,
+        displayNumber: slot.displayNumber,
+        businessName: slot.businessName || `Slot ${slot.displayNumber ?? slot.slotNumber}`,
         shortUrl,
         qrDataUrl,
       });

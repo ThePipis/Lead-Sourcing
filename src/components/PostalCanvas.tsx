@@ -181,14 +181,26 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
     return true;
   });
 
-  const frontSlots = visibleSlots.filter((s) => s.slotNumber <= 16);
-  const backSlots = visibleSlots.filter((s) => s.slotNumber >= 17 && s.slotNumber <= 32);
+  const isFront = (s: SlotState) => s.side === 'FRONT' || (s.slotNumber <= 16 && s.side !== 'BACK');
 
-  const frontTop = frontSlots.filter((s) => (s.gridRow ?? 1) <= 2);
-  const frontBottom = frontSlots.filter((s) => (s.gridRow ?? 1) >= 3);
+  const frontSlots = visibleSlots.filter(isFront);
+  const backSlots = visibleSlots.filter((s) => !isFront(s));
 
-  const backTop = backSlots.filter((s) => (s.gridRow ?? 1) <= 2);
-  const backBottom = backSlots.filter((s) => (s.gridRow ?? 1) >= 3);
+  const sortByGridPosition = (a: SlotState, b: SlotState) => {
+    const rowA = a.gridRow ?? 1;
+    const rowB = b.gridRow ?? 1;
+    if (rowA !== rowB) return rowA - rowB;
+    const colA = a.gridCol ?? 1;
+    const colB = b.gridCol ?? 1;
+    if (colA !== colB) return colA - colB;
+    return (a.displayNumber ?? a.slotNumber) - (b.displayNumber ?? b.slotNumber);
+  };
+
+  const frontTop = frontSlots.filter((s) => (s.gridRow ?? 1) <= 2).sort(sortByGridPosition);
+  const frontBottom = frontSlots.filter((s) => (s.gridRow ?? 1) >= 3).sort(sortByGridPosition);
+
+  const backTop = backSlots.filter((s) => (s.gridRow ?? 1) <= 2).sort(sortByGridPosition);
+  const backBottom = backSlots.filter((s) => (s.gridRow ?? 1) >= 3).sort(sortByGridPosition);
 
   // Handlers for merging / splitting
   const handleMerge = (slotNumber: number, targetFormat: 'MEDIUM' | 'LARGE') => {
@@ -244,7 +256,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                     : 'bg-card border-border text-secondary-foreground hover:bg-accent'
                 }`}
               >
-                Cara Frontal (16 Espacios)
+                Cara Frontal ({frontSlots.length} Espacios)
               </button>
               <button
                 id="btn-side-back"
@@ -256,7 +268,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                     : 'bg-card border-border text-secondary-foreground hover:bg-accent'
                 }`}
               >
-                Cara Reversa (15 Espacios + USPS)
+                Cara Reversa ({backSlots.filter((s) => s.format !== 'USPS').length} Espacios + USPS)
               </button>
             </div>
 
@@ -532,7 +544,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
               {draggingSlot !== null && (
                 <div className="border border-live bg-card px-3 py-2 shadow-xl">
                   <p className="font-mono text-[0.63rem] font-bold text-live">
-                    ESPACIO #{draggingSlot}
+                    ESPACIO #{slots.find((s) => s.slotNumber === draggingSlot)?.displayNumber ?? draggingSlot}
                   </p>
                   <p className="text-xs font-bold text-foreground">
                     {slots.find((s) => s.slotNumber === draggingSlot)?.businessName || 'Comercio Local'}
@@ -683,7 +695,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
         <div className="flex items-center justify-between gap-1 mb-1">
           <div className="flex items-center gap-1.5">
             <span className="font-mono text-[0.62rem] font-black text-muted-foreground">
-              #{slot.slotNumber}
+              #{slot.displayNumber ?? slot.slotNumber}
             </span>
             <span className={`text-[0.58rem] px-1 py-0.2 rounded border border-rule/50 ${formatBadge.color}`}>
               {formatBadge.label}

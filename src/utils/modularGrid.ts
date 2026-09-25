@@ -1,4 +1,4 @@
-import { SlotState, SlotFormat, CardSide } from '../types.ts';
+import { SlotState, SlotFormat, CardSide, SlotStatus } from '../types.ts';
 import { CLOSED_CATEGORIES } from '../data/categories.ts';
 
 export const MODULAR_PRICES: Record<SlotFormat, number> = {
@@ -76,7 +76,7 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
   const mapByNumber = new Map<number, SlotState>();
   existingSlots.forEach((s) => mapByNumber.set(s.slotNumber, s));
 
-  const rawSlots = MODULAR_GRID_DEFS.map((def) => {
+  const rawSlots: SlotState[] = MODULAR_GRID_DEFS.map((def): SlotState => {
     const existing = mapByNumber.get(def.slotNumber);
     const cat = CLOSED_CATEGORIES.find((c) => c.id === def.categoryId) ?? CLOSED_CATEGORIES[0];
 
@@ -85,7 +85,7 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
         slotNumber: 32,
         categoryId: 32,
         categoryName: 'USPS EDDM Technical Zone',
-        status: 'PAID',
+        status: 'PAID' as SlotStatus,
         priceUsd: 0,
         format: 'USPS' as SlotFormat,
         side: 'BACK',
@@ -98,28 +98,28 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
     }
 
     if (existing) {
-      // Check if any partner slot mentions being covered by this slot
-      const coversAny = existingSlots.filter((s) => s.notes?.includes(`#${def.slotNumber}`));
-      const isCoveringLarge =
-        coversAny.length >= 2 ||
-        coversAny.some(
-          (s) =>
-            s.notes?.toLowerCase().includes('large') ||
-            s.notes?.toLowerCase().includes('grande'),
-        );
-
-      let format: SlotFormat = existing.format;
-      if (!format || format === 'SMALL') {
-        if (
-          (existing.rowSpan === 2 && existing.colSpan === 2) ||
-          isCoveringLarge ||
-          existing.priceUsd === 1200
-        ) {
+      let format: SlotFormat = existing.format || 'SMALL';
+      if (!existing.format) {
+        if (existing.rowSpan === 2 && existing.colSpan === 2) {
           format = 'LARGE';
-        } else if (existing.rowSpan === 2 || coversAny.length === 1 || existing.priceUsd === 650) {
+        } else if (existing.rowSpan === 2) {
           format = 'MEDIUM';
         } else {
           format = 'SMALL';
+        }
+      } else if (existing.format === 'SMALL' && (existing.rowSpan === 1 || !existing.rowSpan) && (existing.colSpan === 1 || !existing.colSpan)) {
+        format = 'SMALL';
+      }
+
+      // Check ghost notes on this slot
+      let notes = existing.notes;
+      if (notes?.includes('Covered by')) {
+        const match = notes.match(/#(\d+)/);
+        const primaryNum = match ? parseInt(match[1], 10) : null;
+        const primarySlot = primaryNum ? existingSlots.find((s) => s.slotNumber === primaryNum) : null;
+        if (!primarySlot || primarySlot.format === 'SMALL' || (primarySlot.rowSpan === 1 && primarySlot.colSpan === 1)) {
+          // Primary is small, so this slot is no longer covered
+          notes = undefined;
         }
       }
 
@@ -131,7 +131,7 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
           ? (existing.priceUsd && existing.priceUsd > 350 ? existing.priceUsd : 650)
           : format === 'LARGE'
           ? (existing.priceUsd && existing.priceUsd > 350 ? existing.priceUsd : 1200)
-          : (existing.priceUsd || 350);
+          : 350;
 
       return {
         ...existing,
@@ -142,6 +142,7 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
         rowSpan,
         colSpan,
         priceUsd,
+        notes,
         categoryName: existing.categoryName || cat.name,
         offerHeadline: existing.offerHeadline || cat.defaultHeadline,
       };
@@ -152,7 +153,7 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
       slotNumber: def.slotNumber,
       categoryId: def.categoryId,
       categoryName: cat.name,
-      status: 'VACANT',
+      status: 'VACANT' as SlotStatus,
       priceUsd: MODULAR_PRICES[def.defaultFormat],
       format: def.defaultFormat,
       side: def.side,

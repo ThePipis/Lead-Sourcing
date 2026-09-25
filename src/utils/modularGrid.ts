@@ -104,9 +104,9 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
       return {
         ...existing,
         format,
-        side: existing.side || def.side,
-        gridRow: existing.gridRow ?? def.gridRow,
-        gridCol: existing.gridCol ?? def.gridCol,
+        side: def.side,
+        gridRow: def.gridRow,
+        gridCol: def.gridCol,
         rowSpan: existing.rowSpan ?? (format === 'LARGE' ? 2 : format === 'MEDIUM' ? 2 : 1),
         colSpan: existing.colSpan ?? (format === 'LARGE' ? 2 : 1),
         priceUsd: existing.priceUsd || basePrice,

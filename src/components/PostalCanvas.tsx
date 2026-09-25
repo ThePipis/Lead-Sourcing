@@ -179,8 +179,8 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
     return true;
   });
 
-  const frontSlots = visibleSlots.filter((s) => s.side === 'FRONT' || s.slotNumber <= 16);
-  const backSlots = visibleSlots.filter((s) => s.side === 'BACK' || s.slotNumber > 16);
+  const frontSlots = visibleSlots.filter((s) => s.slotNumber <= 16);
+  const backSlots = visibleSlots.filter((s) => s.slotNumber >= 17 && s.slotNumber <= 32);
 
   const frontTop = frontSlots.filter((s) => (s.gridRow ?? 1) <= 2);
   const frontBottom = frontSlots.filter((s) => (s.gridRow ?? 1) >= 3);
@@ -598,8 +598,8 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
       ? 'border-due border-l-4 border-l-due bg-due/15'
       : 'border-due/70 border-l-4 border-l-due bg-due/10'
     : isProspecting
-    ? 'border-live border-l-4 border-l-live bg-live/10'
-    : 'border-dashed border-border border-l-4 border-l-muted-foreground/30 bg-muted/20 hover:border-muted-foreground/60';
+    ? 'border-live border-l-4 border-l-live bg-card'
+    : 'border-dashed border-border border-l-4 border-l-muted-foreground/30 bg-card hover:border-muted-foreground/60';
 
   const formatBadge = {
     SMALL: { label: 'Chico (1×1)', color: 'bg-secondary text-ink-dim', price: 350 },
@@ -616,7 +616,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
         gridColumn: `${gridCol} / span ${colSpan}`,
         gridRow: `${gridRow} / span ${rowSpan}`,
       }}
-      className={`relative flex flex-col justify-between p-2.5 sm:p-3 border transition-all cursor-pointer select-none ${
+      className={`relative flex flex-col justify-between p-2.5 sm:p-3 border transition-all cursor-pointer select-none bg-card ${
         rowSpan === 2 ? 'min-h-[220px]' : 'min-h-[105px]'
       } ${statusBorderClass} ${
         isSelected ? 'ring-2 ring-live shadow-md' : ''

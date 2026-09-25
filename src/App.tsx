@@ -20,6 +20,7 @@ import {
   Campaign,
   SlotState,
   SlotStatus,
+  SlotFormat,
   LeadProspect,
   Household,
   CurationSummary,
@@ -62,6 +63,31 @@ import {
 } from './services/slotFillService.ts';
 
 const LAST_OPENED_KEY = 'coop.lastOpenedCampaign';
+
+function mergeSlotUpdate(existing: SlotState, updated: SlotState): SlotState {
+  const format: SlotFormat =
+    updated.format && updated.format !== 'SMALL'
+      ? updated.format
+      : existing.format && existing.format !== 'SMALL'
+      ? existing.format
+      : existing.priceUsd === 1200 || updated.priceUsd === 1200
+      ? 'LARGE'
+      : existing.priceUsd === 650 || updated.priceUsd === 650
+      ? 'MEDIUM'
+      : updated.format || existing.format || 'SMALL';
+
+  return {
+    ...existing,
+    ...updated,
+    format,
+    rowSpan: updated.rowSpan || existing.rowSpan || (format === 'LARGE' || format === 'MEDIUM' ? 2 : 1),
+    colSpan: updated.colSpan || existing.colSpan || (format === 'LARGE' ? 2 : 1),
+    gridRow: updated.gridRow || existing.gridRow,
+    gridCol: updated.gridCol || existing.gridCol,
+    side: updated.side || existing.side,
+    notes: updated.notes !== undefined ? updated.notes : existing.notes,
+  };
+}
 
 export default function App() {
   const { t, i18n } = useTranslation(['common']);
@@ -467,7 +493,7 @@ export default function App() {
         ...(isReserving ? { reservedAt, reservationExpiresAt } : {}),
       });
       patchSlots(campaign.id, (slots) =>
-        slots.map((s) => (s.slotNumber === slotNumber ? { ...s, ...updated } : s)),
+        slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
       );
     } catch (err) {
       console.error('Failed to persist slot status to SQLite:', err);
@@ -530,7 +556,7 @@ export default function App() {
         contactPerson: '',
       });
       patchSlots(campaign.id, (slots) =>
-        slots.map((s) => (s.slotNumber === slotNumber ? { ...s, ...updated } : s)),
+        slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
       );
     } catch (err) {
       console.error('Failed to release reservation:', err);
@@ -553,7 +579,7 @@ export default function App() {
         ...record,
       });
       patchSlots(campaign.id, (slots) =>
-        slots.map((s) => (s.slotNumber === slotNumber ? updated : s)),
+        slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
       );
       setPendingPaymentSlot(null);
     } catch (err) {
@@ -610,7 +636,7 @@ export default function App() {
         status: targetStatus,
       });
       patchSlots(campaign.id, (slots) =>
-        slots.map((s) => (s.slotNumber === slotNumber ? updated : s)),
+        slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
       );
     } catch (err) {
       console.error('Failed to persist slot business to SQLite:', err);
@@ -786,7 +812,7 @@ export default function App() {
         amountCollectedUsd: 0,
       });
       patchSlots(campaign.id, (slots) =>
-        slots.map((s) => (s.slotNumber === slotNumber ? updated : s)),
+        slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
       );
       setLoadError(null);
     } catch (err) {
@@ -819,7 +845,7 @@ export default function App() {
         ...(isReserving ? { reservedAt, reservationExpiresAt } : {}),
       });
       patchSlots(campaign.id, (slots) =>
-        slots.map((s) => (s.slotNumber === slotNumber ? { ...s, ...updated } : s)),
+        slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
       );
       setActivePhase('slots');
     } catch (err) {

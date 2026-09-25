@@ -301,7 +301,11 @@
     "proportionalTariffs": "Tarifas proporcionales:",
     "smallSize": "Chico (1×1)",
     "mediumSize": "Mediano (1×2)",
-    "largeSize": "Grande (2×2)"
+    "largeSize": "Grande (2×2)",
+    "compactView": "Vista compacta",
+    "fullBreakdown": "Configuración y Tarifas",
+    "collapse": "Plegar",
+    "expand": "Detalle y Tarifas"
   },
   "tour": {
     "label": "Tutorial guiado",

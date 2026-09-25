@@ -301,7 +301,11 @@
     "proportionalTariffs": "Proportional rates:",
     "smallSize": "Small (1×1)",
     "mediumSize": "Medium (1×2)",
-    "largeSize": "Large (2×2)"
+    "largeSize": "Large (2×2)",
+    "compactView": "Compact view",
+    "fullBreakdown": "Settings & Rates",
+    "collapse": "Collapse",
+    "expand": "Details & Rates"
   },
   "tour": {
     "label": "Guided walkthrough",

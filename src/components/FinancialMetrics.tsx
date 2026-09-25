@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { HelpCircle, Lock } from 'lucide-react';
+import { ChevronDown, ChevronUp, HelpCircle, Lock } from 'lucide-react';
 import { Campaign } from '../types.ts';
 import {
   OPERATING_FLOOR,
@@ -58,6 +58,25 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
 }) => {
   const { t } = useTranslation(['common']);
   const partnersInputRef = useRef<HTMLInputElement>(null);
+
+  // Estado de vista minimizada/plegada por defecto (persiste en localStorage)
+  const [isExpanded, setIsExpanded] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('coop_finance_expanded') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleExpanded = () => {
+    setIsExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('coop_finance_expanded', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // ------------------------------------------------------------- 1. Alcance Postal
   const targetZip = campaign.targetZip;
@@ -235,277 +254,461 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
 
   return (
     <section data-tour="reach" className="mb-5 border border-rule bg-background shadow-xs">
-      {/* 1. Barra Superior: Configuración Operativa (Alcance, Margen y Tarifas) */}
-      <div className="border-b border-rule bg-secondary/35 px-4 py-2.5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 select-none">
-        
-        {/* Lado Izquierdo: Alcance Postal */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-          <label
-            htmlFor="campaign-reach"
-            className="field-label text-[0.68rem] font-bold text-ink uppercase tracking-wider cursor-pointer"
-          >
-            {t('common:reach.label', 'Alcance de la tirada')}:
-          </label>
-          <div className="flex items-center gap-1.5">
-            <input
-              id="campaign-reach"
-              type="number"
-              inputMode="numeric"
-              min={minReach}
-              max={MAX_REACH}
-              step={5}
-              value={draftReach}
-              disabled={locked}
-              onChange={(e) => handleReachChange(e.target.value)}
-              onBlur={handleReachBlur}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleReachBlur();
-                  e.currentTarget.blur();
-                }
-              }}
-              aria-describedby="campaign-reach-note"
-              aria-invalid={!validReach}
-              className={`h-7 w-24 border bg-card px-2 text-center font-mono text-xs font-bold text-ink focus-visible:ring-1 focus-visible:ring-live focus:outline-none disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
-                validReach ? 'border-rule' : 'border-due'
-              }`}
-            />
-            <span className="text-[0.68rem] font-mono text-ink-dim uppercase">
-              {t('common:reach.unit', 'hogares')}
-            </span>
-          </div>
-
-          {/* Estado / Ayuda / Bloqueo */}
-          <div className="flex items-center gap-1.5 pl-0.5">
-            {locked ? (
-              <span className="inline-flex items-center gap-1 text-[0.65rem] text-due font-mono font-medium">
-                <Lock className="h-3 w-3" />
-                {inProduction ? t('common:reach.lockedProduction') : `Bloqueado (${paid} de ${TOTAL_SLOTS} espacios pagados)`}
-              </span>
-            ) : isSaving || pendingReach ? (
-              <span className="text-[0.65rem] font-bold font-mono text-live animate-pulse">
-                {t('common:form.saving', 'Guardando…')}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 border border-rule bg-background text-[0.62rem] font-mono text-ink-dim">
-                Mín. {minReach.toLocaleString('en-US')} ({campaign.targetZip})
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowReachInfo((v) => !v)}
-              aria-label="Ver explicación de rutas EDDM"
-              title="Información sobre distribución postal por rutas carrier"
-              className="p-1 text-ink-dim hover:text-ink transition-colors cursor-pointer"
-            >
-              <HelpCircle className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Lado Derecho: Margen Objetivo y Tarifas Proporcionales */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {/* Margen */}
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="target-margin-input"
-              className="field-label text-[0.68rem] font-bold text-ink cursor-pointer uppercase tracking-wider"
-            >
-              {t('common:finance.targetMargin', 'Margen')}:
-            </label>
-            <div className="relative flex items-center">
-              <input
-                id="target-margin-input"
-                type="number"
-                step={1}
-                min={5}
-                max={95}
-                value={marginInput}
-                disabled={isSaving}
-                onChange={(e) => handleTargetMarginChange(e.target.value)}
-                className="h-7 w-14 border border-rule bg-card px-1.5 pr-4 text-center font-mono text-xs font-bold text-ink focus-visible:ring-1 focus-visible:ring-live focus:outline-none"
-                title="Margen de beneficio objetivo porcentual sobre la recaudación bruta"
-              />
-              <span className="pointer-events-none absolute right-1.5 font-mono text-[0.62rem] text-ink-dim">
-                %
-              </span>
-            </div>
-            <span className="inline-flex items-center gap-1 font-mono text-[0.62rem] font-bold uppercase tracking-wider text-live">
-              <span className="h-1.5 w-1.5 rounded-full bg-live animate-pulse" aria-hidden="true" />
-              <span className="hidden sm:inline">{t('common:finance.targetMarginSub', 'En vivo')}</span>
-            </span>
-          </div>
-
-          {/* Tarifas Proporcionales */}
-          <div className="flex flex-wrap items-center gap-1.5 font-mono text-[0.68rem]">
-            <span className="field-label text-[0.62rem] text-ink-dim hidden xl:inline uppercase tracking-wider mr-0.5">
-              {t('common:finance.proportionalTariffs', 'Tarifas:')}
-            </span>
-            <span className="inline-flex items-center gap-1 border border-rule bg-card px-2 py-1 text-ink shadow-xs">
-              <span className="h-2 w-2 rounded-xs bg-emerald-500" aria-hidden="true" />
-              {t('common:finance.smallSize', 'Chico (1×1)')}: <strong className="font-bold text-live">${scaledTariffs.smallPrice}</strong>
-            </span>
-            <span className="inline-flex items-center gap-1 border border-rule bg-card px-2 py-1 text-ink shadow-xs">
-              <span className="h-2 w-2 rounded-xs bg-blue-500" aria-hidden="true" />
-              {t('common:finance.mediumSize', 'Mediano (1×2)')}: <strong className="font-bold text-live">${scaledTariffs.mediumPrice}</strong>
-            </span>
-            <span className="inline-flex items-center gap-1 border border-rule bg-card px-2 py-1 text-ink shadow-xs">
-              <span className="h-2 w-2 rounded-xs bg-purple-500" aria-hidden="true" />
-              {t('common:finance.largeSize', 'Grande (2×2)')}: <strong className="font-bold text-live">${scaledTariffs.largePrice}</strong>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Nota Explicativa Desplegable de Rutas Carrier EDDM */}
-      {showReachInfo && (
-        <div
-          id="campaign-reach-note"
-          className="border-b border-rule bg-secondary/15 px-4 py-2.5 text-xs leading-relaxed text-ink-dim flex items-start justify-between gap-3 animate-fadeIn"
-        >
-          <p>
-            {floor
-              ? t('common:reach.hintFloor', {
-                  floor: floor.toLocaleString('en-US'),
-                  zip: campaign.targetZip,
-                })
-              : t('common:reach.hint')}
-          </p>
-          <button
-            type="button"
-            onClick={() => setShowReachInfo(false)}
-            aria-label="Cerrar nota informativa"
-            className="text-xs text-ink-dim hover:text-ink font-bold px-1.5 py-0.5"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* 2. Cuadro de Mandos Financiero (4 Tarjetas KPI) */}
-      <dl className="grid grid-cols-2 gap-px bg-rule sm:grid-cols-4">
-        <Entry
-          label={t('common:finance.collected')}
-          value={money(collected)}
-          tone="ink"
-          sublabel={t('common:finance.collectedSub')}
-        />
-        <Entry
-          label={t('common:finance.contracted')}
-          value={money(contracted)}
-          sublabel={t('common:finance.contractedSub')}
-        />
-        <Entry
-          label={t('common:finance.cost')}
-          value={money(cost)}
-          tone={costCovered ? 'clear' : undefined}
-          note={costNote}
-        />
-        <div className="bg-background px-4 py-2.5 flex flex-col justify-between">
-          {/* Cabecera: Título + Stepper de Socios */}
-          <div className="flex items-center justify-between gap-1.5">
-            <dt className="field-label">{t('common:finance.margin')}</dt>
-            <div className="flex items-center gap-1 bg-secondary/80 px-2 py-0.5 border border-rule">
-              <label
-                htmlFor="partners-count-input"
-                className="field-label text-[0.62rem] text-ink-dim cursor-pointer select-none"
+      {/* ========================================================= 1. VISTA MINIMIZADA / PLEGADA (DEFAULT) ========================================================= */}
+      {!isExpanded && (
+        <div id="financial-metrics-compact" className="flex flex-col select-none">
+          {/* Fila 1: Tira Financiera Ejecutiva en Una Sola Línea */}
+          <div className="border-b border-rule bg-secondary/35 px-3 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            {/* Bloque Izquierdo: Botón Expandir + Badge Alcance de la Tirada */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                id="btn-toggle-finance-expand"
+                onClick={toggleExpanded}
+                aria-expanded={false}
+                aria-controls="financial-metrics-details"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[0.69rem] font-bold border border-rule bg-card hover:bg-secondary text-ink transition-colors cursor-pointer focus-visible:ring-1 focus-visible:ring-live focus-visible:outline-none shadow-2xs"
+                title={t('common:finance.fullBreakdown', 'Configuración y Tarifas')}
               >
-                {t('common:finance.partners')}:
-              </label>
-              <input
-                id="partners-count-input"
-                ref={partnersInputRef}
-                type="number"
-                inputMode="numeric"
-                spellCheck={false}
-                min={1}
-                max={50}
-                step={1}
-                value={partnersCount}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10);
-                  if (!isNaN(val)) handlePartnersChange(val);
-                }}
-                className="w-11 h-5 text-center font-mono text-xs font-bold border border-rule bg-background text-ink focus-visible:ring-1 focus-visible:ring-live focus:outline-none"
-                title="Número de socios para repartir ganancia (scroll con rueda del ratón o flechas)"
-              />
-            </div>
-          </div>
+                <ChevronDown className="h-3.5 w-3.5 text-ink-dim" aria-hidden="true" />
+                <span>{t('common:finance.fullBreakdown', 'Configuración y Tarifas')}</span>
+              </button>
 
-          {/* Cifras: Total libre y Monto por Socio */}
-          <div className="mt-1 flex items-baseline justify-between gap-2">
-            <div>
-              <dd
-                className={`field-value text-xl sm:text-2xl font-black tracking-tight ${
-                  netProfit > 0 ? 'text-clear' : 'text-due'
-                }`}
-              >
-                {money(netProfit)}
-              </dd>
+              <div className="inline-flex items-center gap-1.5 border border-rule bg-card px-2.5 py-1 text-xs font-mono shadow-2xs">
+                <span className="field-label text-[0.60rem] text-ink-dim uppercase">
+                  {t('common:reach.label', 'Tirada')}:
+                </span>
+                <strong className="font-bold text-ink">{householdsNum}</strong>
+                <span className="text-[0.60rem] text-ink-faint uppercase">
+                  {t('common:reach.unit', 'hog')}
+                </span>
+              </div>
+
+              {locked && (
+                <span className="inline-flex items-center gap-1 text-[0.62rem] text-due font-mono font-medium">
+                  <Lock className="h-3 w-3" aria-hidden="true" />
+                  <span className="hidden md:inline">
+                    {inProduction ? t('common:reach.lockedProduction') : `(${paid}/${TOTAL_SLOTS} pagados)`}
+                  </span>
+                </span>
+              )}
             </div>
-            <div className="text-right">
-              <div className="field-value text-xl sm:text-2xl font-black text-clear inline-flex items-baseline gap-1">
-                {money(profitPerPartner)}
-                <span className="text-xs sm:text-sm font-bold text-ink-dim">c/u</span>
+
+            {/* Bloque Derecho / Central: Cifras Clave de Decisión */}
+            <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 font-mono text-xs">
+              {/* Cobrado */}
+              <div className="flex items-baseline gap-1" title={t('common:finance.collectedSub')}>
+                <span className="field-label text-[0.60rem] text-ink-dim uppercase">
+                  {t('common:finance.collected')}:
+                </span>
+                <span className={`font-bold ${collected > 0 ? 'text-clear' : 'text-ink'}`}>
+                  {money(collected)}
+                </span>
+              </div>
+
+              <span className="text-rule/60 hidden sm:inline" aria-hidden="true">|</span>
+
+              {/* Costo Operativo */}
+              <div className="flex items-baseline gap-1" title={costNote}>
+                <span className="field-label text-[0.60rem] text-ink-dim uppercase">
+                  {t('common:finance.cost')}:
+                </span>
+                <span className={`font-bold ${costCovered ? 'text-clear' : 'text-ink'}`}>
+                  {money(cost)}
+                </span>
+              </div>
+
+              <span className="text-rule/60 hidden sm:inline" aria-hidden="true">|</span>
+
+              {/* Valor de la Tarjeta */}
+              <div className="flex items-baseline gap-1" title={t('common:finance.contractedSub')}>
+                <span className="field-label text-[0.60rem] text-ink-dim uppercase">
+                  {t('common:finance.contracted')}:
+                </span>
+                <span className="font-bold text-ink">
+                  {money(contracted)}
+                </span>
+              </div>
+
+              <span className="text-rule/60 hidden md:inline" aria-hidden="true">|</span>
+
+              {/* Ganancia Neta Total */}
+              <div className="flex items-baseline gap-1" title={t('common:finance.netProfitTotalSub')}>
+                <span className="field-label text-[0.60rem] text-ink-dim uppercase">
+                  {t('common:finance.margin')}:
+                </span>
+                <span className={`font-bold ${netProfit > 0 ? 'text-clear' : 'text-due'}`}>
+                  {money(netProfit)}
+                </span>
+              </div>
+
+              {/* Ganancia por Socio Destacada */}
+              <div
+                className="inline-flex items-baseline gap-1.5 bg-live/10 border border-live/30 px-2 py-0.5 shadow-2xs"
+                title={`${t('common:finance.perPartnerSub', 'Cada socio')} (${validPartners})`}
+              >
+                <span className="field-label text-[0.60rem] font-bold text-live uppercase">
+                  {t('common:finance.perPartnerSub', 'Cada socio')} ({validPartners}):
+                </span>
+                <span className="font-black text-clear text-sm">
+                  {money(profitPerPartner)}
+                  <span className="text-[0.65rem] font-bold text-ink-dim ml-0.5">c/u</span>
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Subetiquetas */}
-          <div className="mt-0.5 flex items-center justify-between text-[0.65rem] leading-snug">
-            <span className="text-ink-faint">
-              {t('common:finance.netProfitTotalSub')}
-            </span>
-            <span className="field-label text-[0.62rem] font-bold text-clear">
-              {t('common:finance.perPartnerSub', 'Cada socio')} ({partnersCount})
-            </span>
+          {/* Fila 2: Barra de Umbral Operativo / Break-even Compacta */}
+          <div className="px-3 py-2 bg-background flex flex-col gap-1.5">
+            <div className="flex items-baseline justify-between gap-3 text-xs">
+              <span className="field-label text-[0.65rem] font-bold">
+                {floorMet
+                  ? t('common:finance.floorMet')
+                  : !costCovered
+                    ? t('common:finance.floorMissingCost', {
+                        missing: Math.ceil(cost - collected).toLocaleString('en-US'),
+                        households: householdsNum,
+                      })
+                    : t('common:finance.floorMissing', {
+                        missing: OPERATING_FLOOR - paid,
+                        floor: OPERATING_FLOOR,
+                      })}
+              </span>
+              <span className="field-value text-[0.68rem] font-mono text-ink-dim font-bold">
+                {paid}/{TOTAL_SLOTS}
+              </span>
+            </div>
+
+            {/* Barra de progreso visual compacta */}
+            <div className="relative h-2 sm:h-2.5 border border-rule bg-card">
+              <div
+                className={`h-full transition-[width] duration-500 ease-out ${
+                  floorMet ? 'bg-clear' : 'bg-live'
+                }`}
+                style={{ width: pct(paid) }}
+              />
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-[-2px] w-px bg-ink-dim"
+                style={{ left: pct(OPERATING_FLOOR) }}
+              />
+              <span
+                aria-hidden="true"
+                className="field-label absolute top-2.5 -translate-x-1/2 text-[0.52rem] text-ink-faint font-mono"
+                style={{ left: pct(OPERATING_FLOOR) }}
+              >
+                {OPERATING_FLOOR}
+              </span>
+            </div>
           </div>
         </div>
-      </dl>
+      )}
 
-      {/* 3. Escala y Piso Operativo */}
-      <div className="px-4 py-3 border-t border-rule">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="field-label">
-            {floorMet
-              ? t('common:finance.floorMet')
-              : !costCovered
-                ? t('common:finance.floorMissingCost', {
-                    missing: Math.ceil(cost - collected).toLocaleString('en-US'),
-                    households: billableHouseholds(campaign).toLocaleString('en-US'),
-                  })
-                : t('common:finance.floorMissing', {
-                    missing: OPERATING_FLOOR - paid,
-                    floor: OPERATING_FLOOR,
-                  })}
-          </span>
-          <span className="field-value text-xs text-ink-dim font-mono">
-            {paid}/{TOTAL_SLOTS}
-          </span>
-        </div>
+      {/* ========================================================= 2. VISTA DETALLADA / EXPANDIDA ========================================================= */}
+      {isExpanded && (
+        <div id="financial-metrics-details" className="flex flex-col">
+          {/* Cabecera de vista detallada con botón para plegar */}
+          <div className="border-b border-rule bg-secondary/35 px-4 py-2 flex items-center justify-between gap-3 select-none">
+            <span className="field-label text-[0.68rem] font-bold text-ink uppercase tracking-wider">
+              {t('common:finance.fullBreakdown', 'Configuración Operativa y Tarifas')}
+            </span>
+            <button
+              type="button"
+              id="btn-toggle-finance-collapse"
+              onClick={toggleExpanded}
+              aria-expanded={true}
+              aria-controls="financial-metrics-details"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[0.69rem] font-bold border border-rule bg-card hover:bg-secondary text-ink transition-colors cursor-pointer focus-visible:ring-1 focus-visible:ring-live focus-visible:outline-none shadow-2xs"
+            >
+              <ChevronUp className="h-3.5 w-3.5 text-ink-dim" aria-hidden="true" />
+              <span>{t('common:finance.collapse', 'Plegar')}</span>
+            </button>
+          </div>
 
-        {/* Barra de progreso visual hacia el piso operativo */}
-        <div className="relative mt-2 h-3 border border-rule bg-card">
-          <div
-            className={`h-full transition-[width] duration-500 ease-out ${
-              floorMet ? 'bg-clear' : 'bg-live'
-            }`}
-            style={{ width: pct(paid) }}
-          />
-          <span
-            aria-hidden="true"
-            className="absolute inset-y-[-4px] w-px bg-ink-dim"
-            style={{ left: pct(OPERATING_FLOOR) }}
-          />
-          <span
-            aria-hidden="true"
-            className="field-label absolute top-4 -translate-x-1/2 text-[0.56rem] text-ink-faint"
-            style={{ left: pct(OPERATING_FLOOR) }}
-          >
-            {OPERATING_FLOOR}
-          </span>
+          {/* 1. Barra Superior: Configuración Operativa (Alcance, Margen y Tarifas) */}
+          <div className="border-b border-rule bg-secondary/35 px-4 py-2.5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 select-none">
+            {/* Lado Izquierdo: Alcance Postal */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+              <label
+                htmlFor="campaign-reach"
+                className="field-label text-[0.68rem] font-bold text-ink uppercase tracking-wider cursor-pointer"
+              >
+                {t('common:reach.label', 'Alcance de la tirada')}:
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  id="campaign-reach"
+                  type="number"
+                  inputMode="numeric"
+                  min={minReach}
+                  max={MAX_REACH}
+                  step={5}
+                  value={draftReach}
+                  disabled={locked}
+                  onChange={(e) => handleReachChange(e.target.value)}
+                  onBlur={handleReachBlur}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleReachBlur();
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  aria-describedby="campaign-reach-note"
+                  aria-invalid={!validReach}
+                  className={`h-7 w-24 border bg-card px-2 text-center font-mono text-xs font-bold text-ink focus-visible:ring-1 focus-visible:ring-live focus:outline-none disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+                    validReach ? 'border-rule' : 'border-due'
+                  }`}
+                />
+                <span className="text-[0.68rem] font-mono text-ink-dim uppercase">
+                  {t('common:reach.unit', 'hogares')}
+                </span>
+              </div>
+
+              {/* Estado / Ayuda / Bloqueo */}
+              <div className="flex items-center gap-1.5 pl-0.5">
+                {locked ? (
+                  <span className="inline-flex items-center gap-1 text-[0.65rem] text-due font-mono font-medium">
+                    <Lock className="h-3 w-3" />
+                    {inProduction ? t('common:reach.lockedProduction') : `Bloqueado (${paid} de ${TOTAL_SLOTS} espacios pagados)`}
+                  </span>
+                ) : isSaving || pendingReach ? (
+                  <span className="text-[0.65rem] font-bold font-mono text-live animate-pulse">
+                    {t('common:form.saving', 'Guardando…')}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 border border-rule bg-background text-[0.62rem] font-mono text-ink-dim">
+                    Mín. {minReach.toLocaleString('en-US')} ({campaign.targetZip})
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowReachInfo((v) => !v)}
+                  aria-label="Ver explicación de rutas EDDM"
+                  title="Información sobre distribución postal por rutas carrier"
+                  className="p-1 text-ink-dim hover:text-ink transition-colors cursor-pointer"
+                >
+                  <HelpCircle className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Lado Derecho: Margen Objetivo y Tarifas Proporcionales */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              {/* Margen */}
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="target-margin-input"
+                  className="field-label text-[0.68rem] font-bold text-ink cursor-pointer uppercase tracking-wider"
+                >
+                  {t('common:finance.targetMargin', 'Margen')}:
+                </label>
+                <div className="relative flex items-center">
+                  <input
+                    id="target-margin-input"
+                    type="number"
+                    step={1}
+                    min={5}
+                    max={95}
+                    value={marginInput}
+                    disabled={isSaving}
+                    onChange={(e) => handleTargetMarginChange(e.target.value)}
+                    className="h-7 w-14 border border-rule bg-card px-1.5 pr-4 text-center font-mono text-xs font-bold text-ink focus-visible:ring-1 focus-visible:ring-live focus:outline-none"
+                    title="Margen de beneficio objetivo porcentual sobre la recaudación bruta"
+                  />
+                  <span className="pointer-events-none absolute right-1.5 font-mono text-[0.62rem] text-ink-dim">
+                    %
+                  </span>
+                </div>
+                <span className="inline-flex items-center gap-1 font-mono text-[0.62rem] font-bold uppercase tracking-wider text-live">
+                  <span className="h-1.5 w-1.5 rounded-full bg-live animate-pulse" aria-hidden="true" />
+                  <span className="hidden sm:inline">{t('common:finance.targetMarginSub', 'En vivo')}</span>
+                </span>
+              </div>
+
+              {/* Tarifas Proporcionales */}
+              <div className="flex flex-wrap items-center gap-1.5 font-mono text-[0.68rem]">
+                <span className="field-label text-[0.62rem] text-ink-dim hidden xl:inline uppercase tracking-wider mr-0.5">
+                  {t('common:finance.proportionalTariffs', 'Tarifas:')}
+                </span>
+                <span className="inline-flex items-center gap-1 border border-rule bg-card px-2 py-1 text-ink shadow-xs">
+                  <span className="h-2 w-2 rounded-xs bg-emerald-500" aria-hidden="true" />
+                  {t('common:finance.smallSize', 'Chico (1×1)')}: <strong className="font-bold text-live">${scaledTariffs.smallPrice}</strong>
+                </span>
+                <span className="inline-flex items-center gap-1 border border-rule bg-card px-2 py-1 text-ink shadow-xs">
+                  <span className="h-2 w-2 rounded-xs bg-blue-500" aria-hidden="true" />
+                  {t('common:finance.mediumSize', 'Mediano (1×2)')}: <strong className="font-bold text-live">${scaledTariffs.mediumPrice}</strong>
+                </span>
+                <span className="inline-flex items-center gap-1 border border-rule bg-card px-2 py-1 text-ink shadow-xs">
+                  <span className="h-2 w-2 rounded-xs bg-purple-500" aria-hidden="true" />
+                  {t('common:finance.largeSize', 'Grande (2×2)')}: <strong className="font-bold text-live">${scaledTariffs.largePrice}</strong>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Nota Explicativa Desplegable de Rutas Carrier EDDM */}
+          {showReachInfo && (
+            <div
+              id="campaign-reach-note"
+              className="border-b border-rule bg-secondary/15 px-4 py-2.5 text-xs leading-relaxed text-ink-dim flex items-start justify-between gap-3 animate-fadeIn"
+            >
+              <p>
+                {floor
+                  ? t('common:reach.hintFloor', {
+                      floor: floor.toLocaleString('en-US'),
+                      zip: campaign.targetZip,
+                    })
+                  : t('common:reach.hint')}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowReachInfo(false)}
+                aria-label="Cerrar nota informativa"
+                className="text-xs text-ink-dim hover:text-ink font-bold px-1.5 py-0.5"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* 2. Cuadro de Mandos Financiero (4 Tarjetas KPI) */}
+          <dl className="grid grid-cols-2 gap-px bg-rule sm:grid-cols-4">
+            <Entry
+              label={t('common:finance.collected')}
+              value={money(collected)}
+              tone="ink"
+              sublabel={t('common:finance.collectedSub')}
+            />
+            <Entry
+              label={t('common:finance.contracted')}
+              value={money(contracted)}
+              sublabel={t('common:finance.contractedSub')}
+            />
+            <Entry
+              label={t('common:finance.cost')}
+              value={money(cost)}
+              tone={costCovered ? 'clear' : undefined}
+              note={costNote}
+            />
+            <div className="bg-background px-4 py-2.5 flex flex-col justify-between">
+              {/* Cabecera: Título + Stepper de Socios */}
+              <div className="flex items-center justify-between gap-1.5">
+                <dt className="field-label">{t('common:finance.margin')}</dt>
+                <div className="flex items-center gap-1 bg-secondary/80 px-2 py-0.5 border border-rule">
+                  <label
+                    htmlFor="partners-count-input"
+                    className="field-label text-[0.62rem] text-ink-dim cursor-pointer select-none"
+                  >
+                    {t('common:finance.partners')}:
+                  </label>
+                  <input
+                    id="partners-count-input"
+                    ref={partnersInputRef}
+                    type="number"
+                    inputMode="numeric"
+                    spellCheck={false}
+                    min={1}
+                    max={50}
+                    step={1}
+                    value={partnersCount}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val)) handlePartnersChange(val);
+                    }}
+                    className="w-11 h-5 text-center font-mono text-xs font-bold border border-rule bg-background text-ink focus-visible:ring-1 focus-visible:ring-live focus:outline-none"
+                    title="Número de socios para repartir ganancia (scroll con rueda del ratón o flechas)"
+                  />
+                </div>
+              </div>
+
+              {/* Cifras: Total libre y Monto por Socio */}
+              <div className="mt-1 flex items-baseline justify-between gap-2">
+                <div>
+                  <dd
+                    className={`field-value text-xl sm:text-2xl font-black tracking-tight ${
+                      netProfit > 0 ? 'text-clear' : 'text-due'
+                    }`}
+                  >
+                    {money(netProfit)}
+                  </dd>
+                </div>
+                <div className="text-right">
+                  <div className="field-value text-xl sm:text-2xl font-black text-clear inline-flex items-baseline gap-1">
+                    {money(profitPerPartner)}
+                    <span className="text-xs sm:text-sm font-bold text-ink-dim">c/u</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Subetiquetas */}
+              <div className="mt-0.5 flex items-center justify-between text-[0.65rem] leading-snug">
+                <span className="text-ink-faint">
+                  {t('common:finance.netProfitTotalSub')}
+                </span>
+                <span className="field-label text-[0.62rem] font-bold text-clear">
+                  {t('common:finance.perPartnerSub', 'Cada socio')} ({partnersCount})
+                </span>
+              </div>
+            </div>
+          </dl>
+
+          {/* 3. Escala y Piso Operativo */}
+          <div className="px-4 py-3 border-t border-rule">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="field-label">
+                {floorMet
+                  ? t('common:finance.floorMet')
+                  : !costCovered
+                    ? t('common:finance.floorMissingCost', {
+                        missing: Math.ceil(cost - collected).toLocaleString('en-US'),
+                        households: householdsNum,
+                      })
+                    : t('common:finance.floorMissing', {
+                        missing: OPERATING_FLOOR - paid,
+                        floor: OPERATING_FLOOR,
+                      })}
+              </span>
+              <span className="field-value text-xs text-ink-dim font-mono">
+                {paid}/{TOTAL_SLOTS}
+              </span>
+            </div>
+
+            {/* Barra de progreso visual hacia el piso operativo */}
+            <div className="relative mt-2 h-3 border border-rule bg-card">
+              <div
+                className={`h-full transition-[width] duration-500 ease-out ${
+                  floorMet ? 'bg-clear' : 'bg-live'
+                }`}
+                style={{ width: pct(paid) }}
+              />
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-[-4px] w-px bg-ink-dim"
+                style={{ left: pct(OPERATING_FLOOR) }}
+              />
+              <span
+                aria-hidden="true"
+                className="field-label absolute top-4 -translate-x-1/2 text-[0.56rem] text-ink-faint"
+                style={{ left: pct(OPERATING_FLOOR) }}
+              >
+                {OPERATING_FLOOR}
+              </span>
+            </div>
+          </div>
+
+          {/* Pie de cierre para plegar fácilmente */}
+          <div className="border-t border-rule bg-secondary/20 px-4 py-1.5 flex justify-end">
+            <button
+              type="button"
+              onClick={toggleExpanded}
+              className="text-[0.65rem] font-mono font-bold text-ink-dim hover:text-ink transition-colors inline-flex items-center gap-1 cursor-pointer"
+            >
+              <ChevronUp className="h-3 w-3" />
+              <span>{t('common:finance.collapse', 'Plegar a vista compacta')}</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 };

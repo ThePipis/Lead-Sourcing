@@ -249,14 +249,16 @@ export const CostPanel: React.FC<CostPanelProps> = ({
             </div>
           </div>
 
-          {/* 2. Parámetros Clave: Costo por flyer y Hogares */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-rule pt-4">
-            <div>
+          {/* 2. Tarifa Unitaria por Flyer */}
+          <div className="border-t border-rule pt-4">
+            <div className="max-w-md">
               <label htmlFor="cost-per-piece-input" className="block text-xs font-semibold text-ink mb-1.5">
                 Costo por Flyer Todo Incluido ($)
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-2.5 text-xs text-ink-dim">$</span>
+                <span className="absolute left-3 top-2.5 text-xs text-ink-dim select-none" aria-hidden="true">
+                  $
+                </span>
                 <input
                   id="cost-per-piece-input"
                   type="number"
@@ -265,23 +267,11 @@ export const CostPanel: React.FC<CostPanelProps> = ({
                   max="3.00"
                   value={Number(currentUnitCost.toFixed(4))}
                   onChange={(e) => handleCustomUnitCost(e.target.value)}
-                  className="w-full pl-6 pr-3 py-2 border border-rule bg-background text-sm font-semibold text-ink focus:border-live focus:outline-none"
+                  className="w-full pl-7 pr-3 py-2 border border-rule bg-background text-sm font-semibold text-ink focus:border-live focus-visible:ring-1 focus-visible:ring-live focus:outline-none transition-colors"
                 />
               </div>
-              <span className="text-[0.67rem] text-ink-dim mt-1 block">
+              <span className="text-[0.68rem] text-ink-dim mt-1.5 block">
                 Papel 14pt + Full Color + Franqueo USPS EDDM Retail ($0.247)
-              </span>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-ink mb-1.5">
-                Hogares de la Tirada
-              </label>
-              <div className="px-3 py-2 border border-rule/50 bg-secondary/50 text-sm font-bold text-ink">
-                {households.toLocaleString('en-US')} hogares
-              </div>
-              <span className="text-[0.67rem] text-ink-dim mt-1 block">
-                Volumen validado según las Carrier Routes de la microzona
               </span>
             </div>
           </div>

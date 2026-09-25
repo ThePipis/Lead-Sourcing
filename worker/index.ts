@@ -625,6 +625,28 @@ export default {
         const s = c.slots.find((x: any) => x.slot_number === slotNum);
         if (!s) return json({ detail: "Slot not found" }, 404);
         Object.assign(s, body);
+        if (s.status !== "PAID") {
+          s.paid_at = null;
+          s.payment_ref = "";
+          s.amount_collected_usd = 0;
+        }
+        if (s.status === "VACANT") {
+          if (!body.business_name && !body.businessName) s.business_name = "";
+          if (!body.contact_person && !body.contactPerson) s.contact_person = "";
+          if (!body.phone) s.phone = "";
+          if (!body.email) s.email = "";
+          if (!body.website) s.website = "";
+          if (!body.business_address && !body.businessAddress) s.business_address = "";
+          if (!body.offer_headline && !body.offerHeadline) s.offer_headline = "";
+        }
+        c.paid_count = c.slots.filter((x: any) => x.status === 'PAID' && x.slot_number !== 32).length;
+        c.total_collected_usd = c.slots.reduce((sum: number, x: any) => x.status === 'PAID' ? sum + (x.amount_collected_usd || x.price_usd || 0) : sum, 0);
+        const advCount = c.slots.filter((x: any) => x.slot_number !== 32).length;
+        if (advCount > 0 && c.paid_count >= advCount) {
+          c.status = "LOCKED_READY";
+        } else if (c.status === "LOCKED_READY") {
+          c.status = "PROSPECTING";
+        }
         return json(s);
       }
 
@@ -640,12 +662,34 @@ export default {
           const s = c.slots.find((x: any) => x.slot_number === (update.slot_number ?? update.slotNumber));
           if (s) {
             Object.assign(s, update);
+            if (s.status !== "PAID") {
+              s.paid_at = null;
+              s.payment_ref = "";
+              s.amount_collected_usd = 0;
+            }
+            if (s.status === "VACANT") {
+              if (!update.business_name && !update.businessName) s.business_name = "";
+              if (!update.contact_person && !update.contactPerson) s.contact_person = "";
+              if (!update.phone) s.phone = "";
+              if (!update.email) s.email = "";
+              if (!update.website) s.website = "";
+              if (!update.business_address && !update.businessAddress) s.business_address = "";
+              if (!update.offer_headline && !update.offerHeadline) s.offer_headline = "";
+            }
           } else {
             c.slots.push({
               slot_number: update.slot_number ?? update.slotNumber,
               ...update
             });
           }
+        }
+        c.paid_count = c.slots.filter((x: any) => x.status === 'PAID' && x.slot_number !== 32).length;
+        c.total_collected_usd = c.slots.reduce((sum: number, x: any) => x.status === 'PAID' ? sum + (x.amount_collected_usd || x.price_usd || 0) : sum, 0);
+        const advCount = c.slots.filter((x: any) => x.slot_number !== 32).length;
+        if (advCount > 0 && c.paid_count >= advCount) {
+          c.status = "LOCKED_READY";
+        } else if (c.status === "LOCKED_READY") {
+          c.status = "PROSPECTING";
         }
         return json(c.slots);
       }

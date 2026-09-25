@@ -193,52 +193,128 @@ export function canMergeVertical(slot: SlotState, slots: SlotState[]): boolean {
   return partner.status === 'VACANT' || (partner.businessName === slot.businessName && slot.status !== 'PAID');
 }
 
+export interface LargeOriginCandidate {
+  originRow: number;
+  originCol: number;
+  coveredCoords: { r: number; c: number }[];
+  anchorSlot: SlotState;
+}
+
+/**
+ * Finds the optimal 2x2 quadrant origin for expanding a slot into a LARGE (2x2) format.
+ * Prioritizes expanding to the right from the current column, ensuring that no USPS
+ * technical zones, PAID slots, or other existing merged (MEDIUM/LARGE) slots are destroyed.
+ */
+export function findBestLargeOrigin(
+  slot: SlotState,
+  slots: SlotState[]
+): LargeOriginCandidate | null {
+  if (slot.format === 'LARGE' || slot.format === 'USPS' || slot.slotNumber === 32) return null;
+  if (!slot.gridRow || !slot.gridCol) return null;
+  if (slot.notes?.startsWith('Covered by')) return null;
+  if (slot.status === 'PAID') return null;
+
+  const originRow = slot.gridRow <= 2 ? 1 : 3;
+  const col = slot.gridCol;
+
+  // Potential starting columns for a 2-column wide block containing col
+  // Order prioritizes expanding to the right from the current slot:
+  // - col 1: [1] (cols 1 & 2)
+  // - col 2: [2, 1] (prefers cols 2 & 3 to the right; fallback to cols 1 & 2 to the left)
+  // - col 3: [3, 2] (prefers cols 3 & 4 to the right; fallback to cols 2 & 3 to the left)
+  // - col 4: [3] (cols 3 & 4)
+  const candidateCols =
+    col === 1 ? [1] :
+    col === 2 ? [2, 1] :
+    col === 3 ? [3, 2] :
+    [3];
+
+  for (const candCol of candidateCols) {
+    const coveredCoords = [
+      { r: originRow, c: candCol },
+      { r: originRow + 1, c: candCol },
+      { r: originRow, c: candCol + 1 },
+      { r: originRow + 1, c: candCol + 1 },
+    ];
+
+    const quadrantSlots = slots.filter(
+      (s) =>
+        s.side === slot.side &&
+        coveredCoords.some((coord) => coord.r === s.gridRow && coord.c === s.gridCol)
+    );
+
+    if (quadrantSlots.length < 4) continue;
+
+    // 1. Cannot contain USPS technical zone (slot 32)
+    if (quadrantSlots.some((s) => s.format === 'USPS' || s.slotNumber === 32)) {
+      continue;
+    }
+
+    // 2. Cannot contain any slot already in format LARGE (or large covered slot)
+    if (
+      quadrantSlots.some(
+        (s) =>
+          s.format === 'LARGE' ||
+          (s.rowSpan === 2 && s.colSpan === 2) ||
+          s.notes?.includes('Covered by large')
+      )
+    ) {
+      continue;
+    }
+
+    // 3. Cannot contain any PAID slot
+    if (quadrantSlots.some((s) => s.status === 'PAID')) {
+      continue;
+    }
+
+    // 4. Must not alter or destroy any OTHER existing merged slot (e.g. MEDIUM)
+    // Every slot in the quadrant must either:
+    // - Be the slot being expanded
+    // - Be covered by the slot being expanded (if slot was already MEDIUM)
+    // - Be an atomic SMALL slot with no 'Covered by' notes!
+    const destroysOtherMergedSlot = quadrantSlots.some((s) => {
+      if (s.slotNumber === slot.slotNumber) return false;
+      if (s.notes?.includes(`#${slot.slotNumber}`)) return false;
+      if (s.format === 'MEDIUM' || s.notes?.startsWith('Covered by')) {
+        return true;
+      }
+      return false;
+    });
+
+    if (destroysOtherMergedSlot) {
+      continue;
+    }
+
+    // 5. At most one distinct active business name across all 4 cells
+    const activeBusinesses = new Set(
+      quadrantSlots
+        .filter((s) => s.businessName && s.status !== 'VACANT')
+        .map((s) => s.businessName?.trim().toLowerCase())
+    );
+    if (activeBusinesses.size > 1) {
+      continue;
+    }
+
+    // Anchor slot is the top-left slot of this 2x2
+    const anchorSlot =
+      quadrantSlots.find((s) => s.gridRow === originRow && s.gridCol === candCol) ?? slot;
+
+    return {
+      originRow,
+      originCol: candCol,
+      coveredCoords,
+      anchorSlot,
+    };
+  }
+
+  return null;
+}
+
 /**
  * Checks if a slot can be expanded into a LARGE (2x2) quadrant
  */
 export function canMergeLarge(slot: SlotState, slots: SlotState[]): boolean {
-  if (slot.format === 'LARGE' || slot.format === 'USPS') return false;
-  if (!slot.gridRow || !slot.gridCol) return false;
-  if (slot.notes?.startsWith('Covered by')) return false;
-
-  const originRow = slot.gridRow <= 2 ? 1 : 3;
-  const originCol = slot.gridCol <= 2 ? 1 : 3;
-
-  const quadrantSlots = slots.filter(
-    (s) =>
-      s.side === slot.side &&
-      ((s.gridRow ?? 1) === originRow || (s.gridRow ?? 1) === originRow + 1) &&
-      ((s.gridCol ?? 1) === originCol || (s.gridCol ?? 1) === originCol + 1)
-  );
-
-  if (quadrantSlots.length < 4) return false;
-
-  // Cannot contain USPS technical zone
-  if (quadrantSlots.some((s) => s.format === 'USPS' || s.slotNumber === 32)) {
-    return false;
-  }
-
-  // Cannot already be Large
-  if (quadrantSlots.some((s) => s.format === 'LARGE' || (s.rowSpan === 2 && s.colSpan === 2))) {
-    return false;
-  }
-
-  // Cannot merge if any other slot is PAID
-  if (quadrantSlots.some((s) => s.status === 'PAID')) {
-    return false;
-  }
-
-  // At most one distinct active client in the quadrant
-  const activeBusinesses = new Set(
-    quadrantSlots
-      .filter((s) => s.businessName && s.status !== 'VACANT')
-      .map((s) => s.businessName?.trim().toLowerCase())
-  );
-  if (activeBusinesses.size > 1) {
-    return false;
-  }
-
-  return true;
+  return findBestLargeOrigin(slot, slots) !== null;
 }
 
 /**
@@ -291,20 +367,10 @@ export function mergeModularSlot(
   }
 
   if (targetFormat === 'LARGE') {
-    const originRow = row <= 2 ? 1 : 3;
-    const originCol = col <= 2 ? 1 : 3;
+    const origin = findBestLargeOrigin(primary, normalized);
+    if (!origin) return normalized;
 
-    const coveredCoords = [
-      { r: originRow, c: originCol },
-      { r: originRow + 1, c: originCol },
-      { r: originRow, c: originCol + 1 },
-      { r: originRow + 1, c: originCol + 1 },
-    ];
-
-    // Find the top-left slot in this quadrant to serve as the anchor for the 2x2 grid
-    const anchorSlot = normalized.find(
-      (s) => s.side === side && s.gridRow === originRow && s.gridCol === originCol
-    ) ?? primary;
+    const { originRow, originCol, coveredCoords, anchorSlot } = origin;
 
     // Pick advertiser data from whichever slot had active business data
     const slotWithData =

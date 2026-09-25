@@ -2,12 +2,14 @@ export type SlotStatus = 'VACANT' | 'PROSPECTING' | 'RESERVED' | 'PAID';
 
 export type CardSide = 'FRONT' | 'BACK';
 
+export type SlotFormat = 'SMALL' | 'MEDIUM' | 'LARGE' | 'USPS';
+
 export interface CategoryDefinition {
   id: number;
   name: string;
   nicheEs: string;
   side: CardSide;
-  slotType: 'HERO' | 'STANDARD_FRONT' | 'STANDARD_BACK' | 'MEDIUM_BACK' | 'USPS_AREA';
+  slotType: 'HERO' | 'STANDARD_FRONT' | 'STANDARD_BACK' | 'MEDIUM_BACK' | 'USPS_AREA' | 'SMALL' | 'MEDIUM' | 'LARGE';
   widthInches: number;
   heightInches: number;
   priceUsd: number;
@@ -51,6 +53,16 @@ export interface SlotState {
   /** What was actually collected, which can differ from priceUsd after negotiation. */
   amountCollectedUsd?: number;
   notes?: string;
+  /** Modular format: SMALL ($350, 1x1), MEDIUM ($650, 1x2), LARGE ($1,200, 2x2), USPS */
+  format?: SlotFormat;
+  side?: CardSide;
+  gridRow?: number;
+  gridCol?: number;
+  rowSpan?: number;
+  colSpan?: number;
+  /** 72-hour reservation tracking */
+  reservedAt?: string;
+  reservationExpiresAt?: string;
 }
 
 export interface LeadProspect {

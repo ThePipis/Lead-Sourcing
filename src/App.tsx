@@ -15,6 +15,7 @@ import { PostalExportView } from './components/PostalExportView.tsx';
 import { ArchitectureViewer } from './components/ArchitectureViewer.tsx';
 import { GuidedTour, FILE_TOUR, FORM_TOUR, hasSeenTour } from './components/GuidedTour.tsx';
 import { CLOSED_CATEGORIES } from './data/categories.ts';
+import { mergeModularSlot, splitModularSlot } from './utils/modularGrid.ts';
 import {
   Campaign,
   SlotState,
@@ -432,19 +433,98 @@ export default function App() {
       return;
     }
 
+    const isReserving = newStatus === 'RESERVED';
+    const reservedAt = isReserving ? new Date().toISOString() : undefined;
+    const reservationExpiresAt = isReserving
+      ? new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
+      : undefined;
+
     setIsSaving(true);
     patchSlots(campaign.id, (slots) =>
-      slots.map((s) => (s.slotNumber === slotNumber ? { ...s, status: newStatus } : s)),
+      slots.map((s) =>
+        s.slotNumber === slotNumber
+          ? {
+              ...s,
+              status: newStatus,
+              reservedAt,
+              reservationExpiresAt,
+            }
+          : s
+      ),
     );
     try {
       const updated = await updateCampaignSlot(campaign.id, slotNumber, {
         status: newStatus,
+        ...(isReserving ? { reservedAt, reservationExpiresAt } : {}),
       });
       patchSlots(campaign.id, (slots) =>
-        slots.map((s) => (s.slotNumber === slotNumber ? updated : s)),
+        slots.map((s) => (s.slotNumber === slotNumber ? { ...s, ...updated } : s)),
       );
     } catch (err) {
       console.error('Failed to persist slot status to SQLite:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleMergeSlot = async (slotNumber: number, targetFormat: 'MEDIUM' | 'LARGE') => {
+    if (!campaign) return;
+    setIsSaving(true);
+    const updatedSlots = mergeModularSlot(slotNumber, targetFormat, campaign.slots);
+    patchSlots(campaign.id, () => updatedSlots);
+    try {
+      await batchUpdateCampaignSlots(campaign.id, updatedSlots);
+    } catch (err) {
+      console.error('Failed to persist merged modular slots:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSplitSlot = async (slotNumber: number) => {
+    if (!campaign) return;
+    setIsSaving(true);
+    const updatedSlots = splitModularSlot(slotNumber, campaign.slots);
+    patchSlots(campaign.id, () => updatedSlots);
+    try {
+      await batchUpdateCampaignSlots(campaign.id, updatedSlots);
+    } catch (err) {
+      console.error('Failed to persist split modular slots:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleReleaseReservation = async (slotNumber: number) => {
+    if (!campaign) return;
+    setIsSaving(true);
+    patchSlots(campaign.id, (slots) =>
+      slots.map((s) =>
+        s.slotNumber === slotNumber
+          ? {
+              ...s,
+              status: 'VACANT',
+              businessName: '',
+              phone: '',
+              contactPerson: '',
+              reservedAt: undefined,
+              reservationExpiresAt: undefined,
+            }
+          : s
+      ),
+    );
+    try {
+      const updated = await updateCampaignSlot(campaign.id, slotNumber, {
+        status: 'VACANT',
+        businessName: '',
+        phone: '',
+        contactPerson: '',
+      });
+      patchSlots(campaign.id, (slots) =>
+        slots.map((s) => (s.slotNumber === slotNumber ? { ...s, ...updated } : s)),
+      );
+    } catch (err) {
+      console.error('Failed to release reservation:', err);
     } finally {
       setIsSaving(false);
     }
@@ -750,6 +830,12 @@ export default function App() {
     targetStatus: SlotStatus = 'RESERVED',
   ) => {
     if (!campaign) return;
+    const isReserving = targetStatus === 'RESERVED';
+    const reservedAt = isReserving ? new Date().toISOString() : undefined;
+    const reservationExpiresAt = isReserving
+      ? new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
+      : undefined;
+
     setIsSaving(true);
     try {
       const updated = await updateCampaignSlot(campaign.id, slotNumber, {
@@ -758,9 +844,10 @@ export default function App() {
         phone: lead.phone,
         status: targetStatus,
         offerHeadline: lead.bilingualHooks?.es || '',
+        ...(isReserving ? { reservedAt, reservationExpiresAt } : {}),
       });
       patchSlots(campaign.id, (slots) =>
-        slots.map((s) => (s.slotNumber === slotNumber ? updated : s)),
+        slots.map((s) => (s.slotNumber === slotNumber ? { ...s, ...updated } : s)),
       );
       setActivePhase('slots');
     } catch (err) {
@@ -990,6 +1077,9 @@ export default function App() {
               onUpdateSlotPrice={handleUpdateSlotPrice}
               onUpdateSlotAvgTicket={handleUpdateSlotAvgTicket}
               onSwapSlots={handleSwapSlots}
+              onMergeSlot={handleMergeSlot}
+              onSplitSlot={handleSplitSlot}
+              onReleaseReservation={handleReleaseReservation}
               onResetLayout={handleResetSlotLayout}
               onAutofill={handleAutofillSlots}
               onMarkAllPaid={handleMarkAllPaid}

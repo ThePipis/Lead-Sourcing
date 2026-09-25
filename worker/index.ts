@@ -230,6 +230,7 @@ const SEED_PROSPECTS: Record<number, any[]> = {
 
 let campaignsStore: any[] = [seedDefaultCampaign()];
 let nextCampaignId = 2;
+const workerCostsStore: Record<string, any> = {};
 
 function isLoopback(urlStr?: string): boolean {
   if (!urlStr) return true;
@@ -589,9 +590,17 @@ export default {
         const body: any = await request.json();
         const c = campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
-        for (const update of (body.slots || [])) {
-          const s = c.slots.find((x: any) => x.slot_number === update.slot_number);
-          if (s) Object.assign(s, update);
+        const updatesList = Array.isArray(body) ? body : (body.slots || []);
+        for (const update of updatesList) {
+          const s = c.slots.find((x: any) => x.slot_number === (update.slot_number ?? update.slotNumber));
+          if (s) {
+            Object.assign(s, update);
+          } else {
+            c.slots.push({
+              slot_number: update.slot_number ?? update.slotNumber,
+              ...update
+            });
+          }
         }
         return json(c.slots);
       }
@@ -830,27 +839,48 @@ export default {
       // Costs: /api/costs/:mode
       const costMatch = cleanPath.match(/^\/api\/costs\/(DEMO|LIVE)$/i);
       if (costMatch) {
+        const mode = costMatch[1].toUpperCase();
+        if (!workerCostsStore[mode]) {
+          workerCostsStore[mode] = {
+            mode,
+            postage_per_piece: 0.247,
+            print_per_piece: 0.368,
+            list_per_piece: 0.0,
+            variable_data_per_piece: 0.0,
+            presort_per_piece: 0.0,
+            finishing_per_piece: 0.0,
+            setup_fee: 0.0,
+            delivery_fee: 0.0,
+            target_margin: 0.58,
+            source_note: 'Zoom Mailing (Riverside, CA) · Impresión Jumbo 12"×9" + Franqueo EDDM',
+          };
+        }
+
+        if (request.method === "PUT" || request.method === "POST") {
+          let body: any = {};
+          try { body = await request.json(); } catch {}
+          Object.assign(workerCostsStore[mode], body);
+        }
+
+        const current = workerCostsStore[mode];
+        const hh = parseInt(url.searchParams.get("households") || "5000");
+        const unit = Number(((current.postage_per_piece || 0.247) + (current.print_per_piece || 0.368) + (current.list_per_piece || 0)).toFixed(4));
+        const fixed = Number(((current.setup_fee || 0) + (current.delivery_fee || 0)).toFixed(2));
+        const total = Number((unit * hh + fixed).toFixed(2));
+
+        const prices: Record<number, number> = {};
+        for (let i = 1; i <= 31; i++) {
+          prices[i] = 350.0;
+        }
+        prices[32] = 0.0; // USPS
+
         return json({
-          mode: costMatch[1].toUpperCase(),
-          data_cpm: 0.0,
-          print_per_piece: 0.12,
-          inkjet_per_piece: 0.02,
-          presort_per_piece: 0.01,
-          finish_per_piece: 0.01,
-          postage_per_piece: 0.247,
-          setup_flat: 0.0,
-          delivery_flat: 0.0,
-          target_margin: 0.50,
-          target_households: 5000,
-          unit_cost: 0.642,
-          fixed_cost: 375.0,
-          preview_households: 5000,
-          preview_total_cost: 3585.0,
-          suggested_prices: {
-            1: 850.0, 2: 497.0, 3: 497.0, 4: 497.0, 5: 497.0,
-            6: 497.0, 7: 497.0, 8: 497.0, 9: 497.0, 10: 497.0,
-            11: 497.0, 12: 497.0, 13: 497.0, 14: 640.0
-          }
+          ...current,
+          unit_cost: unit,
+          fixed_cost: fixed,
+          preview_households: hh,
+          preview_total_cost: total,
+          suggested_prices: prices,
         });
       }
 

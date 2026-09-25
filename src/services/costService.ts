@@ -2,6 +2,45 @@ import { AppMode } from '../hooks/useAppMode.ts';
 
 const API_BASE = '/api';
 
+export interface DirectMailPartner {
+  id: string;
+  name: string;
+  location: string;
+  costPerPiece: number;
+  note: string;
+}
+
+export const DIRECT_MAIL_PARTNERS: DirectMailPartner[] = [
+  {
+    id: 'zoom_mailing',
+    name: 'Zoom Mailing',
+    location: 'Riverside, CA',
+    costPerPiece: 0.615,
+    note: 'Impresión Jumbo 12"×9" + Franqueo EDDM + Clasificación y Entrega',
+  },
+  {
+    id: 'uribe_printing',
+    name: 'Uribe Printing',
+    location: 'Riverside, CA',
+    costPerPiece: 0.630,
+    note: 'Offset Full Color HD + Preparación USPS + Enrutamiento Postal',
+  },
+  {
+    id: 'unique_printing',
+    name: 'Unique Printing & Graphics',
+    location: 'Moreno Valley, CA',
+    costPerPiece: 0.645,
+    note: 'Servicio integral Inland Empire + Control de Calidad Postal EDDM',
+  },
+  {
+    id: 'custom',
+    name: 'Personalizado / Otra Imprenta',
+    location: 'Inland Empire, CA',
+    costPerPiece: 0.620,
+    note: 'Tarifa directa por pieza acordada con tu imprenta aliada',
+  },
+];
+
 /** The six mail-house lines plus data, fees and the margin we work to. */
 export interface CostSettings {
   mode: AppMode;

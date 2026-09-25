@@ -32,6 +32,15 @@ export function mapBackendSlotToFrontend(raw: any): SlotState {
     paymentRef: raw.payment_ref ?? raw.paymentRef ?? '',
     paidAt: raw.paid_at ?? raw.paidAt ?? undefined,
     amountCollectedUsd: raw.amount_collected_usd ?? raw.amountCollectedUsd ?? undefined,
+    notes: raw.notes ?? undefined,
+    format: raw.format ?? undefined,
+    side: raw.side ?? undefined,
+    gridRow: raw.grid_row ?? raw.gridRow ?? undefined,
+    gridCol: raw.grid_col ?? raw.gridCol ?? undefined,
+    rowSpan: raw.row_span ?? raw.rowSpan ?? undefined,
+    colSpan: raw.col_span ?? raw.colSpan ?? undefined,
+    reservedAt: raw.reserved_at ?? raw.reservedAt ?? undefined,
+    reservationExpiresAt: raw.reservation_expires_at ?? raw.reservationExpiresAt ?? undefined,
   };
 }
 
@@ -58,6 +67,15 @@ export function mapFrontendSlotToBackend(data: Partial<SlotState>): Record<strin
   if (data.amountCollectedUsd !== undefined) payload.amount_collected_usd = data.amountCollectedUsd;
   if (data.priceUsd !== undefined) payload.price_usd = data.priceUsd;
   if (data.avgTicketUsd !== undefined) payload.avg_ticket_usd = data.avgTicketUsd;
+  if (data.notes !== undefined) payload.notes = data.notes;
+  if (data.format !== undefined) payload.format = data.format;
+  if (data.side !== undefined) payload.side = data.side;
+  if (data.gridRow !== undefined) payload.grid_row = data.gridRow;
+  if (data.gridCol !== undefined) payload.grid_col = data.gridCol;
+  if (data.rowSpan !== undefined) payload.row_span = data.rowSpan;
+  if (data.colSpan !== undefined) payload.col_span = data.colSpan;
+  if (data.reservedAt !== undefined) payload.reserved_at = data.reservedAt;
+  if (data.reservationExpiresAt !== undefined) payload.reservation_expires_at = data.reservationExpiresAt;
 
   return payload;
 }

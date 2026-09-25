@@ -33,12 +33,10 @@ interface SettingsProps {
   mode: AppMode;
   /** Reach the costs are computed at. */
   households: number;
-  openSlots?: number[];
   onClose: () => void;
   /** Called after costs change so the open campaign re-reads its costs. */
   onCostsChanged?: () => void;
   onCostsChange?: (unitCost: number, fixedCost: number) => void;
-  onApplySuggested?: (prices: Record<number, number>) => void;
 }
 
 type Tab = 'SOURCES' | 'PRINT';
@@ -59,11 +57,9 @@ export const Settings: React.FC<SettingsProps> = ({
   open,
   mode,
   households,
-  openSlots,
   onClose,
   onCostsChanged,
   onCostsChange,
-  onApplySuggested,
 }) => {
   const { t } = useTranslation(['common']);
   const [tab, setTab] = useState<Tab>('PRINT');
@@ -622,19 +618,6 @@ export const Settings: React.FC<SettingsProps> = ({
                       Nota: {costs?.sourceNote || currentPartner.note}
                     </p>
                   </div>
-                )}
-
-                {/* Botón para aplicar precios sugeridos a los espacios vacantes */}
-                {openSlots && openSlots.length > 0 && costs?.suggestedPrices && (
-                  <button
-                    type="button"
-                    id="btn-apply-suggested"
-                    disabled={costsWriting}
-                    onClick={() => onApplySuggested?.(costs.suggestedPrices)}
-                    className="imperative mt-2 flex min-h-11 w-full items-center justify-center gap-2 border border-live bg-live px-4 text-xs font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40 cursor-pointer"
-                  >
-                    Aplicar Precios Sugeridos a {openSlots.length} Espacios Vacantes
-                  </button>
                 )}
               </div>
             </div>

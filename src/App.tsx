@@ -1296,11 +1296,9 @@ export default function App() {
         open={settingsOpen}
         mode={mode}
         households={campaign ? billableHouseholds(campaign) : 5000}
-        openSlots={campaign ? campaign.slots.filter((s) => s.status !== 'PAID').map((s) => s.slotNumber) : []}
         onClose={() => setSettingsOpen(false)}
         onCostsChanged={() => setCostsVersion((v) => v + 1)}
         onCostsChange={handleCostsChange}
-        onApplySuggested={handleApplySuggestedPrices}
       />
     </div>
   );

@@ -51,6 +51,8 @@ export async function generateCampaignQrCodes(
   const cleanBase = (trackingBaseUrl || 'http://localhost:8000/r').replace(/\/+$/, '');
 
   for (const slot of slots) {
+    if (slot.format === 'USPS' || slot.slotNumber === 32) continue;
+    if (slot.notes?.startsWith('Covered by')) continue; // Skip covered/merged sub-slots
     const slotId = `slot-${slot.slotNumber}`;
     const shortUrl = `${cleanBase}/${campaignId}/${slotId}`;
 

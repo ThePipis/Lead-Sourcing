@@ -466,6 +466,14 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                     <p className="text-[0.69rem] text-muted-foreground mt-1 font-mono text-center truncate max-w-full">
                       {selectedQr.shortUrl}
                     </p>
+                    <a
+                      href={selectedQr.qrDataUrl}
+                      download={`QR_${selectedQr.slotNumber}_${(selectedQr.businessName || 'Slot').replace(/[^a-zA-Z0-9]/g, '_')}.png`}
+                      className="mt-3 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-live text-primary-foreground text-xs font-bold transition-opacity hover:opacity-90 cursor-pointer shadow-sm"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Descargar QR (PNG Imprenta)</span>
+                    </a>
                   </div>
 
                   {/* The redirect URL and its copy control. The button wraps

@@ -557,6 +557,19 @@ export default function App() {
     setIsSaving(true);
     const updatedSlots = mergeModularSlot(slotNumber, targetFormat, campaign.slots);
     patchSlots(campaign.id, () => updatedSlots);
+    const primary = campaign.slots.find((s) => s.slotNumber === slotNumber);
+    if (primary && (primary.gridRow === 2 || primary.gridRow === 4) && targetFormat === 'MEDIUM') {
+      const movedMed = updatedSlots.find(
+        (s) =>
+          s.format === 'MEDIUM' &&
+          !s.notes?.startsWith('Covered by') &&
+          s.slotNumber !== slotNumber &&
+          ((primary.businessName && s.businessName === primary.businessName) || s.categoryId === primary.categoryId)
+      );
+      if (movedMed && inspectedSlot === slotNumber) {
+        setInspectedSlot(movedMed.slotNumber);
+      }
+    }
     try {
       await batchUpdateCampaignSlots(campaign.id, updatedSlots);
     } catch (err) {

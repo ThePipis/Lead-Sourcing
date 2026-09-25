@@ -171,26 +171,104 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
 }
 
 /**
- * Checks if a slot can be merged vertically into a MEDIUM (1x2) slot
+/**
+ * For a bottom slot (row 2 or 4), finds the best available column to the right (col + 1 .. 4)
+ * that can host a MEDIUM (1x2) slot by placing the Mediano in that column and swapping
+ * that column's top cell into this bottom slot, respecting sequential left-to-right negotiation.
+ */
+export function findBottomSlotMediumTarget(
+  slot: SlotState,
+  slots: SlotState[]
+): { targetCol: number; destTop: SlotState; destBottom: SlotState } | null {
+  if (slot.format === 'MEDIUM' || slot.format === 'LARGE' || slot.format === 'USPS' || slot.slotNumber === 32) return null;
+  if (slot.notes?.startsWith('Covered by')) return null;
+  if (slot.status === 'PAID') return null;
+
+  const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === slot.slotNumber);
+  const row = slot.gridRow ?? def?.gridRow;
+  const col = slot.gridCol ?? def?.gridCol;
+  const side = slot.side ?? def?.side;
+  if (!row || !col) return null;
+  if (row !== 2 && row !== 4) return null;
+
+  const rowTop = row - 1;
+
+  for (let candCol = col + 1; candCol <= 4; candCol++) {
+    const candTop = slots.find((s) => {
+      const d = MODULAR_GRID_DEFS.find((item) => item.slotNumber === s.slotNumber);
+      const sr = s.gridRow ?? d?.gridRow;
+      const sc = s.gridCol ?? d?.gridCol;
+      const ss = s.side ?? d?.side;
+      return ss === side && sr === rowTop && sc === candCol;
+    });
+
+    const candBottom = slots.find((s) => {
+      const d = MODULAR_GRID_DEFS.find((item) => item.slotNumber === s.slotNumber);
+      const sr = s.gridRow ?? d?.gridRow;
+      const sc = s.gridCol ?? d?.gridCol;
+      const ss = s.side ?? d?.side;
+      return ss === side && sr === row && sc === candCol;
+    });
+
+    if (!candTop || !candBottom) continue;
+
+    // Cannot involve USPS technical zone
+    if (candTop.format === 'USPS' || candTop.slotNumber === 32 || candBottom.format === 'USPS' || candBottom.slotNumber === 32) continue;
+
+    // Both must be atomic SMALL slots (cannot destroy already merged MEDIUM or LARGE slots)
+    if (candTop.format === 'MEDIUM' || candTop.format === 'LARGE' || candTop.notes?.startsWith('Covered by')) continue;
+    if (candBottom.format === 'MEDIUM' || candBottom.format === 'LARGE' || candBottom.notes?.startsWith('Covered by')) continue;
+
+    // candTop will be moved to (row, col) as an atomic chico, so it cannot be PAID
+    if (candTop.status === 'PAID') continue;
+
+    // candBottom will be absorbed as the covered partner of the Mediano in candCol, so it must be VACANT
+    if (candBottom.status !== 'VACANT' || (candBottom.businessName && candBottom.businessName.trim() !== '')) continue;
+
+    return { targetCol: candCol, destTop: candTop, destBottom: candBottom };
+  }
+
+  return null;
+}
+
+/**
+ * Checks if a slot can be merged vertically into a MEDIUM (1x2) slot.
+ * - Top slots (rows 1 & 3): merges in-place downwards with the row below it.
+ * - Bottom slots (rows 2 & 4): moves to the next column to the right, swapping with
+ *   that column's top cell, respecting sequential left-to-right negotiation order.
  */
 export function canMergeVertical(slot: SlotState, slots: SlotState[]): boolean {
   if (slot.format === 'MEDIUM' || slot.format === 'LARGE' || slot.format === 'USPS') return false;
-  if (!slot.gridRow || !slot.gridCol) return false;
+  const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === slot.slotNumber);
+  const row = slot.gridRow ?? def?.gridRow;
+  const col = slot.gridCol ?? def?.gridCol;
+  const side = slot.side ?? def?.side;
+  if (!row || !col) return false;
   if (slot.notes?.startsWith('Covered by')) return false;
+  if (slot.status === 'PAID') return false;
 
-  // We can merge top half (row 1 with row 2) or bottom half (row 3 with row 4)
-  const targetRow = slot.gridRow === 1 ? 2 : slot.gridRow === 3 ? 4 : null;
-  if (!targetRow) return false;
+  // Case 1: Top half (row 1 or 3) merges downward with row 2 or 4 in the same column
+  if (row === 1 || row === 3) {
+    const targetRow = row + 1;
+    const partner = slots.find(
+      (s) => {
+        const d = MODULAR_GRID_DEFS.find((item) => item.slotNumber === s.slotNumber);
+        return (s.side ?? d?.side) === side && (s.gridCol ?? d?.gridCol) === col && (s.gridRow ?? d?.gridRow) === targetRow;
+      }
+    );
 
-  const partner = slots.find(
-    (s) => s.side === slot.side && s.gridCol === slot.gridCol && s.gridRow === targetRow
-  );
+    if (!partner) return false;
+    if (partner.format === 'USPS' || partner.format === 'LARGE' || partner.format === 'MEDIUM') return false;
+    if (partner.notes?.startsWith('Covered by')) return false;
+    return partner.status === 'VACANT' || partner.businessName === slot.businessName;
+  }
 
-  if (!partner) return false;
-  if (partner.format === 'USPS' || partner.format === 'LARGE' || partner.format === 'MEDIUM') return false;
-  if (partner.notes?.startsWith('Covered by')) return false;
-  // Can merge if partner is VACANT or belongs to the same advertiser
-  return partner.status === 'VACANT' || (partner.businessName === slot.businessName && slot.status !== 'PAID');
+  // Case 2: Bottom half (row 2 or 4) shifts into the next column to the right
+  if (row === 2 || row === 4) {
+    return findBottomSlotMediumTarget(slot, slots) !== null;
+  }
+
+  return false;
 }
 
 export interface LargeOriginCandidate {
@@ -335,35 +413,171 @@ export function mergeModularSlot(
   const side = primary.side;
 
   if (targetFormat === 'MEDIUM') {
-    const partnerRow = row === 1 ? 2 : row === 3 ? 4 : row;
-    const partner = normalized.find(
-      (s) => s.side === side && s.gridCol === col && s.gridRow === partnerRow && s.slotNumber !== primarySlotNum
-    );
-    const existingMed = normalized.find((s) => s.format === 'MEDIUM' && s.priceUsd);
-    const medPrice = existingMed?.priceUsd ?? (primary.priceUsd ? Math.round((primary.priceUsd * 650) / 350 / 5) * 5 : MODULAR_PRICES.MEDIUM);
+    // -------------------------------------------------------------
+    // SUB-CASE 1: TOP SLOT (gridRow === 1 or 3)
+    // Merges downward with partner in the same column
+    // -------------------------------------------------------------
+    if (row === 1 || row === 3) {
+      const partnerRow = row + 1;
+      const partner = normalized.find(
+        (s) => s.side === side && s.gridCol === col && s.gridRow === partnerRow && s.slotNumber !== primarySlotNum
+      );
+      const existingMed = normalized.find((s) => s.format === 'MEDIUM' && s.priceUsd && s.slotNumber !== 32);
+      const medPrice = existingMed?.priceUsd ?? (primary.priceUsd ? Math.round((primary.priceUsd * 650) / 350 / 5) * 5 : MODULAR_PRICES.MEDIUM);
 
-    return computeAdaptiveDisplayNumbers(normalized.map((s) => {
-      if (s.slotNumber === primarySlotNum) {
-        return {
-          ...s,
-          format: 'MEDIUM',
-          rowSpan: 2,
-          colSpan: 1,
-          priceUsd: medPrice,
-          notes: undefined,
-        };
-      }
-      if (partner && s.slotNumber === partner.slotNumber) {
-        // Partner is absorbed into primary slot
-        return {
-          ...s,
-          format: 'MEDIUM',
-          status: 'VACANT',
-          notes: `Covered by slot #${primarySlotNum}`,
-        };
-      }
-      return s;
-    }));
+      return computeAdaptiveDisplayNumbers(normalized.map((s) => {
+        if (s.slotNumber === primarySlotNum) {
+          return {
+            ...s,
+            format: 'MEDIUM',
+            rowSpan: 2,
+            colSpan: 1,
+            priceUsd: medPrice,
+            notes: undefined,
+          };
+        }
+        if (partner && s.slotNumber === partner.slotNumber) {
+          // Partner is absorbed into primary slot
+          return {
+            ...s,
+            format: 'MEDIUM',
+            status: 'VACANT',
+            notes: `Covered by slot #${primarySlotNum}`,
+          };
+        }
+        return s;
+      }));
+    }
+
+    // -------------------------------------------------------------
+    // SUB-CASE 2: BOTTOM SLOT (gridRow === 2 or 4)
+    // Swaps with top slot of the next available column to the right,
+    // placing the Mediano in that column and keeping the chico in this row
+    // -------------------------------------------------------------
+    if (row === 2 || row === 4) {
+      const target = findBottomSlotMediumTarget(primary, normalized);
+      if (!target) return normalized;
+
+      const { destTop, destBottom } = target;
+      const existingMed = normalized.find((s) => s.format === 'MEDIUM' && s.priceUsd && s.slotNumber !== 32);
+      const medPrice = existingMed?.priceUsd ?? (primary.priceUsd ? Math.round((primary.priceUsd * 650) / 350 / 5) * 5 : MODULAR_PRICES.MEDIUM);
+
+      const existingSmall = normalized.find((s) => s.format === 'SMALL' && s.priceUsd && s.slotNumber !== 32);
+      const activeSmallPrice = existingSmall?.priceUsd ?? MODULAR_PRICES.SMALL;
+
+      // Copy primary advertiser data into destTop
+      const primaryData = {
+        categoryId: primary.categoryId,
+        categoryName: primary.categoryName,
+        businessName: primary.businessName,
+        contactPerson: primary.contactPerson,
+        phone: primary.phone,
+        email: primary.email,
+        website: primary.website,
+        status: primary.status,
+        logoUrl: primary.logoUrl,
+        offerHeadline: primary.offerHeadline,
+        avgTicketUsd: primary.avgTicketUsd,
+        paymentRef: primary.paymentRef,
+        paidAt: primary.paidAt,
+        amountCollectedUsd: primary.amountCollectedUsd,
+        scanCount: primary.scanCount,
+      };
+
+      // destTop data
+      const hasDestData = Boolean(destTop.businessName && destTop.status !== 'VACANT');
+      const destData = {
+        categoryId: destTop.categoryId,
+        categoryName: destTop.categoryName,
+        businessName: destTop.businessName,
+        contactPerson: destTop.contactPerson,
+        phone: destTop.phone,
+        email: destTop.email,
+        website: destTop.website,
+        status: destTop.status,
+        logoUrl: destTop.logoUrl,
+        offerHeadline: destTop.offerHeadline,
+        avgTicketUsd: destTop.avgTicketUsd,
+        paymentRef: destTop.paymentRef,
+        paidAt: destTop.paidAt,
+        amountCollectedUsd: destTop.amountCollectedUsd,
+        scanCount: destTop.scanCount,
+      };
+
+      const primaryDef = MODULAR_GRID_DEFS.find((d) => d.slotNumber === primary.slotNumber);
+      const primaryDefaultCat = CLOSED_CATEGORIES.find((c) => c.id === primaryDef?.categoryId);
+      const destDef = MODULAR_GRID_DEFS.find((d) => d.slotNumber === destTop.slotNumber);
+      const destCat = CLOSED_CATEGORIES.find((c) => c.id === destDef?.categoryId);
+
+      return computeAdaptiveDisplayNumbers(normalized.map((s) => {
+        // 1. destTop becomes the MEDIUM slot with primary's data
+        if (s.slotNumber === destTop.slotNumber) {
+          return {
+            ...s,
+            ...primaryData,
+            format: 'MEDIUM',
+            rowSpan: 2,
+            colSpan: 1,
+            priceUsd: medPrice,
+            notes: undefined,
+          };
+        }
+
+        // 2. destBottom is absorbed under destTop
+        if (s.slotNumber === destBottom.slotNumber) {
+          return {
+            ...s,
+            format: 'MEDIUM',
+            rowSpan: 1,
+            colSpan: 1,
+            status: 'VACANT',
+            businessName: undefined,
+            contactPerson: undefined,
+            phone: undefined,
+            email: undefined,
+            website: undefined,
+            logoUrl: undefined,
+            offerHeadline: undefined,
+            notes: `Covered by slot #${destTop.slotNumber}`,
+          };
+        }
+
+        // 3. primary slot (at row, col) receives destTop's data (or destTop's category if vacant)
+        if (s.slotNumber === primary.slotNumber) {
+          if (hasDestData) {
+            return {
+              ...s,
+              ...destData,
+              format: 'SMALL',
+              rowSpan: 1,
+              colSpan: 1,
+              priceUsd: activeSmallPrice,
+              notes: undefined,
+            };
+          }
+          return {
+            ...s,
+            format: 'SMALL',
+            rowSpan: 1,
+            colSpan: 1,
+            status: 'VACANT',
+            businessName: undefined,
+            contactPerson: undefined,
+            phone: undefined,
+            email: undefined,
+            website: undefined,
+            logoUrl: undefined,
+            categoryId: destCat?.id ?? primaryDefaultCat?.id ?? s.categoryId,
+            categoryName: destCat?.name ?? primaryDefaultCat?.name ?? s.categoryName,
+            offerHeadline: destCat?.defaultHeadline ?? primaryDefaultCat?.defaultHeadline ?? s.offerHeadline,
+            priceUsd: activeSmallPrice,
+            notes: undefined,
+          };
+        }
+
+        return s;
+      }));
+    }
   }
 
   if (targetFormat === 'LARGE') {

@@ -6,7 +6,6 @@ import { FormShell } from './components/FormShell.tsx';
 import { PaymentStamp } from './components/PaymentStamp.tsx';
 import { ProductionSection } from './components/ProductionSection.tsx';
 import { FinancialMetrics } from './components/FinancialMetrics.tsx';
-import { ReachControl } from './components/ReachControl.tsx';
 import { CostPanel } from './components/CostPanel.tsx';
 import { PostalCanvas } from './components/PostalCanvas.tsx';
 import { SlotInspector } from './components/SlotInspector.tsx';
@@ -1050,14 +1049,11 @@ export default function App() {
             : undefined;
         return (
           <>
-            <ReachControl
-              campaign={campaign}
-              onResize={handleResizeCampaign}
-              onDraftChange={setDraftReach}
-              isSaving={isSaving}
-            />
             <FinancialMetrics
               campaign={shown}
+              baseCampaign={campaign}
+              onResize={handleResizeCampaign}
+              onDraftChange={setDraftReach}
               onApplySuggested={handleApplySuggestedPrices}
               onTargetMarginSave={async (val) => {
                 try {

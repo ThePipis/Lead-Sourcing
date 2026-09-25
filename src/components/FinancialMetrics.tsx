@@ -344,6 +344,19 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                 </span>
               </div>
 
+              {/* Margen Objetivo Sincronizado (Dato de solo lectura, no editable) */}
+              <div
+                className="inline-flex items-baseline gap-1 border border-rule/80 bg-card px-2 py-0.5 shadow-2xs group-hover:border-live/40 transition-colors"
+                title={`${t('common:finance.targetMargin', 'Margen Objetivo')}: ${actualCalculatedMargin}% (${t('common:finance.targetMarginSub', 'Sincronizado con slots')})`}
+              >
+                <span className="field-label text-[0.60rem] text-ink-dim uppercase">
+                  {t('common:finance.targetMargin', 'Margen Objetivo')}:
+                </span>
+                <span className="font-black font-mono text-xs text-live">
+                  {actualCalculatedMargin}%
+                </span>
+              </div>
+
               {/* Ganancia por Socio Destacada */}
               <div
                 className="inline-flex items-baseline gap-1.5 bg-live/10 border border-live/30 px-2 py-0.5 shadow-2xs group-hover:border-live/60 transition-colors"
@@ -646,6 +659,15 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                   >
                     {money(netProfit)}
                   </dd>
+                </div>
+                <div
+                  className="hidden sm:inline-flex items-center gap-1 border border-rule/70 bg-card px-2 py-0.5 text-xs font-mono font-bold text-live shadow-2xs self-center"
+                  title={`${t('common:finance.targetMargin', 'Margen')}: ${actualCalculatedMargin}% (${t('common:finance.targetMarginSub', 'Sincronizado con slots')})`}
+                >
+                  <span className="field-label text-[0.58rem] text-ink-dim uppercase">
+                    {t('common:finance.targetMargin', 'Margen')}:
+                  </span>
+                  <span>{actualCalculatedMargin}%</span>
                 </div>
                 <div className="text-right">
                   <div className="field-value text-xl sm:text-2xl font-black text-clear inline-flex items-baseline gap-1">

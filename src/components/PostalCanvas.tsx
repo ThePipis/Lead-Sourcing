@@ -194,12 +194,6 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
   const backSlots = visibleSlots.filter((s) => !isFront(s));
 
   const sortByGridPosition = (a: SlotState, b: SlotState) => {
-    const rowA = a.gridRow ?? 1;
-    const rowB = b.gridRow ?? 1;
-    if (rowA !== rowB) return rowA - rowB;
-    const colA = a.gridCol ?? 1;
-    const colB = b.gridCol ?? 1;
-    if (colA !== colB) return colA - colB;
     return (a.displayNumber ?? a.slotNumber) - (b.displayNumber ?? b.slotNumber);
   };
 

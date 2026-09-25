@@ -1004,16 +1004,28 @@ export function computeAdaptiveDisplayNumbers(slots: SlotState[]): SlotState[] {
   const frontVisible = visibleSlots.filter(isFront);
   const backVisible = visibleSlots.filter((s) => !isFront(s));
 
-  // Sort FRONT in natural reading order: row ASC, col ASC, then slotNumber ASC
-  frontVisible.sort((a, b) => {
+  const compareSlotsColumnByColumn = (a: SlotState, b: SlotState): number => {
     const rowA = a.gridRow ?? 1;
     const rowB = b.gridRow ?? 1;
-    if (rowA !== rowB) return rowA - rowB;
+    // Block 0: Top half (rows 1 & 2, above banner)
+    // Block 1: Bottom half (rows 3 & 4, below banner)
+    const blockA = rowA <= 2 ? 0 : 1;
+    const blockB = rowB <= 2 ? 0 : 1;
+    if (blockA !== blockB) return blockA - blockB;
+
+    // Within each block, traverse column by column (left to right: col 1..4)
     const colA = a.gridCol ?? 1;
     const colB = b.gridCol ?? 1;
     if (colA !== colB) return colA - colB;
+
+    // Within each column, traverse top to bottom (row 1 then row 2, or row 3 then row 4)
+    if (rowA !== rowB) return rowA - rowB;
+
     return a.slotNumber - b.slotNumber;
-  });
+  };
+
+  // Sort FRONT column by column, top to bottom
+  frontVisible.sort(compareSlotsColumnByColumn);
 
   frontVisible.forEach((slot, index) => {
     displayMap.set(slot.slotNumber, index + 1);
@@ -1021,16 +1033,8 @@ export function computeAdaptiveDisplayNumbers(slots: SlotState[]): SlotState[] {
 
   const nextNumber = frontVisible.length + 1;
 
-  // Sort BACK in natural reading order: row ASC, col ASC, then slotNumber ASC
-  backVisible.sort((a, b) => {
-    const rowA = a.gridRow ?? 1;
-    const rowB = b.gridRow ?? 1;
-    if (rowA !== rowB) return rowA - rowB;
-    const colA = a.gridCol ?? 1;
-    const colB = b.gridCol ?? 1;
-    if (colA !== colB) return colA - colB;
-    return a.slotNumber - b.slotNumber;
-  });
+  // Sort BACK column by column, top to bottom
+  backVisible.sort(compareSlotsColumnByColumn);
 
   backVisible.forEach((slot, index) => {
     displayMap.set(slot.slotNumber, nextNumber + index);

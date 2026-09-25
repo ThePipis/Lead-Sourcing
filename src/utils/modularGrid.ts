@@ -76,7 +76,7 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
   const mapByNumber = new Map<number, SlotState>();
   existingSlots.forEach((s) => mapByNumber.set(s.slotNumber, s));
 
-  return MODULAR_GRID_DEFS.map((def) => {
+  const rawSlots = MODULAR_GRID_DEFS.map((def) => {
     const existing = mapByNumber.get(def.slotNumber);
     const cat = CLOSED_CATEGORIES.find((c) => c.id === def.categoryId) ?? CLOSED_CATEGORIES[0];
 
@@ -165,6 +165,8 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
       avgTicketUsd: cat.avgTicketUsd,
     };
   });
+
+  return computeAdaptiveDisplayNumbers(rawSlots);
 }
 
 /**

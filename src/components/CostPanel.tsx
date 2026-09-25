@@ -212,7 +212,6 @@ export const CostPanel: React.FC<CostPanelProps> = ({
   };
 
   const projectedRevenue = currentGrossRevenue > 0 ? currentGrossRevenue : scaledTariffs.projectedRevenue;
-  const projectedProfit = Math.max(0, projectedRevenue - currentTotalCost);
   const currentPartner = DIRECT_MAIL_PARTNERS.find((p) => p.id === selectedPartnerId) || DIRECT_MAIL_PARTNERS[0];
 
   return (
@@ -389,7 +388,7 @@ export const CostPanel: React.FC<CostPanelProps> = ({
           </div>
 
           {/* 3. Tarjetas Financieras Directas */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2">
             <div className="border border-rule bg-secondary/20 p-3">
               <span className="text-[0.68rem] uppercase font-bold text-ink-dim block mb-1">
                 Costo Total Tirada
@@ -411,18 +410,6 @@ export const CostPanel: React.FC<CostPanelProps> = ({
               </span>
               <span className="text-[0.63rem] text-ink-dim block mt-0.5">
                 Al vender todos los slots
-              </span>
-            </div>
-
-            <div className="border border-live/40 bg-live/10 p-3">
-              <span className="text-[0.68rem] uppercase font-bold text-live block mb-1">
-                Ganancia Neta en Mano
-              </span>
-              <span className="text-base font-black text-live">
-                {money(projectedProfit)}
-              </span>
-              <span className="text-[0.63rem] text-live/80 block mt-0.5">
-                Beneficio libre de costos
               </span>
             </div>
 

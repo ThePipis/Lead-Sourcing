@@ -1,4 +1,4 @@
-import { Campaign, SlotState, SlotStatus, Household, CurationSummary } from '../types.ts';
+import { Campaign, SlotState, SlotStatus, SlotFormat, Household, CurationSummary } from '../types.ts';
 import { CLOSED_CATEGORIES } from '../data/categories.ts';
 import { normalizeModularSlots } from '../utils/modularGrid.ts';
 

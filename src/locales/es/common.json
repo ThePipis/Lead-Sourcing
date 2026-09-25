@@ -509,7 +509,8 @@
     "tab": {
       "routes": "Motor de rutas",
       "sources": "Fuentes de datos",
-      "market": "Precios de mercado"
+      "market": "Imprenta y costos direct mail",
+      "print": "Imprenta y costos direct mail"
     },
     "sourcesIntro": "De dónde saca datos el sistema en este modo. Las gratuitas no cuestan nada y sirven para practicar el proceso completo; las de pago son las que hacen falta para una campaña real. Cada una dice qué te da y qué no, y puedes probarla aquí mismo con 5 registros.",
     "cost": {

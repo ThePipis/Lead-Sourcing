@@ -6,7 +6,6 @@ import { FormShell } from './components/FormShell.tsx';
 import { PaymentStamp } from './components/PaymentStamp.tsx';
 import { ProductionSection } from './components/ProductionSection.tsx';
 import { FinancialMetrics } from './components/FinancialMetrics.tsx';
-import { CostPanel } from './components/CostPanel.tsx';
 import { PostalCanvas } from './components/PostalCanvas.tsx';
 import { SlotInspector } from './components/SlotInspector.tsx';
 import { CurationStudio } from './components/CurationStudio.tsx';
@@ -235,7 +234,23 @@ export default function App() {
 
   const patchSlots = useCallback(
     (id: string, update: (slots: SlotState[]) => SlotState[]) => {
-      patchCampaign(id, (c) => ({ ...c, slots: update(c.slots) }));
+      patchCampaign(id, (c) => {
+        const nextSlots = update(c.slots);
+        const revenue = nextSlots.reduce((acc, s) => {
+          if (s.format === 'USPS' || s.slotNumber === 32 || s.notes?.includes('Covered by')) return acc;
+          return acc + (s.priceUsd || 0);
+        }, 0);
+        const cost = dropCostUsd(c);
+        const margin = revenue > 0 ? (revenue - cost) / revenue : 0;
+        return {
+          ...c,
+          slots: nextSlots,
+          targetGrossRevenue: revenue,
+          operatingCostEst: cost,
+          netMarginEst: Math.max(0, revenue - cost),
+          targetMargin: margin,
+        };
+      });
     },
     [patchCampaign],
   );
@@ -1064,16 +1079,6 @@ export default function App() {
               }}
               isSaving={isSaving}
             />
-            <CostPanel
-              key={`costs-${costsVersion}`}
-              mode={mode}
-              households={billableHouseholds(shown)}
-              openSlots={campaign.slots.filter((s) => s.status !== 'PAID').map((s) => s.slotNumber)}
-              slots={shown.slots}
-              onApplySuggested={handleApplySuggestedPrices}
-              onCostsChange={handleCostsChange}
-              isSaving={isSaving}
-            />
             {/* The postal card with its integrated curtain inspector. At rest the
                 slots take the full width of the flyer; clicking any slot smoothly draws
                 open the inspector curtain at the exact height of the slots. */}
@@ -1284,9 +1289,12 @@ export default function App() {
       <Settings
         open={settingsOpen}
         mode={mode}
-        households={campaign?.totalTargetHouseholds ?? 5000}
+        households={campaign ? billableHouseholds(campaign) : 5000}
+        openSlots={campaign ? campaign.slots.filter((s) => s.status !== 'PAID').map((s) => s.slotNumber) : []}
         onClose={() => setSettingsOpen(false)}
         onCostsChanged={() => setCostsVersion((v) => v + 1)}
+        onCostsChange={handleCostsChange}
+        onApplySuggested={handleApplySuggestedPrices}
       />
     </div>
   );

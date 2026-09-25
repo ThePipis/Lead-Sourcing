@@ -16,10 +16,7 @@ interface CostPanelProps {
   mode: AppMode;
   /** Reach the figures are computed at — the typed one, not only the saved one. */
   households: number;
-  /** Slots whose price can still be rewritten (not yet paid). */
-  openSlots: number[];
   slots: SlotState[];
-  onApplySuggested: (prices: Record<number, number>) => void;
   /** Reported upward so the ledger and the gates move with the cost model. */
   onCostsChange: (unitCost: number, fixedCost: number) => void;
   isSaving: boolean;
@@ -33,9 +30,7 @@ const money = (n: number) =>
 export const CostPanel: React.FC<CostPanelProps> = ({
   mode,
   households,
-  openSlots,
   slots,
-  onApplySuggested,
   onCostsChange,
   isSaving,
 }) => {
@@ -292,18 +287,6 @@ export const CostPanel: React.FC<CostPanelProps> = ({
                 </span>
               )}
             </div>
-
-            {openSlots.length > 0 && costs?.suggestedPrices && (
-              <button
-                type="button"
-                id="btn-apply-suggested"
-                disabled={isSaving || writing}
-                onClick={() => onApplySuggested(costs.suggestedPrices)}
-                className="px-3.5 py-1.5 border border-live bg-live text-primary-foreground text-xs font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
-              >
-                Aplicar Precios a {openSlots.length} Espacios Vacantes
-              </button>
-            )}
           </div>
 
           {/* Desglose técnico opcional */}

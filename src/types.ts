@@ -63,6 +63,8 @@ export interface SlotState {
   /** 72-hour reservation tracking */
   reservedAt?: string;
   reservationExpiresAt?: string;
+  /** Adaptive visual number (#1..N) based on visible reading order on the flyer */
+  displayNumber?: number;
 }
 
 export interface LeadProspect {

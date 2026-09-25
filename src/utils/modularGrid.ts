@@ -893,3 +893,72 @@ export function computeScaledPricesForMargin(
   };
 }
 
+/**
+ * Computes sequential, adaptive visual display numbers (#1, #2, #3, ...)
+ * for all visible slots on the flyer in natural reading order:
+ * 1. Front face: Top to bottom (gridRow 1..4), left to right (gridCol 1..4) -> #1 .. #N_front
+ * 2. Back face: Top to bottom (gridRow 1..4), left to right (gridCol 1..4) -> #(N_front + 1) .. #N_total
+ * (Subordinate slots covered by merged parents and USPS technical zone are excluded from commercial numbering).
+ */
+export function computeAdaptiveDisplayNumbers(slots: SlotState[]): SlotState[] {
+  const displayMap = new Map<number, number>();
+
+  const isFront = (s: SlotState) => s.side === 'FRONT' || (s.slotNumber <= 16 && s.side !== 'BACK');
+
+  // Filter visible commercial slots (not covered by merged parents and not USPS)
+  const visibleSlots = slots.filter(
+    (s) => !s.notes?.startsWith('Covered by') && s.format !== 'USPS' && s.slotNumber !== 32
+  );
+
+  const frontVisible = visibleSlots.filter(isFront);
+  const backVisible = visibleSlots.filter((s) => !isFront(s));
+
+  // Sort FRONT in natural reading order: row ASC, col ASC, then slotNumber ASC
+  frontVisible.sort((a, b) => {
+    const rowA = a.gridRow ?? 1;
+    const rowB = b.gridRow ?? 1;
+    if (rowA !== rowB) return rowA - rowB;
+    const colA = a.gridCol ?? 1;
+    const colB = b.gridCol ?? 1;
+    if (colA !== colB) return colA - colB;
+    return a.slotNumber - b.slotNumber;
+  });
+
+  frontVisible.forEach((slot, index) => {
+    displayMap.set(slot.slotNumber, index + 1);
+  });
+
+  const nextNumber = frontVisible.length + 1;
+
+  // Sort BACK in natural reading order: row ASC, col ASC, then slotNumber ASC
+  backVisible.sort((a, b) => {
+    const rowA = a.gridRow ?? 1;
+    const rowB = b.gridRow ?? 1;
+    if (rowA !== rowB) return rowA - rowB;
+    const colA = a.gridCol ?? 1;
+    const colB = b.gridCol ?? 1;
+    if (colA !== colB) return colA - colB;
+    return a.slotNumber - b.slotNumber;
+  });
+
+  backVisible.forEach((slot, index) => {
+    displayMap.set(slot.slotNumber, nextNumber + index);
+  });
+
+  return slots.map((s) => ({
+    ...s,
+    displayNumber: displayMap.get(s.slotNumber),
+  }));
+}
+
+/**
+ * Returns the adaptive visual display number for a slot, falling back to slotNumber
+ */
+export function getSlotDisplayNumber(slot: SlotState, allSlots?: SlotState[]): number {
+  if (slot.displayNumber !== undefined) return slot.displayNumber;
+  if (!allSlots || allSlots.length === 0) return slot.slotNumber;
+  const computed = computeAdaptiveDisplayNumbers(allSlots);
+  const match = computed.find((s) => s.slotNumber === slot.slotNumber);
+  return match?.displayNumber ?? slot.slotNumber;
+}
+

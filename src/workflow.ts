@@ -214,25 +214,21 @@ export function priceForReach(basePrice: number, households: number): number {
 export function scaleCampaignToReach(campaign: Campaign, households: number): Campaign {
   const unit = campaign.unitCostUsd ?? 0.6;
   const fixed = campaign.fixedCostUsd ?? 0;
-  const margin = Math.min(Math.max(campaign.targetMargin ?? 0.58, 0), 0.95);
-  const cost = households * unit + fixed;
-  const requiredRevenue = margin < 1 ? cost / (1 - margin) : cost;
-
-  const weightSum = SLOT_WEIGHTS.reduce((a, b) => a + b, 0) || 1;
+  const cost = Math.round(households * unit + fixed);
+  const revenue = campaign.slots.reduce((acc, s) => {
+    if (s.format === 'USPS' || s.slotNumber === 32 || s.notes?.includes('Covered by')) return acc;
+    return acc + (s.priceUsd || 0);
+  }, 0);
+  const margin = revenue > 0 ? (revenue - cost) / revenue : 0;
 
   return {
     ...campaign,
     totalTargetHouseholds: households,
-    slots: campaign.slots.map((s) => {
-      // Slot 32 USPS EDDM Indicia technical zone is not commercial
-      if (s.format === 'USPS' || s.slotNumber === 32) return { ...s, priceUsd: 0 };
-      // A paid slot keeps its price: that figure is a transaction, not an
-      // estimate, and a preview must not pretend otherwise.
-      if (s.status === 'PAID') return s;
-      const defaultWeight = s.format === 'LARGE' ? 1200 : s.format === 'MEDIUM' ? 650 : 350;
-      const weight = SLOT_WEIGHTS[s.slotNumber - 1] ?? defaultWeight;
-      return { ...s, priceUsd: Math.round((requiredRevenue * weight) / weightSum) };
-    }),
+    operatingCostEst: cost,
+    targetGrossRevenue: revenue,
+    targetMargin: margin,
+    netMarginEst: Math.max(0, revenue - cost),
+    slots: campaign.slots,
   };
 }
 

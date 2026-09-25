@@ -509,7 +509,8 @@
     "tab": {
       "routes": "Route engine",
       "sources": "Data sources",
-      "market": "Market prices"
+      "market": "Print & Direct Mail Costs",
+      "print": "Print & Direct Mail Costs"
     },
     "sourcesIntro": "Where the system gets data in this mode. The free ones cost nothing and are enough to practise the whole process; the paid ones are what a real campaign needs. Each says what it gives and what it does not, and can be tested here with 5 records.",
     "cost": {

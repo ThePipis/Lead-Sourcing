@@ -199,12 +199,6 @@ def _populate_campaign_computed(camp: Campaign, db: Optional[Session] = None) ->
         camp.covered_households = 0
         camp.selected_routes = 0
     camp.fixed_cost_usd = drop_fixed_cost(camp, db)
-    cost_row = (
-        db.query(CostSettings).filter(CostSettings.mode == (camp.mode or "DEMO")).first()
-        if db is not None
-        else None
-    )
-    camp.target_margin = cost_row.target_margin if cost_row else 0.58
     camp.operating_cost_est = drop_cost(camp, db)
     if db is not None:
         camp.curated_count = db.query(Household).filter(
@@ -213,6 +207,15 @@ def _populate_campaign_computed(camp: Campaign, db: Optional[Session] = None) ->
     camp.total_collected_usd = sum(s.amount_collected_usd or s.price_usd for s in paid_slots)
     camp.target_gross_revenue = sum(s.price_usd for s in camp.slots)
     camp.net_margin_est = max(0.0, camp.target_gross_revenue - camp.operating_cost_est)
+    if camp.target_gross_revenue > 0:
+        camp.target_margin = round((camp.target_gross_revenue - camp.operating_cost_est) / camp.target_gross_revenue, 4)
+    else:
+        cost_row = (
+            db.query(CostSettings).filter(CostSettings.mode == (camp.mode or "DEMO")).first()
+            if db is not None
+            else None
+        )
+        camp.target_margin = cost_row.target_margin if cost_row else 0.58
     camp.slots.sort(key=lambda s: s.slot_number)
     return camp
 
@@ -255,7 +258,6 @@ def create_campaign(req: CampaignCreate, db: Session = Depends(get_db)):
     db.add(camp)
     db.flush()
 
-    derived = prices_for_campaign(db, mode, camp.target_households or 0)
     for num, cat_name, side, stype, w, h, price, ticket, headline in INITIAL_SLOT_DEFS:
         s = Slot(
             campaign_id=camp.id,
@@ -266,7 +268,7 @@ def create_campaign(req: CampaignCreate, db: Session = Depends(get_db)):
             slot_type=stype,
             width_inches=w,
             height_inches=h,
-            price_usd=0.0 if num == 32 else derived.get(num, price_for(price, camp.target_households)),
+            price_usd=0.0 if num == 32 else price,
             avg_ticket_usd=ticket,
             offer_headline=headline,
             status="PAID" if num == 32 else "VACANT",
@@ -329,19 +331,7 @@ def update_campaign_status(
 
         if req.target_households is not None and req.target_households != camp.target_households:
             camp.target_households = req.target_households
-            # Nothing is sold yet, so every box re-prices — from the cost of the
-            # new drop, not from a rate card multiplied by the reach. At five
-            # households that multiplication gives fifty cents a box against a
-            # drop that still costs $428 in setup and delivery.
-            repriced = slot_prices(db, camp)
-            by_number = {d[0]: d[6] for d in INITIAL_SLOT_DEFS}
-            for slot in camp.slots:
-                price = repriced.get(slot.slot_number)
-                if price is None:
-                    base = by_number.get(slot.slot_number)
-                    price = price_for(base, camp.target_households) if base is not None else None
-                if price is not None:
-                    slot.price_usd = price
+            # Slot list prices remain fixed ($350/$650/$1200). Operating cost and margin % scale dynamically.
 
             # The persisted audience was cut to the old reach, so it no longer
             # describes this drop. Drop it and send the campaign back to the
@@ -380,6 +370,9 @@ def update_campaign_status(
             if camp.mailed_at is None:
                 camp.mailed_at = now
 
+    camp.operating_cost_est = drop_cost(camp, db)
+    camp.target_gross_revenue = sum(s.price_usd for s in camp.slots)
+    camp.net_margin_est = max(0.0, camp.target_gross_revenue - camp.operating_cost_est)
     db.commit()
     db.refresh(camp)
     return _populate_campaign_computed(camp, db)
@@ -507,7 +500,7 @@ def update_slot(campaign_id: str, slot_id: str, req: SlotUpdate, db: Session = D
     # Recalculate campaign financials dynamically
     all_slots = db.query(Slot).filter(Slot.campaign_id == camp.id).all()
     camp.target_gross_revenue = sum(s.price_usd for s in all_slots)
-    camp.operating_cost_est = 3000.0
+    camp.operating_cost_est = drop_cost(camp, db)
     camp.net_margin_est = max(0.0, camp.target_gross_revenue - camp.operating_cost_est)
     camp.total_collected_usd = sum(s.price_usd for s in all_slots if s.status == "PAID")
 
@@ -602,6 +595,7 @@ def batch_update_slots(campaign_id: str, updates: List[dict] = Body(...), db: Se
 
     all_slots = db.query(Slot).filter(Slot.campaign_id == camp.id).all()
     camp.target_gross_revenue = sum(s.price_usd for s in all_slots)
+    camp.operating_cost_est = drop_cost(camp, db)
     camp.net_margin_est = max(0.0, camp.target_gross_revenue - camp.operating_cost_est)
     camp.total_collected_usd = sum(s.price_usd for s in all_slots if s.status == "PAID")
     paid_count = len([s for s in all_slots if s.status == "PAID" and s.slot_number != 32])

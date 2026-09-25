@@ -126,7 +126,6 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
 
   const commit = (nextName: string, nextHeadline: string) => {
     window.clearTimeout(timer.current);
-    if (isPaid) return;
     if (nextName === saved.current.name && nextHeadline === saved.current.headline) return;
     if (!nextName.trim() && !saved.current.name) return; // nothing to name yet
     saved.current = { name: nextName, headline: nextHeadline };
@@ -374,7 +373,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {hasBusiness || showManualForm ? (
+        {isPaid || hasBusiness || showManualForm ? (
           <>
             {/* ------------------------------------------------- the ad itself */}
             <section className="space-y-2.5 border-b border-border px-3.5 py-3">
@@ -387,7 +386,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                 <div className="flex items-start justify-between gap-2 border border-clear/50 bg-clear/10 px-3 py-2 text-xs leading-relaxed text-clear">
                   <div className="flex items-start gap-2">
                     <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>{t('canvas:modal.paidNotice')}</span>
+                    <span>Espacio pagado y confirmado. Puedes personalizar el nombre comercial y titular de la oferta para la tirada.</span>
                   </div>
                   <button
                     type="button"
@@ -407,14 +406,13 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                   id="inspector-business-name"
                   type="text"
                   value={name}
-                  readOnly={isPaid}
-                  placeholder={t('canvas:modal.businessNamePlaceholder')}
+                  placeholder={niche.name || t('canvas:modal.businessNamePlaceholder')}
                   onChange={(e) => {
                     setName(e.target.value);
                     schedule(e.target.value, headline);
                   }}
                   onBlur={() => commit(name, headline)}
-                  className="mt-1 w-full border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-live focus:outline-none read-only:cursor-default read-only:text-ink-dim"
+                  className="mt-1 w-full border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:border-live focus:outline-none"
                 />
               </label>
 
@@ -424,14 +422,13 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                   id="inspector-headline"
                   rows={2}
                   value={headline}
-                  readOnly={isPaid}
-                  placeholder={t('canvas:modal.headlinePlaceholder')}
+                  placeholder={niche.defaultHeadline || t('canvas:modal.headlinePlaceholder')}
                   onChange={(e) => {
                     setHeadline(e.target.value);
                     schedule(name, e.target.value);
                   }}
                   onBlur={() => commit(name, headline)}
-                  className="mt-1 w-full resize-none border border-border bg-background px-2.5 py-1.5 text-xs leading-relaxed text-foreground focus:border-live focus:outline-none read-only:cursor-default read-only:text-ink-dim"
+                  className="mt-1 w-full resize-none border border-border bg-background px-2.5 py-1.5 text-xs leading-relaxed text-foreground focus:border-live focus:outline-none"
                 />
               </label>
 
@@ -477,7 +474,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                 </select>
               </label>
 
-              {showManualForm && !hasBusiness && (
+              {showManualForm && !hasBusiness && !isPaid && (
                 <button
                   type="button"
                   onClick={() => setShowManualForm(false)}
@@ -589,7 +586,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
             </section>
 
             {/* Alternativas de prospección colapsables cuando ya hay comercio asignado */}
-            {hasBusiness && leads.length > 0 && (
+            {!isPaid && hasBusiness && leads.length > 0 && (
               <section className="px-3.5 py-2.5 border-b border-border">
                 <button
                   type="button"

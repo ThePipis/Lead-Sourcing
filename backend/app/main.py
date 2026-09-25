@@ -43,6 +43,10 @@ def _add_missing_columns() -> None:
             "paid_at": "DATETIME",
             "amount_collected_usd": "FLOAT",
             "business_address": "VARCHAR(255)",
+            "notes": "TEXT",
+            "format": "VARCHAR(16) DEFAULT 'SMALL'",
+            "row_span": "INTEGER DEFAULT 1",
+            "col_span": "INTEGER DEFAULT 1",
         },
     }
 

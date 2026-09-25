@@ -78,6 +78,10 @@ class Slot(Base):
     paid_at = Column(DateTime, nullable=True)
     amount_collected_usd = Column(Float, nullable=True)
     scan_count = Column(Integer, default=0)
+    notes = Column(Text, nullable=True)
+    format = Column(String(16), nullable=True, default="SMALL")
+    row_span = Column(Integer, nullable=True, default=1)
+    col_span = Column(Integer, nullable=True, default=1)
 
     campaign = relationship("Campaign", back_populates="slots")
 

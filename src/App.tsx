@@ -15,7 +15,7 @@ import { PostalExportView } from './components/PostalExportView.tsx';
 import { ArchitectureViewer } from './components/ArchitectureViewer.tsx';
 import { GuidedTour, FILE_TOUR, FORM_TOUR, hasSeenTour } from './components/GuidedTour.tsx';
 import { CLOSED_CATEGORIES } from './data/categories.ts';
-import { mergeModularSlot, splitModularSlot } from './utils/modularGrid.ts';
+import { mergeModularSlot, splitModularSlot, swapModularSlots } from './utils/modularGrid.ts';
 import {
   Campaign,
   SlotState,
@@ -659,49 +659,12 @@ export default function App() {
 
   const handleSwapSlots = async (sourceSlotNumber: number, targetSlotNumber: number) => {
     if (!campaign || sourceSlotNumber === targetSlotNumber) return;
-    const source = campaign.slots.find((s) => s.slotNumber === sourceSlotNumber);
-    const target = campaign.slots.find((s) => s.slotNumber === targetSlotNumber);
-    if (!source || !target) return;
-
     setIsSaving(true);
-    // Everything that belongs to the advertiser travels; what belongs to the
-    // paper stays. The category is the advertiser's — moving a dentist into the
-    // hero makes the hero the dentistry box — while size and price stay with the
-    // position, which is what the printer and the price list are measured on.
-    // Without the category the two vacant boxes exchange nothing visible, which
-    // reads as a broken drag.
-    const carry = (s: SlotState) => ({
-      categoryId: s.categoryId,
-      categoryName:
-        CLOSED_CATEGORIES.find((c) => c.id === s.categoryId)?.name ?? String(s.categoryId),
-      businessName: s.businessName,
-      contactPerson: s.contactPerson,
-      phone: s.phone,
-      email: s.email,
-      website: s.website,
-      status: s.status,
-      logoUrl: s.logoUrl,
-      offerHeadline: s.offerHeadline,
-      avgTicketUsd: s.avgTicketUsd,
-      paymentRef: s.paymentRef,
-      scanCount: s.scanCount,
-    });
-    const sourceData = carry(source);
-    const targetData = carry(target);
-
-    patchSlots(campaign.id, (slots) =>
-      slots.map((s) => {
-        if (s.slotNumber === targetSlotNumber) return { ...s, ...sourceData };
-        if (s.slotNumber === sourceSlotNumber) return { ...s, ...targetData };
-        return s;
-      }),
-    );
+    const updatedSlots = swapModularSlots(sourceSlotNumber, targetSlotNumber, campaign.slots);
+    patchSlots(campaign.id, () => updatedSlots);
 
     try {
-      await batchUpdateCampaignSlots(campaign.id, [
-        { slotNumber: targetSlotNumber, ...sourceData },
-        { slotNumber: sourceSlotNumber, ...targetData },
-      ]);
+      await batchUpdateCampaignSlots(campaign.id, updatedSlots);
     } catch (err) {
       console.error('Failed to persist swapped slots to SQLite:', err);
     } finally {

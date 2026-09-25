@@ -98,10 +98,30 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
     }
 
     if (existing) {
-      const format: SlotFormat =
-        existing.format ||
-        (existing.rowSpan === 2 && existing.colSpan === 2 ? 'LARGE' : existing.rowSpan === 2 ? 'MEDIUM' : 'SMALL');
-      const basePrice = MODULAR_PRICES[format] || (format === 'LARGE' ? 1200 : format === 'MEDIUM' ? 650 : 350);
+      // Check if any partner slot mentions being covered by this slot
+      const coversAny = existingSlots.filter((s) => s.notes?.includes(`#${def.slotNumber}`));
+      const isCoveringLarge =
+        coversAny.length >= 2 ||
+        coversAny.some(
+          (s) =>
+            s.notes?.toLowerCase().includes('large') ||
+            s.notes?.toLowerCase().includes('grande'),
+        );
+
+      let format: SlotFormat = existing.format;
+      if (!format || format === 'SMALL') {
+        if (
+          (existing.rowSpan === 2 && existing.colSpan === 2) ||
+          isCoveringLarge ||
+          existing.priceUsd === 1200
+        ) {
+          format = 'LARGE';
+        } else if (existing.rowSpan === 2 || coversAny.length === 1 || existing.priceUsd === 650) {
+          format = 'MEDIUM';
+        } else {
+          format = 'SMALL';
+        }
+      }
 
       const rowSpan = format === 'LARGE' || format === 'MEDIUM' ? 2 : 1;
       const colSpan = format === 'LARGE' ? 2 : 1;
@@ -178,31 +198,43 @@ export function canMergeLarge(slot: SlotState, slots: SlotState[]): boolean {
   if (!slot.gridRow || !slot.gridCol) return false;
   if (slot.notes?.startsWith('Covered by')) return false;
 
-  // Origin can be (row 1, col 1), (row 1, col 3), (row 3, col 1), (row 3, col 3)
-  const validRows = [1, 3];
-  const validCols = [1, 3];
-  if (!validRows.includes(slot.gridRow) || !validCols.includes(slot.gridCol)) return false;
+  const originRow = slot.gridRow <= 2 ? 1 : 3;
+  const originCol = slot.gridCol <= 2 ? 1 : 3;
 
-  const r = slot.gridRow;
-  const c = slot.gridCol;
+  const quadrantSlots = slots.filter(
+    (s) =>
+      s.side === slot.side &&
+      ((s.gridRow ?? 1) === originRow || (s.gridRow ?? 1) === originRow + 1) &&
+      ((s.gridCol ?? 1) === originCol || (s.gridCol ?? 1) === originCol + 1)
+  );
 
-  // Check 4 cells in the 2x2 box: (r, c), (r+1, c), (r, c+1), (r+1, c+1)
-  const required = [
-    { row: r, col: c },
-    { row: r + 1, col: c },
-    { row: r, col: c + 1 },
-    { row: r + 1, col: c + 1 },
-  ];
+  if (quadrantSlots.length < 4) return false;
 
-  for (const req of required) {
-    const target = slots.find((s) => s.side === slot.side && s.gridRow === req.row && s.gridCol === req.col);
-    if (!target) return false;
-    if (target.format === 'USPS') return false;
-    if (target.slotNumber !== slot.slotNumber) {
-      if (target.status === 'PAID') return false;
-      if (target.format === 'MEDIUM' || target.format === 'LARGE' || target.notes?.startsWith('Covered by')) return false;
-    }
+  // Cannot contain USPS technical zone
+  if (quadrantSlots.some((s) => s.format === 'USPS' || s.slotNumber === 32)) {
+    return false;
   }
+
+  // Cannot already be Large
+  if (quadrantSlots.some((s) => s.format === 'LARGE' || (s.rowSpan === 2 && s.colSpan === 2))) {
+    return false;
+  }
+
+  // Cannot merge if any other slot is PAID
+  if (quadrantSlots.some((s) => s.status === 'PAID')) {
+    return false;
+  }
+
+  // At most one distinct active client in the quadrant
+  const activeBusinesses = new Set(
+    quadrantSlots
+      .filter((s) => s.businessName && s.status !== 'VACANT')
+      .map((s) => s.businessName?.trim().toLowerCase())
+  );
+  if (activeBusinesses.size > 1) {
+    return false;
+  }
+
   return true;
 }
 
@@ -237,6 +269,7 @@ export function mergeModularSlot(
           rowSpan: 2,
           colSpan: 1,
           priceUsd: MODULAR_PRICES.MEDIUM,
+          notes: undefined,
         };
       }
       if (partner && s.slotNumber === partner.slotNumber) {
@@ -253,8 +286,8 @@ export function mergeModularSlot(
   }
 
   if (targetFormat === 'LARGE') {
-    const originRow = row % 2 === 1 ? row : row - 1;
-    const originCol = col % 2 === 1 ? col : col - 1;
+    const originRow = row <= 2 ? 1 : 3;
+    const originCol = col <= 2 ? 1 : 3;
 
     const coveredCoords = [
       { r: originRow, c: originCol },
@@ -263,24 +296,65 @@ export function mergeModularSlot(
       { r: originRow + 1, c: originCol + 1 },
     ];
 
+    // Find the top-left slot in this quadrant to serve as the anchor for the 2x2 grid
+    const anchorSlot = normalized.find(
+      (s) => s.side === side && s.gridRow === originRow && s.gridCol === originCol
+    ) ?? primary;
+
+    // Pick advertiser data from whichever slot had active business data
+    const slotWithData =
+      primary.businessName && primary.status !== 'VACANT'
+        ? primary
+        : anchorSlot.businessName && anchorSlot.status !== 'VACANT'
+        ? anchorSlot
+        : normalized.find(
+            (s) =>
+              s.side === side &&
+              coveredCoords.some((c) => c.r === s.gridRow && c.c === s.gridCol) &&
+              s.businessName &&
+              s.status !== 'VACANT'
+          ) ?? primary;
+
+    const mainSlotNumber = anchorSlot.slotNumber;
+
     return normalized.map((s) => {
-      if (s.slotNumber === primarySlotNum) {
+      if (s.slotNumber === mainSlotNumber) {
         return {
           ...s,
+          categoryId: slotWithData.categoryId,
+          categoryName: slotWithData.categoryName,
+          businessName: slotWithData.businessName,
+          contactPerson: slotWithData.contactPerson,
+          phone: slotWithData.phone,
+          email: slotWithData.email,
+          website: slotWithData.website,
+          status: slotWithData.status,
+          logoUrl: slotWithData.logoUrl,
+          offerHeadline: slotWithData.offerHeadline,
+          avgTicketUsd: slotWithData.avgTicketUsd,
+          paymentRef: slotWithData.paymentRef,
+          paidAt: slotWithData.paidAt,
+          amountCollectedUsd: slotWithData.amountCollectedUsd,
+          scanCount: slotWithData.scanCount,
           format: 'LARGE',
           rowSpan: 2,
           colSpan: 2,
           gridRow: originRow,
           gridCol: originCol,
           priceUsd: MODULAR_PRICES.LARGE,
+          notes: undefined,
         };
       }
       const isCovered = coveredCoords.some((coord) => s.side === side && s.gridRow === coord.r && s.gridCol === coord.c);
-      if (isCovered && s.slotNumber !== primarySlotNum) {
+      if (isCovered && s.slotNumber !== mainSlotNumber) {
         return {
           ...s,
+          format: 'LARGE',
           status: 'VACANT',
-          notes: `Covered by large slot #${primarySlotNum}`,
+          businessName: undefined,
+          offerHeadline: undefined,
+          phone: undefined,
+          notes: `Covered by large slot #${mainSlotNumber}`,
         };
       }
       return s;
@@ -301,6 +375,7 @@ export function splitModularSlot(primarySlotNum: number, slots: SlotState[]): Sl
   return normalized.map((s) => {
     if (s.slotNumber === primarySlotNum) {
       const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === primarySlotNum);
+      const cat = CLOSED_CATEGORIES.find((c) => c.id === def?.categoryId);
       return {
         ...s,
         format: 'SMALL',
@@ -309,10 +384,12 @@ export function splitModularSlot(primarySlotNum: number, slots: SlotState[]): Sl
         gridRow: def?.gridRow ?? s.gridRow,
         gridCol: def?.gridCol ?? s.gridCol,
         priceUsd: MODULAR_PRICES.SMALL,
+        notes: undefined,
       };
     }
-    if (s.notes?.includes(`Covered by`) && s.notes?.includes(`#${primarySlotNum}`)) {
+    if (s.notes?.includes(`Covered by`) && (s.notes?.includes(`#${primarySlotNum}`) || s.notes?.includes(`slot #${primarySlotNum}`))) {
       const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === s.slotNumber);
+      const cat = CLOSED_CATEGORIES.find((c) => c.id === def?.categoryId);
       return {
         ...s,
         format: 'SMALL',
@@ -322,11 +399,353 @@ export function splitModularSlot(primarySlotNum: number, slots: SlotState[]): Sl
         gridCol: def?.gridCol ?? s.gridCol,
         status: 'VACANT',
         priceUsd: MODULAR_PRICES.SMALL,
+        categoryName: cat?.name ?? s.categoryName,
+        offerHeadline: cat?.defaultHeadline ?? s.offerHeadline,
         notes: undefined,
       };
     }
     return s;
   });
+}
+
+/**
+ * Helper to copy advertiser fields from one slot to another
+ */
+function copyAdvertiserFields(source: SlotState, destination: SlotState): SlotState {
+  return {
+    ...destination,
+    categoryId: source.categoryId,
+    categoryName: source.categoryName,
+    businessName: source.businessName,
+    contactPerson: source.contactPerson,
+    phone: source.phone,
+    email: source.email,
+    website: source.website,
+    status: source.status,
+    logoUrl: source.logoUrl,
+    offerHeadline: source.offerHeadline,
+    avgTicketUsd: source.avgTicketUsd,
+    paymentRef: source.paymentRef,
+    paidAt: source.paidAt,
+    amountCollectedUsd: source.amountCollectedUsd,
+    scanCount: source.scanCount,
+  };
+}
+
+/**
+ * Swaps two modular slots or modular groups (Small, Medium, Large) in the grid,
+ * swapping formats and advertiser data across columns or quadrants.
+ */
+export function swapModularSlots(
+  sourceSlotNum: number,
+  targetSlotNum: number,
+  slots: SlotState[]
+): SlotState[] {
+  if (sourceSlotNum === targetSlotNum) return slots;
+  const normalized = normalizeModularSlots(slots);
+
+  const rawSource = normalized.find((s) => s.slotNumber === sourceSlotNum);
+  const rawTarget = normalized.find((s) => s.slotNumber === targetSlotNum);
+  if (!rawSource || !rawTarget) return normalized;
+
+  // Resolve primary slot if either source or target is a covered slot
+  const resolvePrimary = (s: SlotState): SlotState => {
+    if (s.notes?.includes('Covered by')) {
+      const match = s.notes.match(/#(\d+)/);
+      if (match) {
+        const parentNum = parseInt(match[1], 10);
+        const parent = normalized.find((item) => item.slotNumber === parentNum);
+        if (parent) return parent;
+      }
+    }
+    return s;
+  };
+
+  const source = resolvePrimary(rawSource);
+  const target = resolvePrimary(rawTarget);
+  if (source.slotNumber === target.slotNumber) return normalized;
+
+  // Never allow moving or overwriting USPS technical zone (slot 32)
+  if (source.format === 'USPS' || target.format === 'USPS' || source.slotNumber === 32 || target.slotNumber === 32) {
+    return normalized;
+  }
+
+  const srcFmt = source.format || 'SMALL';
+  const tgtFmt = target.format || 'SMALL';
+
+  const getColSlots = (s: SlotState) => {
+    const rowBase = (s.gridRow ?? 1) <= 2 ? 1 : 3;
+    const col = s.gridCol ?? 1;
+    const top = normalized.find((item) => item.side === s.side && item.gridCol === col && item.gridRow === rowBase);
+    const bottom = normalized.find((item) => item.side === s.side && item.gridCol === col && item.gridRow === rowBase + 1);
+    return { top, bottom, col, rowBase, side: s.side };
+  };
+
+  // CASE 1: Both are SMALL (1x1)
+  if (srcFmt === 'SMALL' && tgtFmt === 'SMALL') {
+    const srcData = copyAdvertiserFields(source, target);
+    const tgtData = copyAdvertiserFields(target, source);
+    return normalized.map((s) => {
+      if (s.slotNumber === source.slotNumber) return tgtData;
+      if (s.slotNumber === target.slotNumber) return srcData;
+      return s;
+    });
+  }
+
+  // CASE 2: Both are LARGE (2x2)
+  if (srcFmt === 'LARGE' && tgtFmt === 'LARGE') {
+    const srcData = copyAdvertiserFields(source, target);
+    const tgtData = copyAdvertiserFields(target, source);
+    return normalized.map((s) => {
+      if (s.slotNumber === source.slotNumber) return tgtData;
+      if (s.slotNumber === target.slotNumber) return srcData;
+      return s;
+    });
+  }
+
+  // CASE 3: One is LARGE (2x2) and the other is SMALL or MEDIUM
+  if (srcFmt === 'LARGE' || tgtFmt === 'LARGE') {
+    const lgSlot = srcFmt === 'LARGE' ? source : target;
+    const otherSlot = srcFmt === 'LARGE' ? target : source;
+
+    const rowBaseA = (lgSlot.gridRow ?? 1) <= 2 ? 1 : 3;
+    const colBaseA = (lgSlot.gridCol ?? 1) <= 2 ? 1 : 3;
+    const sideA = lgSlot.side;
+
+    const rowBaseB = (otherSlot.gridRow ?? 1) <= 2 ? 1 : 3;
+    const colBaseB = (otherSlot.gridCol ?? 1) <= 2 ? 1 : 3;
+    const sideB = otherSlot.side;
+
+    // Disallow if targeting same quadrant
+    if (sideA === sideB && rowBaseA === rowBaseB && colBaseA === colBaseB) {
+      return normalized;
+    }
+
+    const otherQuad = normalized.filter(
+      (item) =>
+        item.side === sideB &&
+        ((item.gridRow ?? 1) === rowBaseB || (item.gridRow ?? 1) === rowBaseB + 1) &&
+        ((item.gridCol ?? 1) === colBaseB || (item.gridCol ?? 1) === colBaseB + 1)
+    );
+
+    // Disallow if other quadrant contains USPS zone
+    if (otherQuad.some((s) => s.format === 'USPS' || s.slotNumber === 32)) {
+      return normalized;
+    }
+
+    // Cells in Quadrant A (where Large slot currently is)
+    const cellA_00 = normalized.find((s) => s.side === sideA && s.gridRow === rowBaseA && s.gridCol === colBaseA);
+    const cellA_10 = normalized.find((s) => s.side === sideA && s.gridRow === rowBaseA + 1 && s.gridCol === colBaseA);
+    const cellA_01 = normalized.find((s) => s.side === sideA && s.gridRow === rowBaseA && s.gridCol === colBaseA + 1);
+    const cellA_11 = normalized.find((s) => s.side === sideA && s.gridRow === rowBaseA + 1 && s.gridCol === colBaseA + 1);
+
+    // Cells in Quadrant B (where other slot currently is)
+    const cellB_00 = normalized.find((s) => s.side === sideB && s.gridRow === rowBaseB && s.gridCol === colBaseB);
+    const cellB_10 = normalized.find((s) => s.side === sideB && s.gridRow === rowBaseB + 1 && s.gridCol === colBaseB);
+    const cellB_01 = normalized.find((s) => s.side === sideB && s.gridRow === rowBaseB && s.gridCol === colBaseB + 1);
+    const cellB_11 = normalized.find((s) => s.side === sideB && s.gridRow === rowBaseB + 1 && s.gridCol === colBaseB + 1);
+
+    if (!cellA_00 || !cellA_10 || !cellA_01 || !cellA_11 || !cellB_00 || !cellB_10 || !cellB_01 || !cellB_11) {
+      return normalized;
+    }
+
+    const col0BIsMed = cellB_00.format === 'MEDIUM';
+    const col1BIsMed = cellB_01.format === 'MEDIUM';
+
+    // Check if otherSlot was in column 1 of Quadrant B
+    const otherIsInCol1 = otherSlot.gridCol === colBaseB + 1;
+
+    // The column containing otherSlot maps to Column 0 of Quadrant A (anchor slot cellA_00),
+    // and the other column of Quadrant B maps to Column 1 of Quadrant A
+    const srcColForA0 = otherIsInCol1 ? { top: cellB_01, bot: cellB_11, isMed: col1BIsMed } : { top: cellB_00, bot: cellB_10, isMed: col0BIsMed };
+    const srcColForA1 = otherIsInCol1 ? { top: cellB_00, bot: cellB_10, isMed: col0BIsMed } : { top: cellB_01, bot: cellB_11, isMed: col1BIsMed };
+
+    const updates = new Map<number, SlotState>();
+
+    // 1. Quadrant B gets the LARGE slot anchored at cellB_00
+    const lgAdvertiser = copyAdvertiserFields(lgSlot, cellB_00);
+    updates.set(cellB_00.slotNumber, {
+      ...lgAdvertiser,
+      format: 'LARGE',
+      rowSpan: 2,
+      colSpan: 2,
+      priceUsd: lgSlot.priceUsd || MODULAR_PRICES.LARGE,
+      notes: undefined,
+    });
+
+    const lgCoveredNotes = `Covered by large slot #${cellB_00.slotNumber}`;
+    [cellB_10, cellB_01, cellB_11].forEach((cov) => {
+      updates.set(cov.slotNumber, {
+        ...cov,
+        format: 'LARGE',
+        status: 'VACANT',
+        businessName: undefined,
+        offerHeadline: undefined,
+        phone: undefined,
+        notes: lgCoveredNotes,
+      });
+    });
+
+    // 2. Column 0 of Quadrant A receives srcColForA0
+    if (srcColForA0.isMed) {
+      const medData = copyAdvertiserFields(srcColForA0.top, cellA_00);
+      updates.set(cellA_00.slotNumber, {
+        ...medData,
+        format: 'MEDIUM',
+        rowSpan: 2,
+        colSpan: 1,
+        priceUsd: srcColForA0.top.priceUsd || MODULAR_PRICES.MEDIUM,
+        notes: undefined,
+      });
+      updates.set(cellA_10.slotNumber, {
+        ...cellA_10,
+        format: 'MEDIUM',
+        status: 'VACANT',
+        businessName: undefined,
+        offerHeadline: undefined,
+        phone: undefined,
+        notes: `Covered by slot #${cellA_00.slotNumber}`,
+      });
+    } else {
+      const smTopData = copyAdvertiserFields(srcColForA0.top, cellA_00);
+      const smBotData = copyAdvertiserFields(srcColForA0.bot, cellA_10);
+      updates.set(cellA_00.slotNumber, {
+        ...smTopData,
+        format: 'SMALL',
+        rowSpan: 1,
+        colSpan: 1,
+        priceUsd: srcColForA0.top.priceUsd || MODULAR_PRICES.SMALL,
+        notes: undefined,
+      });
+      updates.set(cellA_10.slotNumber, {
+        ...smBotData,
+        format: 'SMALL',
+        rowSpan: 1,
+        colSpan: 1,
+        priceUsd: srcColForA0.bot.priceUsd || MODULAR_PRICES.SMALL,
+        notes: undefined,
+      });
+    }
+
+    // 3. Column 1 of Quadrant A receives srcColForA1
+    if (srcColForA1.isMed) {
+      const medData = copyAdvertiserFields(srcColForA1.top, cellA_01);
+      updates.set(cellA_01.slotNumber, {
+        ...medData,
+        format: 'MEDIUM',
+        rowSpan: 2,
+        colSpan: 1,
+        priceUsd: srcColForA1.top.priceUsd || MODULAR_PRICES.MEDIUM,
+        notes: undefined,
+      });
+      updates.set(cellA_11.slotNumber, {
+        ...cellA_11,
+        format: 'MEDIUM',
+        status: 'VACANT',
+        businessName: undefined,
+        offerHeadline: undefined,
+        phone: undefined,
+        notes: `Covered by slot #${cellA_01.slotNumber}`,
+      });
+    } else {
+      const smTopData = copyAdvertiserFields(srcColForA1.top, cellA_01);
+      const smBotData = copyAdvertiserFields(srcColForA1.bot, cellA_11);
+      updates.set(cellA_01.slotNumber, {
+        ...smTopData,
+        format: 'SMALL',
+        rowSpan: 1,
+        colSpan: 1,
+        priceUsd: srcColForA1.top.priceUsd || MODULAR_PRICES.SMALL,
+        notes: undefined,
+      });
+      updates.set(cellA_11.slotNumber, {
+        ...smBotData,
+        format: 'SMALL',
+        rowSpan: 1,
+        colSpan: 1,
+        priceUsd: srcColForA1.bot.priceUsd || MODULAR_PRICES.SMALL,
+        notes: undefined,
+      });
+    }
+
+    return normalized.map((s) => updates.get(s.slotNumber) || s);
+  }
+
+  // CASE 4: Both are MEDIUM (1x2)
+  if (srcFmt === 'MEDIUM' && tgtFmt === 'MEDIUM') {
+    const srcData = copyAdvertiserFields(source, target);
+    const tgtData = copyAdvertiserFields(target, source);
+    return normalized.map((s) => {
+      if (s.slotNumber === source.slotNumber) return { ...tgtData, priceUsd: source.priceUsd || MODULAR_PRICES.MEDIUM };
+      if (s.slotNumber === target.slotNumber) return { ...srcData, priceUsd: target.priceUsd || MODULAR_PRICES.MEDIUM };
+      return s;
+    });
+  }
+
+  // CASE 5: One is MEDIUM (1x2) and the other is SMALL (1x1)
+  if (srcFmt === 'MEDIUM' || tgtFmt === 'MEDIUM') {
+    const medSlot = srcFmt === 'MEDIUM' ? source : target;
+    const smSlot = srcFmt === 'MEDIUM' ? target : source;
+
+    const medCol = getColSlots(medSlot);
+    const smCol = getColSlots(smSlot);
+
+    if (!medCol.top || !medCol.bottom || !smCol.top || !smCol.bottom) return normalized;
+    if (smCol.top.format === 'USPS' || smCol.bottom.format === 'USPS' || smCol.top.slotNumber === 32 || smCol.bottom.slotNumber === 32) {
+      return normalized;
+    }
+
+    const medAdvertiser = copyAdvertiserFields(medSlot, smCol.top);
+    const smTopAdvertiser = copyAdvertiserFields(smCol.top, medCol.top);
+    const smBottomAdvertiser = copyAdvertiserFields(smCol.bottom, medCol.bottom);
+
+    return normalized.map((s) => {
+      if (s.slotNumber === smCol.top?.slotNumber) {
+        return {
+          ...medAdvertiser,
+          format: 'MEDIUM',
+          rowSpan: 2,
+          colSpan: 1,
+          priceUsd: medSlot.priceUsd || MODULAR_PRICES.MEDIUM,
+          notes: undefined,
+        };
+      }
+      if (s.slotNumber === smCol.bottom?.slotNumber) {
+        return {
+          ...s,
+          format: 'MEDIUM',
+          status: 'VACANT',
+          businessName: undefined,
+          offerHeadline: undefined,
+          phone: undefined,
+          notes: `Covered by slot #${smCol.top?.slotNumber}`,
+        };
+      }
+      if (s.slotNumber === medCol.top?.slotNumber) {
+        return {
+          ...smTopAdvertiser,
+          format: 'SMALL',
+          rowSpan: 1,
+          colSpan: 1,
+          priceUsd: MODULAR_PRICES.SMALL,
+          notes: undefined,
+        };
+      }
+      if (s.slotNumber === medCol.bottom?.slotNumber) {
+        return {
+          ...smBottomAdvertiser,
+          format: 'SMALL',
+          rowSpan: 1,
+          colSpan: 1,
+          priceUsd: MODULAR_PRICES.SMALL,
+          notes: undefined,
+        };
+      }
+      return s;
+    });
+  }
+
+  return normalized;
 }
 
 /**

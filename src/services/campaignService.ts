@@ -11,6 +11,35 @@ export function mapBackendSlotToFrontend(raw: any): SlotState {
   const slotNum = raw.slot_number ?? raw.slotNumber;
   const catDef = CLOSED_CATEGORIES.find((c) => c.id === slotNum);
 
+  const rawFormat = (raw.format || raw.slot_type || raw.slotType || '').toString().toUpperCase();
+  const price = raw.price_usd ?? raw.priceUsd ?? (catDef ? catDef.priceUsd : 497);
+
+  let inferredFormat: SlotFormat = 'SMALL';
+  if (slotNum === 32 || rawFormat === 'USPS') {
+    inferredFormat = 'USPS';
+  } else if (
+    rawFormat === 'LARGE' ||
+    (raw.row_span === 2 && raw.col_span === 2) ||
+    (raw.rowSpan === 2 && raw.colSpan === 2) ||
+    price === 1200
+  ) {
+    inferredFormat = 'LARGE';
+  } else if (
+    rawFormat === 'MEDIUM' ||
+    raw.row_span === 2 ||
+    raw.rowSpan === 2 ||
+    price === 650
+  ) {
+    inferredFormat = 'MEDIUM';
+  } else if (raw.format) {
+    inferredFormat = raw.format as SlotFormat;
+  }
+
+  const rowSpan =
+    raw.row_span ?? raw.rowSpan ?? (inferredFormat === 'LARGE' || inferredFormat === 'MEDIUM' ? 2 : 1);
+  const colSpan =
+    raw.col_span ?? raw.colSpan ?? (inferredFormat === 'LARGE' ? 2 : 1);
+
   return {
     slotNumber: slotNum,
     categoryId: raw.category_id ?? raw.categoryId ?? slotNum,
@@ -22,7 +51,7 @@ export function mapBackendSlotToFrontend(raw: any): SlotState {
     website: raw.website ?? '',
     businessAddress: raw.business_address ?? raw.businessAddress ?? '',
     status: (raw.status as SlotStatus) || 'VACANT',
-    priceUsd: raw.price_usd ?? raw.priceUsd ?? (catDef ? catDef.priceUsd : 497),
+    priceUsd: price,
     avgTicketUsd: raw.avg_ticket_usd ?? raw.avgTicketUsd ?? (catDef ? catDef.avgTicketUsd : 450),
     logoUrl: raw.logo_url ?? raw.logoUrl ?? '',
     offerHeadline:
@@ -34,12 +63,12 @@ export function mapBackendSlotToFrontend(raw: any): SlotState {
     paidAt: raw.paid_at ?? raw.paidAt ?? undefined,
     amountCollectedUsd: raw.amount_collected_usd ?? raw.amountCollectedUsd ?? undefined,
     notes: raw.notes ?? undefined,
-    format: raw.format ?? undefined,
+    format: inferredFormat,
     side: raw.side ?? undefined,
     gridRow: raw.grid_row ?? raw.gridRow ?? undefined,
     gridCol: raw.grid_col ?? raw.gridCol ?? undefined,
-    rowSpan: raw.row_span ?? raw.rowSpan ?? undefined,
-    colSpan: raw.col_span ?? raw.colSpan ?? undefined,
+    rowSpan,
+    colSpan,
     reservedAt: raw.reserved_at ?? raw.reservedAt ?? undefined,
     reservationExpiresAt: raw.reservation_expires_at ?? raw.reservationExpiresAt ?? undefined,
   };
@@ -69,7 +98,10 @@ export function mapFrontendSlotToBackend(data: Partial<SlotState>): Record<strin
   if (data.priceUsd !== undefined) payload.price_usd = data.priceUsd;
   if (data.avgTicketUsd !== undefined) payload.avg_ticket_usd = data.avgTicketUsd;
   if (data.notes !== undefined) payload.notes = data.notes;
-  if (data.format !== undefined) payload.format = data.format;
+  if (data.format !== undefined) {
+    payload.format = data.format;
+    payload.slot_type = data.format;
+  }
   if (data.side !== undefined) payload.side = data.side;
   if (data.gridRow !== undefined) payload.grid_row = data.gridRow;
   if (data.gridCol !== undefined) payload.grid_col = data.gridCol;

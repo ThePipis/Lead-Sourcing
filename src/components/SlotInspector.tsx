@@ -437,19 +437,30 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                   }}
                   className="mt-1 w-full border border-border bg-background px-2 py-2 text-xs text-foreground focus:border-live focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {slots.map((s) => (
-                    <option key={s.slotNumber} value={s.slotNumber}>
-                      {t('canvas:modal.moveToOption', {
-                        id: s.slotNumber,
-                        side:
-                          (CLOSED_CATEGORIES.find((c) => c.id === s.slotNumber)?.side ?? 'FRONT') ===
-                          'FRONT'
-                            ? t('canvas:ruler.frontTab')
-                            : t('canvas:ruler.backTab'),
-                        business: s.businessName || t('canvas:modal.moveToEmpty'),
-                      })}
-                    </option>
-                  ))}
+                  {slots
+                    .filter((s) => !s.notes?.startsWith('Covered by') && s.format !== 'USPS')
+                    .map((s) => {
+                      const fmtLabel =
+                        s.format === 'LARGE'
+                          ? ' [Grande 2×2]'
+                          : s.format === 'MEDIUM'
+                          ? ' [Mediano 1×2]'
+                          : ' [Chico 1×1]';
+                      return (
+                        <option key={s.slotNumber} value={s.slotNumber}>
+                          {t('canvas:modal.moveToOption', {
+                            id: s.slotNumber,
+                            side:
+                              (CLOSED_CATEGORIES.find((c) => c.id === s.slotNumber)?.side ?? 'FRONT') ===
+                              'FRONT'
+                                ? t('canvas:ruler.frontTab')
+                                : t('canvas:ruler.backTab'),
+                            business: s.businessName || t('canvas:modal.moveToEmpty'),
+                          })}
+                          {fmtLabel}
+                        </option>
+                      );
+                    })}
                 </select>
               </label>
 

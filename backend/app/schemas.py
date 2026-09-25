@@ -27,6 +27,10 @@ class SlotBase(BaseModel):
     paid_at: Optional[datetime.datetime] = None
     amount_collected_usd: Optional[float] = None
     scan_count: int = 0
+    notes: Optional[str] = None
+    format: Optional[str] = "SMALL"
+    row_span: Optional[int] = Field(1, alias="rowSpan")
+    col_span: Optional[int] = Field(1, alias="colSpan")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -46,6 +50,11 @@ class SlotUpdate(BaseModel):
     paid_at: Optional[datetime.datetime] = Field(None, alias="paidAt")
     amount_collected_usd: Optional[float] = Field(None, alias="amountCollectedUsd")
     scan_count: Optional[int] = Field(None, alias="scanCount")
+    slot_type: Optional[str] = Field(None, alias="slotType")
+    notes: Optional[str] = None
+    format: Optional[str] = None
+    row_span: Optional[int] = Field(None, alias="rowSpan")
+    col_span: Optional[int] = Field(None, alias="colSpan")
 
     model_config = ConfigDict(populate_by_name=True)
 

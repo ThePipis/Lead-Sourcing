@@ -25,6 +25,8 @@ import {
   DragOverlay,
   MeasuringStrategy,
   closestCenter,
+  pointerWithin,
+  CollisionDetection,
   PointerSensor,
   KeyboardSensor,
   useDraggable,
@@ -347,9 +349,14 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
             </div>
           </div>
 
+          {/* Custom Collision Detection: prioritizes pointer hover, falls back to closest center */}
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={(args) => {
+              const pointerCollisions = pointerWithin(args);
+              if (pointerCollisions.length > 0) return pointerCollisions;
+              return closestCenter(args);
+            }}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             onDragCancel={() => setDraggingSlot(null)}
@@ -582,9 +589,17 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   const isVacant = slot.status === 'VACANT';
   const isExpired = isReservationExpired(slot);
 
-  const format = slot.format || 'SMALL';
+  const format: SlotFormat =
+    slot.format && slot.format !== 'SMALL'
+      ? slot.format
+      : (slot.rowSpan === 2 && slot.colSpan === 2) || slot.priceUsd === 1200
+      ? 'LARGE'
+      : slot.rowSpan === 2 || slot.priceUsd === 650
+      ? 'MEDIUM'
+      : slot.format || 'SMALL';
+
   const colSpan = slot.colSpan || (format === 'LARGE' ? 2 : 1);
-  const rowSpan = slot.rowSpan || (format === 'LARGE' ? 2 : format === 'MEDIUM' ? 2 : 1);
+  const rowSpan = slot.rowSpan || (format === 'LARGE' || format === 'MEDIUM' ? 2 : 1);
 
   const gridCol = slot.gridCol || 1;
   const rawRow = slot.gridRow || 1;
@@ -686,10 +701,10 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                 type="button"
                 {...attributes}
                 {...listeners}
-                className="text-muted-foreground hover:text-foreground p-0.5 cursor-grab touch-none"
+                className="text-muted-foreground hover:text-foreground p-1.5 -mr-1 rounded hover:bg-secondary cursor-grab active:cursor-grabbing touch-none flex items-center transition-colors"
                 title="Arrastrar para intercambiar posición"
               >
-                <GripVertical className="h-3 w-3" />
+                <GripVertical className="h-4 w-4" />
               </button>
             )}
           </div>
@@ -800,6 +815,51 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                       Espacio adyacente ocupado o al límite del cuadrante.
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          ) : format === 'MEDIUM' ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => onToggleMenu(slot.slotNumber)}
+                className="flex items-center gap-0.5 text-[0.6rem] font-medium text-ink-dim hover:text-ink border border-rule px-1.5 py-0.5 rounded bg-background"
+                title="Ampliar a Grande o Dividir"
+              >
+                <Maximize2 className="h-2.5 w-2.5 text-purple-600" />
+                <span>Modificar</span>
+                <ChevronDown className="h-2.5 w-2.5" />
+              </button>
+
+              {menuOpen && (
+                <div className="absolute left-0 bottom-full mb-1 z-30 w-48 bg-card border border-border shadow-xl p-1 text-xs">
+                  <div className="text-[0.62rem] font-bold text-muted-foreground px-2 py-1 uppercase border-b border-border">
+                    Formato del Anuncio
+                  </div>
+                  {canMergeLg && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMerge(slot.slotNumber, 'LARGE');
+                      }}
+                      className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-purple-600 font-bold cursor-pointer"
+                    >
+                      <span>Grande (2×2)</span>
+                      <span>$1,200</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSplit(slot.slotNumber);
+                    }}
+                    className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-due font-bold cursor-pointer border-t border-border mt-0.5"
+                  >
+                    <span>Dividir en Chicos (1×1)</span>
+                    <span>$350</span>
+                  </button>
                 </div>
               )}
             </div>

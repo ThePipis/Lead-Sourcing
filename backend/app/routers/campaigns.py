@@ -501,6 +501,8 @@ def update_slot(campaign_id: str, slot_id: str, req: SlotUpdate, db: Session = D
     update_data = req.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(slot, key, value)
+    if "format" in update_data and "slot_type" not in update_data and update_data["format"]:
+        slot.slot_type = update_data["format"]
     
     # Recalculate campaign financials dynamically
     all_slots = db.query(Slot).filter(Slot.campaign_id == camp.id).all()
@@ -568,6 +570,30 @@ def batch_update_slots(campaign_id: str, updates: List[dict] = Body(...), db: Se
             slot.price_usd = float(item.get("price_usd") if "price_usd" in item else item.get("priceUsd"))
         if "avg_ticket_usd" in item or "avgTicketUsd" in item:
             slot.avg_ticket_usd = float(item.get("avg_ticket_usd") if "avg_ticket_usd" in item else item.get("avgTicketUsd"))
+        if "notes" in item:
+            slot.notes = item["notes"]
+        if "format" in item:
+            slot.format = item["format"]
+            slot.slot_type = item["format"]
+        if "row_span" in item or "rowSpan" in item:
+            slot.row_span = int(item.get("row_span") or item.get("rowSpan"))
+        if "col_span" in item or "colSpan" in item:
+            slot.col_span = int(item.get("col_span") or item.get("colSpan"))
+        if "slot_type" in item or "slotType" in item:
+            slot.slot_type = item.get("slot_type") or item.get("slotType")
+        if "payment_ref" in item or "paymentRef" in item:
+            slot.payment_ref = item.get("payment_ref") or item.get("paymentRef")
+        if "paid_at" in item or "paidAt" in item:
+            val = item.get("paid_at") or item.get("paidAt")
+            if isinstance(val, str):
+                try:
+                    slot.paid_at = datetime.datetime.fromisoformat(val.replace("Z", "+00:00"))
+                except Exception:
+                    pass
+        if "amount_collected_usd" in item or "amountCollectedUsd" in item:
+            val = item.get("amount_collected_usd") if "amount_collected_usd" in item else item.get("amountCollectedUsd")
+            if val is not None:
+                slot.amount_collected_usd = float(val)
         updated_slots.append(slot)
 
     db.commit()

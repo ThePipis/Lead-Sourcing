@@ -263,7 +263,7 @@ export function mergeModularSlot(
       (s) => s.side === side && s.gridCol === col && s.gridRow === partnerRow && s.slotNumber !== primarySlotNum
     );
 
-    return normalized.map((s) => {
+    return computeAdaptiveDisplayNumbers(normalized.map((s) => {
       if (s.slotNumber === primarySlotNum) {
         return {
           ...s,
@@ -284,7 +284,7 @@ export function mergeModularSlot(
         };
       }
       return s;
-    });
+    }));
   }
 
   if (targetFormat === 'LARGE') {
@@ -319,7 +319,7 @@ export function mergeModularSlot(
 
     const mainSlotNumber = anchorSlot.slotNumber;
 
-    return normalized.map((s) => {
+    return computeAdaptiveDisplayNumbers(normalized.map((s) => {
       if (s.slotNumber === mainSlotNumber) {
         return {
           ...s,
@@ -360,7 +360,7 @@ export function mergeModularSlot(
         };
       }
       return s;
-    });
+    }));
   }
 
   return normalized;
@@ -374,7 +374,7 @@ export function splitModularSlot(primarySlotNum: number, slots: SlotState[]): Sl
   const primary = normalized.find((s) => s.slotNumber === primarySlotNum);
   if (!primary) return normalized;
 
-  return normalized.map((s) => {
+  return computeAdaptiveDisplayNumbers(normalized.map((s) => {
     if (s.slotNumber === primarySlotNum) {
       const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === primarySlotNum);
       const cat = CLOSED_CATEGORIES.find((c) => c.id === def?.categoryId);
@@ -407,7 +407,7 @@ export function splitModularSlot(primarySlotNum: number, slots: SlotState[]): Sl
       };
     }
     return s;
-  });
+  }));
 }
 
 /**

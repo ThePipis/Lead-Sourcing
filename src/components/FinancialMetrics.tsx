@@ -280,7 +280,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
             {locked ? (
               <span className="inline-flex items-center gap-1 text-[0.65rem] text-due font-mono font-medium">
                 <Lock className="h-3 w-3" />
-                {inProduction ? t('common:reach.lockedProduction') : `Bloqueado (${paid} pagados)`}
+                {inProduction ? t('common:reach.lockedProduction') : `Bloqueado (${paid} de ${TOTAL_SLOTS} espacios pagados)`}
               </span>
             ) : isSaving || pendingReach ? (
               <span className="text-[0.65rem] font-bold font-mono text-live animate-pulse">

@@ -438,7 +438,7 @@ function copyAdvertiserFields(source: SlotState, destination: SlotState): SlotSt
  * Swaps two modular slots or modular groups (Small, Medium, Large) in the grid,
  * swapping formats and advertiser data across columns or quadrants.
  */
-export function swapModularSlots(
+function internalSwapModularSlots(
   sourceSlotNum: number,
   targetSlotNum: number,
   slots: SlotState[]
@@ -767,6 +767,20 @@ export function swapModularSlots(
   }
 
   return normalized;
+}
+
+/**
+ * Swaps two modular slots or modular groups (Small, Medium, Large) in the grid,
+ * swapping formats and advertiser data across columns or quadrants, and
+ * returns all slots with updated adaptive visual display numbers.
+ */
+export function swapModularSlots(
+  sourceSlotNum: number,
+  targetSlotNum: number,
+  slots: SlotState[]
+): SlotState[] {
+  const result = internalSwapModularSlots(sourceSlotNum, targetSlotNum, slots);
+  return computeAdaptiveDisplayNumbers(result);
 }
 
 /**

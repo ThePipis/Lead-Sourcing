@@ -122,13 +122,13 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
     >
       <form
         onSubmit={submit}
-        className="w-full max-w-xl border-2 border-live bg-card shadow-2xl relative flex flex-col focus:outline-none animate-in zoom-in-95 duration-150 rounded-none"
+        className="w-full max-w-2xl border-2 border-live bg-card shadow-2xl relative flex flex-col focus:outline-none animate-in zoom-in-95 duration-150 rounded-none"
         aria-label={t('common:payment.title', { slot: slot.slotNumber })}
       >
         {/* Header: Sello de Cobro Postal + Slot # + Formato + Close Button */}
         <div className="flex items-center justify-between gap-3 border-b border-rule bg-secondary/80 px-4 py-3 select-none">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded border border-live/40 bg-live/10 text-live">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded border border-live/40 bg-live/10 text-live shrink-0">
               <ShieldCheck className="h-4 w-4" />
             </span>
             <div>
@@ -162,7 +162,7 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
         </div>
 
         {/* Advertiser Context Bar */}
-        <div className="border-b border-rule bg-card px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="border-b border-rule bg-secondary/30 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2">
             <span className="font-mono text-[0.68rem] font-bold text-muted-foreground uppercase">Anunciante:</span>
             {slot.businessName ? (
@@ -186,74 +186,90 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
         {/* 3 Ruled Form Fields */}
         <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-rule bg-background">
           {/* 1. Forma de Pago */}
-          <label className="block p-4">
-            <span className="field-label flex items-center justify-between">
-              <span>{t('common:payment.reference')}</span>
-              <span className="font-mono text-[0.6rem] text-live font-bold">REQUERIDO</span>
-            </span>
-            <select
-              id="payment-method"
-              value={method}
-              onChange={(e) => handleMethodChange(e.target.value)}
-              className="field-value mt-2 w-full border border-rule bg-card px-2.5 py-2 text-xs font-medium focus:border-live focus-visible:ring-1 focus-visible:ring-live focus:outline-none cursor-pointer"
-            >
-              {PAYMENT_METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {t(`common:payment.methods.${m}`)}
-                </option>
-              ))}
-              <option value={OTHER}>{t('common:payment.methods.other')}</option>
-            </select>
+          <div className="p-4 flex flex-col justify-start">
+            <label htmlFor="payment-method" className="h-5 flex items-center justify-between gap-1 mb-2 select-none cursor-pointer">
+              <span className="field-label truncate">{t('common:payment.reference')}</span>
+              <span className="font-mono text-[0.6rem] text-live font-bold tracking-wider shrink-0">REQUERIDO</span>
+            </label>
+            <div className="relative h-10 w-full">
+              <select
+                id="payment-method"
+                value={method}
+                onChange={(e) => handleMethodChange(e.target.value)}
+                className="field-value h-10 w-full border border-rule bg-card px-3 text-xs sm:text-sm font-medium focus:border-live focus-visible:ring-1 focus-visible:ring-live focus:outline-none cursor-pointer"
+              >
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m} value={m}>
+                    {t(`common:payment.methods.${m}`)}
+                  </option>
+                ))}
+                <option value={OTHER}>{t('common:payment.methods.other')}</option>
+              </select>
+            </div>
 
-            {method === OTHER && (
-              <input
-                ref={otherInputRef}
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-                placeholder={t('common:payment.referencePlaceholder')}
-                className="field-value mt-2 w-full border border-live bg-card px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:border-live focus-visible:ring-1 focus-visible:ring-live focus:outline-none"
-              />
+            {method === OTHER ? (
+              <div className="mt-2">
+                <input
+                  ref={otherInputRef}
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  placeholder={t('common:payment.referencePlaceholder')}
+                  className="field-value h-8 w-full border border-live bg-card px-2.5 text-xs placeholder:text-muted-foreground focus:border-live focus-visible:ring-1 focus-visible:ring-live focus:outline-none"
+                />
+              </div>
+            ) : (
+              <div className="mt-2 min-h-[1.1rem] flex items-center text-[0.63rem] font-mono text-muted-foreground">
+                <span>Canal comercial verificado</span>
+              </div>
             )}
-          </label>
+          </div>
 
-          {/* 2. Importe Cobrado (USD) */}
-          <label className="block p-4">
-            <span className="field-label flex items-center justify-between">
-              <span>{t('common:payment.amount')}</span>
-              <span className="font-mono text-[0.62rem] text-muted-foreground">USD</span>
-            </span>
-            <div className="relative mt-2">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 font-mono text-xs font-bold text-muted-foreground select-none">
+          {/* 2. Importe Cobrado */}
+          <div className="p-4 flex flex-col justify-start">
+            <label htmlFor="payment-amount" className="h-5 flex items-center justify-between gap-1 mb-2 select-none cursor-pointer">
+              <span className="field-label truncate">{t('common:payment.amount')}</span>
+              <span className="font-mono text-[0.6rem] text-muted-foreground font-bold tracking-wider shrink-0">USD</span>
+            </label>
+            <div className="relative flex items-center h-10 w-full border border-rule bg-card focus-within:border-live focus-within:ring-1 focus-within:ring-live transition-all">
+              <span className="pl-3 font-mono text-xs sm:text-sm font-bold text-muted-foreground select-none">
                 $
               </span>
               <input
+                id="payment-amount"
                 ref={amountInputRef}
                 type="number"
                 min={0}
                 step={1}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="field-value w-full pl-6 pr-2.5 py-2 border border-rule bg-card text-xs font-mono font-bold tabular-nums focus:border-live focus-visible:ring-1 focus-visible:ring-live focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="field-value h-full w-full pl-2 pr-3 bg-transparent text-xs sm:text-sm font-mono font-bold tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </div>
-            <span className="mt-1.5 block font-mono text-[0.63rem] tabular-nums text-muted-foreground">
-              {t('common:payment.listPrice', { price: slot.priceUsd || formatBadge.price })}
-            </span>
-          </label>
+            <div className="mt-2 min-h-[1.1rem] flex items-center text-[0.63rem] font-mono tabular-nums text-muted-foreground">
+              <span>{t('common:payment.listPrice', { price: slot.priceUsd || formatBadge.price })}</span>
+            </div>
+          </div>
 
           {/* 3. Fecha del Cobro */}
-          <label className="block p-4">
-            <span className="field-label block">
-              {t('common:payment.date')}
-            </span>
-            <input
-              type="date"
-              value={date}
-              max={todayIso()}
-              onChange={(e) => setDate(e.target.value)}
-              className="field-value mt-2 w-full border border-rule bg-card px-2.5 py-2 text-xs font-mono focus:border-live focus-visible:ring-1 focus-visible:ring-live focus:outline-none cursor-pointer"
-            />
-          </label>
+          <div className="p-4 flex flex-col justify-start">
+            <label htmlFor="payment-date" className="h-5 flex items-center justify-between gap-1 mb-2 select-none cursor-pointer">
+              <span className="field-label truncate">{t('common:payment.date')}</span>
+              <span className="font-mono text-[0.6rem] text-muted-foreground font-bold tracking-wider shrink-0">LOCAL</span>
+            </label>
+            <div className="relative h-10 w-full">
+              <input
+                id="payment-date"
+                type="date"
+                value={date}
+                max={todayIso()}
+                onChange={(e) => setDate(e.target.value)}
+                className="field-value h-10 w-full border border-rule bg-card px-3 text-xs sm:text-sm font-mono focus:border-live focus-visible:ring-1 focus-visible:ring-live focus:outline-none cursor-pointer"
+              />
+            </div>
+            <div className="mt-2 min-h-[1.1rem] flex items-center text-[0.63rem] font-mono text-muted-foreground">
+              <span>Comprobante al instante</span>
+            </div>
+          </div>
         </div>
 
         {/* Negotiated Delta Alerts */}
@@ -278,17 +294,19 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
         )}
 
         {/* Footer Actions: Fast Enter shortcut and Sellar Button */}
-        <div className="flex items-center justify-between gap-3 border-t border-rule bg-secondary/80 px-4 py-3">
-          <span className="hidden sm:inline font-mono text-[0.62rem] text-muted-foreground">
-            ↵ Presiona <span className="text-foreground font-bold">Enter</span> para sellar · <span className="text-foreground font-bold">Esc</span> para cancelar
-          </span>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-rule bg-secondary/80 px-4 py-3 select-none">
+          <div className="flex items-center gap-1.5 font-mono text-[0.65rem] text-muted-foreground">
+            <span>↵ Presiona <span className="font-bold text-foreground">Enter</span> para sellar</span>
+            <span className="text-muted-foreground/40">·</span>
+            <span><span className="font-bold text-foreground">Esc</span> para cancelar</span>
+          </div>
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center justify-end gap-2 ml-auto">
             <button
               type="button"
               onClick={onCancel}
               disabled={isSaving}
-              className="px-3 py-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              className="px-3.5 py-2 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors cursor-pointer border border-transparent"
             >
               {t('common:payment.cancel')}
             </button>
@@ -296,7 +314,7 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
               id="btn-confirm-payment"
               type="submit"
               disabled={!canSubmit}
-              className="flex items-center gap-1.5 border border-clear bg-clear px-4 py-2 text-xs font-black text-primary-foreground shadow-sm transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+              className="flex items-center gap-1.5 border border-clear bg-clear px-5 py-2 text-xs font-black text-primary-foreground shadow-sm transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
             >
               {isSaving ? (
                 <>

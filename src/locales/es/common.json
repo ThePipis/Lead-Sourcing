@@ -252,7 +252,7 @@
     "noBusiness": "Sin comercio asignado",
     "reference": "Forma de pago",
     "referencePlaceholder": "Escribe la referencia",
-    "amount": "Importe cobrado (USD)",
+    "amount": "Importe cobrado",
     "listPrice": "Precio de lista: ${{price}}",
     "date": "Fecha del cobro",
     "belowList": "${{diff}} por debajo del precio de lista. Se registra el importe real.",

@@ -211,7 +211,6 @@ export const CostPanel: React.FC<CostPanelProps> = ({
     }, 450);
   };
 
-  const projectedRevenue = currentGrossRevenue > 0 ? currentGrossRevenue : scaledTariffs.projectedRevenue;
   const currentPartner = DIRECT_MAIL_PARTNERS.find((p) => p.id === selectedPartnerId) || DIRECT_MAIL_PARTNERS[0];
 
   return (
@@ -387,33 +386,9 @@ export const CostPanel: React.FC<CostPanelProps> = ({
             </div>
           </div>
 
-          {/* 3. Tarjetas Financieras Directas */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2">
-            <div className="border border-rule bg-secondary/20 p-3">
-              <span className="text-[0.68rem] uppercase font-bold text-ink-dim block mb-1">
-                Costo Total Tirada
-              </span>
-              <span className="text-base font-black text-due">
-                {money(currentTotalCost)}
-              </span>
-              <span className="text-[0.63rem] text-ink-dim block mt-0.5">
-                Pago a imprenta y correo
-              </span>
-            </div>
-
-            <div className="border border-rule bg-secondary/20 p-3">
-              <span className="text-[0.68rem] uppercase font-bold text-ink-dim block mb-1">
-                Ingresos Estimados
-              </span>
-              <span className="text-base font-black text-ink">
-                {money(projectedRevenue)}
-              </span>
-              <span className="text-[0.63rem] text-ink-dim block mt-0.5">
-                Al vender todos los slots
-              </span>
-            </div>
-
-            <div className="border border-rule bg-secondary/20 p-3">
+          {/* Margen Operativo */}
+          <div className="pt-2">
+            <div className="border border-rule bg-secondary/20 p-3 max-w-xs">
               <span className="text-[0.68rem] uppercase font-bold text-ink-dim block mb-1">
                 Margen Operativo
               </span>

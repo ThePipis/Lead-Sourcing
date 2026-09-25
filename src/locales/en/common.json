@@ -252,7 +252,7 @@
     "noBusiness": "No business assigned",
     "reference": "Payment method",
     "referencePlaceholder": "Type the reference",
-    "amount": "Amount collected (USD)",
+    "amount": "Amount collected",
     "listPrice": "List price: ${{price}}",
     "date": "Payment date",
     "belowList": "${{diff}} below list price. The actual amount is what gets recorded.",

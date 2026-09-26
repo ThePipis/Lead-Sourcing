@@ -505,6 +505,9 @@ export default {
         const campId = autofillMatch[1];
         const c = campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
+        if (c.mode === "LIVE") {
+          return json({ detail: "Autofill is only available in DEMO mode" }, 400);
+        }
         let filledCount = 0;
         for (const s of c.slots) {
           if (s.status === "VACANT" || !s.business_name) {
@@ -551,6 +554,9 @@ export default {
         const campId = markAllPaidMatch[1];
         const c = campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
+        if (c.mode === "LIVE") {
+          return json({ detail: "Mark all paid is only available in DEMO mode" }, 400);
+        }
 
         // Ensure all 32 slots exist
         const existingNums = new Set(c.slots.map((s: any) => s.slot_number));
@@ -625,6 +631,12 @@ export default {
         if (!c) return json({ detail: "Campaign not found" }, 404);
         const s = c.slots.find((x: any) => x.slot_number === slotNum);
         if (!s) return json({ detail: "Slot not found" }, 404);
+        if (c.mode === "LIVE" && body.status === "PAID") {
+          const biz = (body.business_name ?? body.businessName ?? s.business_name ?? '').trim();
+          if (!biz) {
+            return json({ detail: "Cannot mark slot as PAID without an assigned business in LIVE mode" }, 400);
+          }
+        }
         Object.assign(s, body);
         if (s.status !== "PAID") {
           s.paid_at = null;
@@ -701,6 +713,9 @@ export default {
         const campId = resetMatch[1];
         const c = campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
+        if (c.mode === "LIVE") {
+          return json({ detail: "Reset slots is only available in DEMO mode" }, 400);
+        }
         c.slots = createDefaultSlots(c.target_households || 5000);
         c.paid_count = 0;
         c.total_collected_usd = 0;

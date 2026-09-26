@@ -509,6 +509,11 @@ export default function App() {
     // Money moves outside the app, so PAID is a record of a transfer that
     // already happened: collect the reference before committing it.
     if (newStatus === 'PAID') {
+      const currentSlot = campaign.slots.find((s) => s.slotNumber === slotNumber);
+      const hasClient = Boolean(currentSlot?.businessName && currentSlot.businessName.trim().length > 0);
+      if (mode === 'LIVE' && !hasClient) {
+        return;
+      }
       setPendingPaymentSlot(slotNumber);
       return;
     }
@@ -1279,9 +1284,9 @@ export default function App() {
               onSplitSlot={handleSplitSlot}
               onReleaseReservation={handleReleaseReservation}
               onReactivateOffer={handleReactivateOffer}
-              onResetLayout={handleResetSlotLayout}
-              onAutofill={handleAutofillSlots}
-              onMarkAllPaid={handleMarkAllPaid}
+              onResetLayout={mode === 'DEMO' ? handleResetSlotLayout : undefined}
+              onAutofill={mode === 'DEMO' ? handleAutofillSlots : undefined}
+              onMarkAllPaid={mode === 'DEMO' ? handleMarkAllPaid : undefined}
               onUndoPayment={handleUndoPayment}
               isDemo={mode === 'DEMO'}
               onNextCandidate={handleNextCandidate}

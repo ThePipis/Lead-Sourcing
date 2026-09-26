@@ -299,7 +299,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {onAutofill && (
+            {isDemo && onAutofill && (
               <button
                 id="btn-autofill-slots"
                 type="button"
@@ -325,7 +325,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
               </button>
             )}
 
-            {onResetLayout && (
+            {isDemo && onResetLayout && (
               <button
                 id="btn-reset-layout"
                 type="button"
@@ -406,6 +406,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         key={slot.slotNumber}
                         slot={slot}
                         allSlots={slots}
+                        isDemo={isDemo}
                         isSelected={selectedSlot === slot.slotNumber}
                         onInspect={onInspectSlot}
                         onMerge={handleMerge}
@@ -446,6 +447,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         key={slot.slotNumber}
                         slot={slot}
                         allSlots={slots}
+                        isDemo={isDemo}
                         isSelected={selectedSlot === slot.slotNumber}
                         onInspect={onInspectSlot}
                         onMerge={handleMerge}
@@ -475,6 +477,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         key={slot.slotNumber}
                         slot={slot}
                         allSlots={slots}
+                        isDemo={isDemo}
                         isSelected={selectedSlot === slot.slotNumber}
                         onInspect={onInspectSlot}
                         onMerge={handleMerge}
@@ -523,6 +526,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                           key={slot.slotNumber}
                           slot={slot}
                           allSlots={slots}
+                          isDemo={isDemo}
                           isSelected={selectedSlot === slot.slotNumber}
                           onInspect={onInspectSlot}
                           onMerge={handleMerge}
@@ -703,6 +707,7 @@ interface ModularSlotCardProps {
   slot: SlotState;
   allSlots: SlotState[];
   isSelected: boolean;
+  isDemo?: boolean;
   onInspect?: (slotNumber: number) => void;
   onMerge: (slotNumber: number, format: 'MEDIUM' | 'LARGE') => void;
   onSplit: (slotNumber: number, targetFormat?: 'SMALL' | 'MEDIUM') => void;
@@ -723,6 +728,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   slot,
   allSlots,
   isSelected,
+  isDemo = false,
   onInspect,
   onMerge,
   onSplit,
@@ -743,6 +749,8 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   const isProspecting = slot.status === 'PROSPECTING';
   const isVacant = slot.status === 'VACANT';
   const isExpired = isReservationExpired(slot);
+  const hasBusiness = Boolean(slot.businessName && slot.businessName.trim().length > 0);
+  const canMarkPaid = isDemo || hasBusiness;
 
   const format: SlotFormat =
     slot.format ||
@@ -1158,14 +1166,14 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
           ) : isReserved ? (
             <>
               <option value="RESERVED">Reservado (72h)</option>
-              <option value="PAID">Pagado</option>
+              {canMarkPaid && <option value="PAID">Pagado</option>}
             </>
           ) : (
             <>
               <option value="VACANT">Vacante</option>
               <option value="PROSPECTING">Llamando</option>
               <option value="RESERVED">Reservado (72h)</option>
-              <option value="PAID">Pagado</option>
+              {canMarkPaid && <option value="PAID">Pagado</option>}
             </>
           )}
         </select>

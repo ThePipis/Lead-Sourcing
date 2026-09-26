@@ -492,6 +492,16 @@ def update_slot(campaign_id: str, slot_id: str, req: SlotUpdate, db: Session = D
         raise HTTPException(status_code=404, detail="Slot not found")
     
     update_data = req.model_dump(exclude_unset=True)
+
+    # In LIVE mode, a slot cannot be marked as PAID without an assigned business
+    if (camp.mode or "DEMO").upper() == "LIVE" and req.status == "PAID":
+        biz = (update_data.get("business_name") or slot.business_name or "").strip()
+        if not biz:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot mark slot as PAID without an assigned business in LIVE mode",
+            )
+
     for key, value in update_data.items():
         setattr(slot, key, value)
     if "format" in update_data and "slot_type" not in update_data and update_data["format"]:

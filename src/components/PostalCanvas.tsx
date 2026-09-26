@@ -1153,10 +1153,21 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
           }`}
           title={isPaid ? 'Slot pagado (usa el botón "Desbloquear" para modificar)' : 'Cambiar estado'}
         >
-          <option value="VACANT">Vacante</option>
-          <option value="PROSPECTING">Llamando</option>
-          <option value="RESERVED">Reservado (72h)</option>
-          <option value="PAID">Pagado</option>
+          {isPaid ? (
+            <option value="PAID">Pagado</option>
+          ) : isReserved ? (
+            <>
+              <option value="RESERVED">Reservado (72h)</option>
+              <option value="PAID">Pagado</option>
+            </>
+          ) : (
+            <>
+              <option value="VACANT">Vacante</option>
+              <option value="PROSPECTING">Llamando</option>
+              <option value="RESERVED">Reservado (72h)</option>
+              <option value="PAID">Pagado</option>
+            </>
+          )}
         </select>
       </div>
     </div>

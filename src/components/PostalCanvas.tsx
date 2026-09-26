@@ -808,8 +808,8 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
       ? 'border-due border-l-4 border-l-due bg-due/15'
       : 'border-due/70 border-l-4 border-l-due bg-due/10'
     : isProspecting
-    ? 'border-live border-l-4 border-l-live bg-card'
-    : 'border-dashed border-border border-l-4 border-l-muted-foreground/30 bg-card hover:border-muted-foreground/60';
+    ? 'border-live border-l-4 border-l-live bg-slot-bg'
+    : 'border-dashed border-border border-l-4 border-l-muted-foreground/40 bg-slot-bg hover:border-live/60 hover:bg-secondary/60';
 
   const activeSmallPrice = allSlots?.find((s) => s.format === 'SMALL' && s.priceUsd && s.slotNumber !== 32 && s.status !== 'RESERVED')?.priceUsd || MODULAR_PRICES.SMALL;
   const activeMedPrice = allSlots?.find((s) => s.format === 'MEDIUM' && s.priceUsd && s.status !== 'RESERVED')?.priceUsd || MODULAR_PRICES.MEDIUM;
@@ -831,7 +831,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
         gridColumn: `${gridCol} / span ${colSpan}`,
         gridRow: `${gridRow} / span ${rowSpan}`,
       }}
-      className={`relative flex flex-col justify-between p-2.5 sm:p-3 border transition-all cursor-pointer select-none bg-card ${
+      className={`relative flex flex-col justify-between p-2.5 sm:p-3 border transition-all cursor-pointer select-none bg-slot-bg ${
         rowSpan === 2 ? 'min-h-[220px]' : 'min-h-[105px]'
       } ${statusBorderClass} ${
         isSelected ? 'ring-2 ring-live shadow-md' : ''
@@ -994,7 +994,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
               <button
                 type="button"
                 onClick={() => onToggleMenu(slot.slotNumber)}
-                className="flex items-center gap-0.5 text-[0.6rem] font-medium text-ink-dim hover:text-ink border border-rule px-1.5 py-0.5 rounded bg-background"
+                className="flex items-center gap-0.5 text-[0.6rem] font-medium text-ink-dim hover:text-ink border border-rule px-1.5 py-0.5 rounded bg-secondary hover:bg-accent cursor-pointer transition-colors"
                 title="Ampliar o fusionar espacio para este cliente"
               >
                 <Maximize2 className="h-2.5 w-2.5 text-live" />
@@ -1046,7 +1046,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
               <button
                 type="button"
                 onClick={() => onToggleMenu(slot.slotNumber)}
-                className="flex items-center gap-0.5 text-[0.6rem] font-medium text-ink-dim hover:text-ink border border-rule px-1.5 py-0.5 rounded bg-background"
+                className="flex items-center gap-0.5 text-[0.6rem] font-medium text-ink-dim hover:text-ink border border-rule px-1.5 py-0.5 rounded bg-secondary hover:bg-accent cursor-pointer transition-colors"
                 title="Ampliar a Grande o Dividir"
               >
                 <Maximize2 className="h-2.5 w-2.5 text-purple-600" />
@@ -1091,7 +1091,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
               <button
                 type="button"
                 onClick={() => onToggleMenu(slot.slotNumber)}
-                className="flex items-center gap-0.5 text-[0.6rem] font-medium text-ink-dim hover:text-ink border border-rule px-1.5 py-0.5 rounded bg-background cursor-pointer"
+                className="flex items-center gap-0.5 text-[0.6rem] font-medium text-ink-dim hover:text-ink border border-rule px-1.5 py-0.5 rounded bg-secondary hover:bg-accent cursor-pointer transition-colors"
                 title="Dividir en Medianos o Chicos"
               >
                 <Minimize2 className="h-2.5 w-2.5 text-due" />
@@ -1148,7 +1148,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
               onUpdateStatus(slot.slotNumber, next);
             }
           }}
-          className={`bg-card text-foreground border border-border text-[0.63rem] font-semibold px-1 py-0.5 rounded focus:outline-none transition-all ${
+          className={`bg-secondary text-foreground border border-border text-[0.63rem] font-semibold px-1 py-0.5 rounded focus:outline-none transition-all ${
             isPaid ? 'opacity-60 cursor-not-allowed bg-muted/40' : 'cursor-pointer hover:border-foreground/40'
           }`}
           title={isPaid ? 'Slot pagado (usa el botón "Desbloquear" para modificar)' : 'Cambiar estado'}

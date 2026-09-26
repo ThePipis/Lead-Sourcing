@@ -62,37 +62,37 @@
   /* Dark is the default: this is a production document worked at a desk for
      long stretches, read as a backlit form rather than a sheet of paper. */
   :root {
-    --background: #0b0d11;
-    --foreground: #ded3ba;
-    --card: #11151c;
-    --card-foreground: #ded3ba;
-    --popover: #11151c;
-    --popover-foreground: #ded3ba;
-    --primary: #d9a441;
-    --primary-foreground: #16120a;
-    --secondary: #161b24;
-    --secondary-foreground: #ded3ba;
-    --muted: #11151c;
-    --muted-foreground: #8d8878;
-    --accent: #1c2330;
-    --accent-foreground: #ded3ba;
-    --border: #222a36;
-    --ring: #d9a441;
+    --background: #0f141c;
+    --foreground: #f2ede4;
+    --card: #17202c;
+    --card-foreground: #f2ede4;
+    --popover: #17202c;
+    --popover-foreground: #f2ede4;
+    --primary: #e5ab43;
+    --primary-foreground: #0f141c;
+    --secondary: #212c3d;
+    --secondary-foreground: #f2ede4;
+    --muted: #1c2635;
+    --muted-foreground: #a4b3c7;
+    --accent: #29374c;
+    --accent-foreground: #f2ede4;
+    --border: #38485e;
+    --ring: #e5ab43;
 
-    --canvas-bg: #090b0f;
-    --slot-bg: #11151c;
-    --slot-border: #222a36;
-    --highlight: #d9a441;
+    --canvas-bg: #131923;
+    --slot-bg: #1d2736;
+    --slot-border: #38485e;
+    --highlight: #e5ab43;
 
-    --ink: #ded3ba;
-    --ink-dim: #8d8878;
-    --ink-faint: #7c8496;
-    --rule: #222a36;
-    --rule-strong: #35404f;
+    --ink: #f2ede4;
+    --ink-dim: #a4b3c7;
+    --ink-faint: #8898ad;
+    --rule: #38485e;
+    --rule-strong: #546d8e;
 
-    --due: #d2503f;
-    --clear: #46a97d;
-    --live: #d9a441;
+    --due: #e25544;
+    --clear: #3ebd82;
+    --live: #e5ab43;
   }
 
   /* Light is the form on its actual stock: manila, printed in black. */

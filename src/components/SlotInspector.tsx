@@ -398,7 +398,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain flex flex-col">
         {isPaid || hasBusiness || showManualForm ? (
           <>
             {/* ------------------------------------------------- the ad itself */}
@@ -738,18 +738,18 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
           </>
         ) : (
           /* ------------------------------------------------- who to call (VACANT / PROSPECTS FIRST) */
-          <section className="px-2.5 py-2">
+          <section className="flex-1 flex flex-col justify-between p-3 min-h-0">
             {loadingLeads ? (
-              <p className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t('prospecting:crm.loading', { city: targetCity })}
-              </p>
+              <div className="flex-1 flex flex-col items-center justify-center py-12 text-xs text-muted-foreground gap-2">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <p>{t('prospecting:crm.loading', { city: targetCity })}</p>
+              </div>
             ) : leads.length === 0 ? (
-              <p className="py-6 text-xs text-muted-foreground">
-                {t('prospecting:crm.noLeads', { city: targetCity })}
-              </p>
+              <div className="flex-1 flex flex-col items-center justify-center py-12 text-xs text-muted-foreground text-center">
+                <p>{t('prospecting:crm.noLeads', { city: targetCity })}</p>
+              </div>
             ) : (
-              <ul className="space-y-1.5">
+              <ul className="flex-1 flex flex-col gap-2.5 sm:gap-3 min-h-0">
                 {leads.map((lead, idx) => {
                   const status = crm[lead.id] ?? lead.status;
                   const isHere = slot.businessName === lead.businessName;
@@ -763,38 +763,44 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                     return (
                       <li
                         key={lead.id}
-                        className="border border-due/40 bg-due/5 p-2 text-xs transition-colors rounded-sm"
+                        className="flex-1 min-h-[160px] flex flex-col justify-between border border-due/40 bg-due/5 p-3 sm:p-3.5 text-xs transition-colors rounded-md"
                       >
                         <div className="flex items-center justify-between gap-1.5">
                           <div className="min-w-0">
                             <p className="flex items-center gap-1.5">
-                              <span className="font-mono text-[0.63rem] font-bold text-muted-foreground">
+                              <span className="font-mono text-xs font-bold text-muted-foreground">
                                 #{idx + 1}
                               </span>
                               <span className="truncate font-semibold text-xs text-muted-foreground line-through">
                                 {lead.businessName}
                               </span>
                             </p>
-                            <p className="mt-0.5 text-[0.65rem] text-muted-foreground truncate">
+                            <p className="mt-0.5 text-[0.68rem] text-muted-foreground truncate">
                               {lead.address}, {lead.city}
                             </p>
                           </div>
-                          <span className="shrink-0 inline-flex items-center gap-1 border border-due/40 bg-due/15 px-1.5 py-0.5 font-mono text-[0.58rem] font-bold text-due uppercase">
+                          <span className="shrink-0 inline-flex items-center gap-1 border border-due/40 bg-due/15 px-1.5 py-0.5 font-mono text-[0.6rem] font-bold text-due uppercase rounded-xs">
                             <Lock className="h-2.5 w-2.5" />
                             {t('prospecting:crm.blocked', 'Desestimó / Bloqueado')}
                           </span>
                         </div>
 
-                        <div className="mt-1.5">
+                        <div className="my-auto py-2">
+                          <p className="text-xs text-muted-foreground italic text-center">
+                            Prospecto descartado para esta campaña.
+                          </p>
+                        </div>
+
+                        <div className="pt-1">
                           <button
                             type="button"
                             onClick={() => handleReplaceBlockedLead(lead)}
                             disabled={replacingId === lead.id || isSaving}
-                            className="flex w-full h-6 items-center justify-center gap-1.5 border border-primary bg-primary/10 hover:bg-primary hover:text-primary-foreground px-2 text-[0.65rem] font-bold text-primary transition-all disabled:opacity-50 cursor-pointer"
+                            className="flex w-full h-8 items-center justify-center gap-1.5 border border-primary bg-primary/10 hover:bg-primary hover:text-primary-foreground px-2.5 text-xs font-bold text-primary rounded transition-all disabled:opacity-50 cursor-pointer"
                           >
                             {replacingId === lead.id ? (
                               <>
-                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                 <span>
                                   {t(
                                     'prospecting:crm.searchingReplacement',
@@ -804,7 +810,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                               </>
                             ) : (
                               <>
-                                <Sparkles className="h-3 w-3" />
+                                <Sparkles className="h-3.5 w-3.5" />
                                 <span>
                                   {t('prospecting:crm.searchReplacement', 'Buscar otra vacante o negocio')}
                                 </span>
@@ -820,125 +826,127 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                   return (
                     <li
                       key={lead.id}
-                      className={`border p-2 text-xs transition-colors rounded-sm ${
+                      className={`flex-1 min-h-[170px] flex flex-col justify-between border p-3 sm:p-3.5 text-xs transition-colors rounded-md shadow-2xs ${
                         isHere
                           ? slot.status === 'PROSPECTING'
-                            ? 'border-live bg-live/10'
-                            : 'border-clear bg-clear/10'
+                            ? 'border-live bg-live/10 ring-1 ring-live/40 shadow-xs'
+                            : 'border-clear bg-clear/10 ring-1 ring-clear/40 shadow-xs'
                           : status === 'CONTACTED'
                             ? 'border-live/50 bg-live/5'
-                            : 'border-border hover:border-rule-strong'
+                            : 'border-border/90 bg-card hover:border-rule-strong hover:shadow-xs'
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-1.5">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="font-mono text-[0.63rem] font-bold text-primary shrink-0">
-                            #{idx + 1}
-                          </span>
-                          <span className="truncate font-bold text-xs text-foreground" title={lead.businessName}>
-                            {lead.businessName}
-                          </span>
-                          {lead.rating != null && (
-                            <span className="inline-flex items-center gap-0.5 font-semibold text-[0.65rem] text-live shrink-0">
-                              <Star className="h-2.5 w-2.5 fill-live text-live" />
-                              {lead.rating}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-mono text-xs font-black text-primary px-1.5 py-0.5 rounded-xs bg-primary/10 border border-primary/20 shrink-0">
+                              #{idx + 1}
                             </span>
-                          )}
+                            <span className="truncate font-bold text-sm text-foreground" title={lead.businessName}>
+                              {lead.businessName}
+                            </span>
+                            {lead.rating != null && (
+                              <span className="inline-flex items-center gap-0.5 font-bold text-xs text-live shrink-0 bg-live/10 border border-live/30 px-1.5 py-0.2 rounded">
+                                <Star className="h-3 w-3 fill-live text-live" />
+                                {lead.rating}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {isHere && slot.status === 'PROSPECTING' && (
+                              <span className="inline-flex items-center gap-0.5 border border-live/60 bg-live/20 px-1.5 py-0.5 font-mono text-[0.62rem] font-bold text-live uppercase rounded-xs">
+                                <Phone className="h-2.5 w-2.5" />
+                                {t('prospecting:crm.negotiatingBadge', 'En Negociación')}
+                              </span>
+                            )}
+                            {isHere && (slot.status === 'RESERVED' || slot.status === 'PAID') && (
+                              <span className="inline-flex items-center gap-0.5 border border-clear/60 bg-clear/20 px-1.5 py-0.5 font-mono text-[0.62rem] font-bold text-clear uppercase rounded-xs">
+                                <CheckCircle className="h-2.5 w-2.5" />
+                                {t('prospecting:crm.assigned', 'Asignado')}
+                              </span>
+                            )}
+                            {!isHere && status === 'CONTACTED' && (
+                              <span className="inline-flex items-center gap-0.5 border border-live/50 bg-live/15 px-1.5 py-0.5 font-mono text-[0.62rem] font-bold text-live uppercase rounded-xs">
+                                <Phone className="h-2.5 w-2.5" />
+                                {t('prospecting:crm.contactedBadge', 'Contactado')}
+                              </span>
+                            )}
+                            <span className="shrink-0 border border-border bg-secondary/80 px-2 py-0.5 font-mono text-[0.62rem] text-secondary-foreground font-semibold rounded-xs">
+                              {lead.source}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {isHere && slot.status === 'PROSPECTING' && (
-                            <span className="inline-flex items-center gap-0.5 border border-live/60 bg-live/20 px-1 py-0.5 font-mono text-[0.58rem] font-bold text-live uppercase">
-                              <Phone className="h-2 w-2" />
-                              {t('prospecting:crm.negotiatingBadge', 'En Negociación')}
-                            </span>
-                          )}
-                          {isHere && (slot.status === 'RESERVED' || slot.status === 'PAID') && (
-                            <span className="inline-flex items-center gap-0.5 border border-clear/60 bg-clear/20 px-1 py-0.5 font-mono text-[0.58rem] font-bold text-clear uppercase">
-                              <CheckCircle className="h-2 w-2" />
-                              {t('prospecting:crm.assigned', 'Asignado')}
-                            </span>
-                          )}
-                          {!isHere && status === 'CONTACTED' && (
-                            <span className="inline-flex items-center gap-0.5 border border-live/50 bg-live/15 px-1 py-0.5 font-mono text-[0.58rem] font-bold text-live uppercase">
-                              <Phone className="h-2 w-2" />
-                              {t('prospecting:crm.contactedBadge', 'Contactado')}
-                            </span>
-                          )}
-                          <span className="shrink-0 border border-border bg-secondary px-1 py-0.5 font-mono text-[0.58rem] text-secondary-foreground">
-                            {lead.source}
-                          </span>
-                        </div>
-                      </div>
 
-                      <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[0.68rem] text-muted-foreground">
-                        {lead.phone && (
-                          <a
-                            href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`}
-                            className="inline-flex items-center gap-1 font-mono text-xs font-bold text-live hover:underline"
-                          >
-                            <Phone className="h-3 w-3" />
-                            {lead.phone}
-                          </a>
-                        )}
-                        {lead.websiteUrl && (
-                          <a
-                            href={lead.websiteUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 font-mono text-[0.67rem] text-primary hover:underline"
-                            title={lead.websiteUrl}
-                          >
-                            <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-                            <span className="truncate max-w-[130px]">
-                              {lead.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
-                            </span>
-                          </a>
-                        )}
-                        <span className="flex items-center gap-0.5 truncate text-[0.65rem] text-muted-foreground">
-                          <MapPin className="h-2.5 w-2.5 shrink-0" />
-                          <span className="truncate max-w-[150px]">{lead.city || lead.address}</span>
-                        </span>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                          {lead.phone && (
+                            <a
+                              href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`}
+                              className="inline-flex items-center gap-1 font-mono text-xs font-bold text-live hover:underline"
+                            >
+                              <Phone className="h-3 w-3" />
+                              {lead.phone}
+                            </a>
+                          )}
+                          {lead.websiteUrl && (
+                            <a
+                              href={lead.websiteUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"
+                              title={lead.websiteUrl}
+                            >
+                              <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                              <span className="truncate max-w-[140px]">
+                                {lead.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+                              </span>
+                            </a>
+                          )}
+                          <span className="flex items-center gap-0.5 truncate text-xs text-muted-foreground">
+                            <MapPin className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate max-w-[150px]">{lead.city || lead.address}</span>
+                          </span>
+                        </div>
                       </div>
 
                       {currentHook && (
-                        <div className="mt-1 border border-border/70 bg-secondary/30 px-2 py-1 rounded-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-1 font-mono text-[0.6rem] font-bold text-primary">
-                              <Sparkles className="h-2.5 w-2.5" />
+                        <div className="flex-1 my-2 border border-border/70 bg-secondary/35 px-2.5 py-2 rounded-md flex flex-col justify-center">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="flex items-center gap-1.5 font-mono text-[0.68rem] font-bold text-primary">
+                              <Sparkles className="h-3 w-3" />
                               {t('canvas:inspector.hook')}
                             </span>
                             <button
                               type="button"
                               onClick={() => copyPitch(lead)}
-                              className="flex items-center gap-1 text-[0.6rem] text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                              className="flex items-center gap-1 text-[0.65rem] text-muted-foreground hover:text-foreground font-medium transition-colors cursor-pointer bg-background/50 hover:bg-background px-1.5 py-0.5 rounded border border-border/50"
                             >
                               {copiedId === lead.id ? (
                                 <>
-                                  <Check className="h-2.5 w-2.5 text-clear" />
-                                  <span className="text-clear font-medium">{t('prospecting:llama.copied')}</span>
+                                  <Check className="h-3 w-3 text-clear" />
+                                  <span className="text-clear font-semibold">{t('prospecting:llama.copied')}</span>
                                 </>
                               ) : (
                                 <>
-                                  <Copy className="h-2.5 w-2.5" />
+                                  <Copy className="h-3 w-3" />
                                   <span>{t('prospecting:llama.copyPitch')}</span>
                                 </>
                               )}
                             </button>
                           </div>
-                          <p className="mt-0.5 line-clamp-2 text-[0.67rem] leading-snug text-foreground/90 italic">
-                            {currentHook}
+                          <p className="line-clamp-3 text-[0.72rem] leading-relaxed text-foreground/90 italic">
+                            "{currentHook}"
                           </p>
                         </div>
                       )}
 
-                      <div className="mt-1.5 flex items-center justify-between gap-1.5">
-                        <div className="flex items-center gap-1">
+                      <div className="flex items-center justify-between gap-1.5 pt-1 mt-auto">
+                        <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => handleContactLead(lead)}
                             disabled={isPaid || isSaving || (isHere && slot.status === 'PROSPECTING')}
                             title={t('prospecting:crm.contactedActive')}
-                            className={`h-6 border px-2 text-[0.65rem] font-medium transition-colors flex items-center gap-1 cursor-pointer ${
+                            className={`h-7.5 border px-2.5 text-xs font-semibold rounded transition-colors flex items-center gap-1 cursor-pointer ${
                               isHere && slot.status === 'PROSPECTING'
                                 ? 'border-live bg-live/25 text-live font-bold ring-1 ring-live/60'
                                 : status === 'CONTACTED'
@@ -957,7 +965,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                             type="button"
                             onClick={() => handleRejectLead(lead)}
                             disabled={isPaid || isSaving}
-                            className={`h-6 border px-2 text-[0.65rem] font-medium transition-colors cursor-pointer ${
+                            className={`h-7.5 border px-2.5 text-xs font-semibold rounded transition-colors cursor-pointer ${
                               status === 'REJECTED'
                                 ? 'border-due/40 bg-due/15 text-due font-semibold'
                                 : 'border-border text-secondary-foreground hover:bg-secondary hover:text-foreground'
@@ -970,7 +978,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                           type="button"
                           onClick={() => handleAssign(lead)}
                           disabled={isPaid || (isHere && slot.status === 'RESERVED') || isSaving}
-                          className={`flex h-6 items-center gap-1 px-2.5 text-[0.65rem] font-bold transition-colors disabled:opacity-40 cursor-pointer ${
+                          className={`flex h-7.5 items-center gap-1.5 px-3 text-xs font-bold rounded transition-colors disabled:opacity-40 cursor-pointer shadow-xs ${
                             isHere && slot.status === 'RESERVED'
                               ? 'bg-clear text-background'
                               : isHere && slot.status === 'PROSPECTING'
@@ -978,7 +986,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                                 : 'bg-primary text-primary-foreground hover:bg-primary/90'
                           }`}
                         >
-                          <CheckCircle className="h-3 w-3" />
+                          <CheckCircle className="h-3.5 w-3.5" />
                           <span>
                             {isHere && slot.status === 'RESERVED'
                               ? t('prospecting:crm.assigned')
@@ -994,11 +1002,11 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
               </ul>
             )}
 
-            <div className="pt-1.5 border-t border-border mt-2 text-center">
+            <div className="shrink-0 pt-2.5 pb-1 border-t border-border/70 text-center">
               <button
                 type="button"
                 onClick={() => setShowManualForm(true)}
-                className="text-[0.67rem] text-muted-foreground hover:text-primary transition-colors underline cursor-pointer"
+                className="text-xs text-muted-foreground hover:text-primary transition-colors underline cursor-pointer font-medium"
               >
                 {t('canvas:inspector.manualEntry', '+ Ingresar comercio manualmente sin prospecto')}
               </button>

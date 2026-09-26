@@ -272,6 +272,36 @@ function csv(content: string, filename: string) {
   });
 }
 
+function releaseExpiredReservations(campaigns: any[]) {
+  const now = Date.now();
+  for (const c of campaigns) {
+    if (!c.slots) continue;
+    for (const s of c.slots) {
+      if (s.status === "RESERVED") {
+        const expiresAt = s.reservation_expires_at
+          ? new Date(s.reservation_expires_at).getTime()
+          : s.reserved_at
+          ? new Date(s.reserved_at).getTime() + 72 * 60 * 60 * 1000
+          : null;
+        if (expiresAt && now >= expiresAt) {
+          s.status = "VACANT";
+          s.business_name = "";
+          s.contact_person = "";
+          s.phone = "";
+          s.email = "";
+          s.website = "";
+          s.business_address = "";
+          s.offer_headline = "";
+          s.reserved_at = null;
+          s.reservation_expires_at = null;
+          const format = s.format || s.slot_type;
+          s.price_usd = format === "LARGE" ? 1200 : format === "MEDIUM" ? 650 : 350;
+        }
+      }
+    }
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
@@ -324,6 +354,7 @@ export default {
 
       // GET /api/campaigns
       if (cleanPath === "/api/campaigns" && request.method === "GET") {
+        releaseExpiredReservations(campaignsStore);
         const mode = url.searchParams.get("mode") || "DEMO";
         const archived = url.searchParams.get("archived") === "true";
         const filtered = campaignsStore.filter(c => {
@@ -712,6 +743,7 @@ export default {
         const campId = campMatch[1];
         const c = campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
+        releaseExpiredReservations([c]);
         return json(c);
       }
 

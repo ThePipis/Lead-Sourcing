@@ -79,6 +79,7 @@ export interface LeadProspect {
   zip: string;
   zipCode?: string;
   phone: string;
+  email?: string;
   /** Absent when the source has no ratings (OpenStreetMap does not). */
   rating?: number;
   reviewCount?: number;
@@ -92,6 +93,9 @@ export interface LeadProspect {
     es: string;
   };
   roiPitch: string;
+  distanceMiles?: number;
+  distance_miles?: number;
+  geoTier?: number;
   status: 'NEW' | 'CONTACTED' | 'REJECTED' | 'WON';
   assignedSlot?: number;
 }

@@ -117,6 +117,7 @@ async def search_leads(
                 zip=norm_zip,
                 zip_code=norm_zip,
                 phone=cand.get("phone"),
+                email=cand.get("email"),
                 rating=cand.get("rating"),
                 review_count=cand.get("review_count"),
                 website_url=cand.get("website_url"),
@@ -128,6 +129,9 @@ async def search_leads(
                 hook_en=llm_result.get("en"),
                 hook_es=llm_result.get("es"),
                 roi_pitch=f"Inversión: ${ad_price:.0f} USD | Ticket: ${ticket:.0f} USD | Breakeven: {breakeven_deals} {'cierre' if breakeven_deals == 1 else 'cierres'} ({breakeven_ratio} ventas requeridas).",
+                distance_miles=cand.get("distance_miles"),
+                distance_m=cand.get("distance_m"),
+                geo_tier=cand.get("geo_tier"),
                 status="NEW"
             )
 
@@ -146,6 +150,8 @@ async def search_leads(
                     city=cand.get("city", city),
                     zip=norm_zip,
                     phone=cand.get("phone"),
+                    email=cand.get("email"),
+                    website_url=cand.get("website_url"),
                     rating=cand.get("rating"),
                     review_count=cand.get("review_count"),
                     source=cand["source"],
@@ -155,15 +161,20 @@ async def search_leads(
                     hook_en=llm_result.get("en"),
                     hook_es=llm_result.get("es"),
                     roi_pitch=lead_resp.roi_pitch,
+                    distance_miles=cand.get("distance_miles"),
                     status="NEW",
                 )
                 db.add(row)
             else:
                 # Refresh the sourced facts, never the operator's own CRM status.
                 row.business_name = cand["business_name"]
+                row.city = cand.get("city", city)
                 row.phone = cand.get("phone")
+                row.email = cand.get("email")
+                row.website_url = cand.get("website_url")
                 row.rating = cand["rating"]
                 row.review_count = cand["review_count"]
+                row.distance_miles = cand.get("distance_miles")
 
             lead_resp.status = row.status
             results.append(lead_resp)
@@ -250,6 +261,7 @@ async def get_replacement_lead(
         zip=norm_zip,
         zip_code=norm_zip,
         phone=cand.get("phone"),
+        email=cand.get("email"),
         rating=cand.get("rating"),
         review_count=cand.get("review_count"),
         website_url=cand.get("website_url"),
@@ -261,6 +273,9 @@ async def get_replacement_lead(
         hook_en=llm_result.get("en"),
         hook_es=llm_result.get("es"),
         roi_pitch=f"Inversión: ${ad_price:.0f} USD | Ticket: ${ticket:.0f} USD | Breakeven: {breakeven_deals} {'cierre' if breakeven_deals == 1 else 'cierres'} ({breakeven_ratio} ventas requeridas).",
+        distance_miles=cand.get("distance_miles"),
+        distance_m=cand.get("distance_m"),
+        geo_tier=cand.get("geo_tier"),
         status="NEW"
     )
 
@@ -276,6 +291,8 @@ async def get_replacement_lead(
             city=cand.get("city", city),
             zip=norm_zip,
             phone=cand.get("phone"),
+            email=cand.get("email"),
+            website_url=cand.get("website_url"),
             rating=cand.get("rating"),
             review_count=cand.get("review_count"),
             source=cand["source"],
@@ -285,6 +302,7 @@ async def get_replacement_lead(
             hook_en=llm_result.get("en"),
             hook_es=llm_result.get("es"),
             roi_pitch=lead_resp.roi_pitch,
+            distance_miles=cand.get("distance_miles"),
             status="NEW",
         )
         db.add(row)

@@ -129,6 +129,7 @@ class LeadResponse(BaseModel):
     zip: Optional[str] = None
     zip_code: Optional[str] = None
     phone: Optional[str] = None
+    email: Optional[str] = None
     # OpenStreetMap has no ratings. A shop nobody has reviewed is a fact about
     # the source, not a zero-star business, so the field stays empty and the
     # interface says so instead of printing a score that was never given.
@@ -143,6 +144,9 @@ class LeadResponse(BaseModel):
     hook_en: Optional[str] = None
     hook_es: Optional[str] = None
     roi_pitch: Optional[str] = None
+    distance_miles: Optional[float] = None
+    distance_m: Optional[float] = None
+    geo_tier: Optional[int] = None
     status: str
     model_config = ConfigDict(from_attributes=True)
 

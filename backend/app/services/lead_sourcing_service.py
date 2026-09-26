@@ -1,8 +1,11 @@
 import asyncio
 import os
 import json
+import re
+import math
+import urllib.parse
 import httpx
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 # Normalización estricta de los 14 giros cerrados del modelo Co-Op Direct Mail
 # OpenStreetMap tag filters for the fourteen niches, used through the public
@@ -290,6 +293,160 @@ MOCK_COORDINATES = {
     ]
 }
 
+CITY_COORDINATES: Dict[str, Tuple[float, float]] = {
+    "92880": (33.9634, -117.5639),  # Eastvale (centro comercial / Town Center)
+    "eastvale": (33.9634, -117.5639),
+    "92882": (33.8753, -117.5664),  # Corona Sur / Centro
+    "92879": (33.8856, -117.5642),  # Corona Norte
+    "92881": (33.8422, -117.5255),  # Corona Este
+    "corona": (33.8753, -117.5664),
+    "92860": (33.9311, -117.5586),  # Norco
+    "norco": (33.9311, -117.5586),
+    "91764": (34.0633, -117.6509),  # Ontario
+    "ontario": (34.0633, -117.6509),
+    "91752": (33.9994, -117.4753),  # Jurupa Valley / Mira Loma
+    "jurupa valley": (33.9994, -117.4753),
+    "mira loma": (33.9994, -117.4753),
+    "91730": (34.1064, -117.5931),  # Rancho Cucamonga
+    "rancho cucamonga": (34.1064, -117.5931),
+    "91709": (33.9898, -117.7326),  # Chino Hills
+    "chino hills": (33.9898, -117.7326),
+    "92506": (33.9533, -117.3962),  # Riverside
+    "riverside": (33.9533, -117.3962),
+}
+
+def get_campaign_center(city: str, zip_code: str) -> Tuple[float, float]:
+    """Obtiene las coordenadas del centro geográfico de la campaña para cálculo de distancia."""
+    z = (zip_code or "").strip()
+    if z in CITY_COORDINATES:
+        return CITY_COORDINATES[z]
+    c = (city or "").strip().lower()
+    for k, coords in CITY_COORDINATES.items():
+        if k in c:
+            return coords
+    return (33.9634, -117.5639)
+
+def haversine_distance_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calcula la distancia geodésica en millas entre dos coordenadas (Haversine)."""
+    R = 3958.8  # Radio medio de la Tierra en millas
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dlat / 2.0) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2.0) ** 2
+    )
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+    return round(R * c, 2)
+
+def normalize_candidate_record(
+    c: Dict[str, Any],
+    target_city: str,
+    target_zip: str,
+    center_lat: float,
+    center_lon: float,
+) -> Dict[str, Any]:
+    """
+    1. Cálculo unificado de distancia en el backend:
+       Calcula distance_miles (float) y distance_m (float) contra el centro de la campaña (lat, lon)
+       para todos los candidatos (OSM, Yelp, Geoapify, Mock), garantizando siempre float válido (nunca NoneType).
+    2. Normalización de etiqueta para ZIP 92880:
+       Si un negocio tiene zip_code == '92880', normaliza automáticamente su ciudad a 'Eastvale (92880)'
+       aunque Yelp o el registro lo llamen históricamente 'Corona'.
+    3. Formato legible de ubicación para Tier 2:
+       Para los contratistas que vengan de Norco o Corona (Tier 2), formatea la ubicación en el
+       candidato para que muestre la distancia respecto a la zona objetivo:
+       ej. 'Norco (A {distancia} mi · Área de servicio)' o 'Corona (A {distancia} mi · Área de servicio)'.
+    """
+    coords = c.get("coordinates") or {}
+    c_lat = coords.get("latitude")
+    c_lon = coords.get("longitude")
+
+    dist_mi: Optional[float] = None
+    if c_lat is not None and c_lon is not None:
+        try:
+            f_lat = float(c_lat)
+            f_lon = float(c_lon)
+            if abs(f_lat) > 0.1 and abs(f_lon) > 0.1:
+                dist_mi = haversine_distance_miles(center_lat, center_lon, f_lat, f_lon)
+        except Exception:
+            dist_mi = None
+
+    if dist_mi is None and c.get("distance_m") is not None:
+        try:
+            val = float(c["distance_m"])
+            if val > 0.0:
+                dist_mi = round(val / 1609.344, 2)
+        except Exception:
+            dist_mi = None
+
+    cand_city_raw = (c.get("base_city") or c.get("city") or "").strip()
+    cand_city_raw = re.sub(r'\s*\(A\s+[\d\.]+\s*mi.*?\)$', '', cand_city_raw).strip()
+    if cand_city_raw == "Eastvale (92880)":
+        cand_city_raw = "Eastvale"
+
+    cand_zip = (c.get("zip_code") or c.get("zip") or "").strip()
+
+    if dist_mi is None and cand_zip in CITY_COORDINATES:
+        z_lat, z_lon = CITY_COORDINATES[cand_zip]
+        dist_mi = haversine_distance_miles(center_lat, center_lon, z_lat, z_lon)
+
+    if dist_mi is None:
+        c_lower = cand_city_raw.lower()
+        for k, k_coords in CITY_COORDINATES.items():
+            if k in c_lower:
+                dist_mi = haversine_distance_miles(center_lat, center_lon, k_coords[0], k_coords[1])
+                break
+
+    # Fallback determinista si no vinieron coordenadas válidas ni coincidencia
+    if dist_mi is None:
+        if cand_zip == "92880" or "eastvale" in cand_city_raw.lower():
+            dist_mi = 1.2
+        elif "norco" in cand_city_raw.lower() or cand_zip == "92860":
+            dist_mi = 3.2
+        elif "corona" in cand_city_raw.lower():
+            dist_mi = 4.8
+        elif "ontario" in cand_city_raw.lower():
+            dist_mi = 5.6
+        elif "jurupa" in cand_city_raw.lower() or "mira loma" in cand_city_raw.lower():
+            dist_mi = 4.1
+        else:
+            dist_mi = 8.5
+
+    # 1. distance_miles siempre numérico float válido (nunca None)
+    c["distance_miles"] = float(round(dist_mi, 2))
+    c["distance_m"] = float(round(dist_mi * 1609.344, 1))
+
+    # Guardar ciudad base antes de normalizar
+    c["base_city"] = cand_city_raw or target_city
+
+    # 2. Normalización de etiqueta para ZIP 92880
+    t_city = target_city.strip().lower()
+    t_zip = target_zip.strip()
+    is_eastvale_target = (t_zip == "92880" or "eastvale" in t_city)
+
+    if cand_zip == "92880":
+        c["city"] = "Eastvale (92880)"
+        c["zip_code"] = "92880"
+        c["zip"] = "92880"
+        # Tier 0 si el registro ya decía Eastvale, Tier 1 si era registro histórico 92880
+        c["geo_tier"] = 0 if "eastvale" in cand_city_raw.lower() else 1
+    elif "eastvale" in cand_city_raw.lower() and is_eastvale_target:
+        c["city"] = "Eastvale (92880)"
+        c["zip_code"] = "92880"
+        c["zip"] = "92880"
+        c["geo_tier"] = 0
+    elif not is_eastvale_target and (t_city in cand_city_raw.lower() or cand_zip == t_zip):
+        c["city"] = cand_city_raw
+        c["geo_tier"] = 0
+    else:
+        # 3. Formato legible de ubicación para Tier 2 (ej. Norco, Corona, etc.)
+        c["geo_tier"] = 2
+        base = cand_city_raw if cand_city_raw else "Área Local"
+        dist_display = f"{c['distance_miles']:.1f}"
+        c["city"] = f"{base} (A {dist_display} mi · Área de servicio)"
+
+    return c
+
 class LeadSourcingService:
     def __init__(self):
         # Why the last Overpass call came back empty, when it did.
@@ -358,6 +515,7 @@ class LeadSourcingService:
                 "name": biz_name,
                 "business_name": biz_name,
                 "phone": phone_num,
+                "email": f"contact@{biz_slug}.com",
                 "address": address,
                 "city": norm_city,
                 "zip_code": norm_zip,
@@ -416,6 +574,37 @@ class LeadSourcingService:
             if cache_key in self._yelp_cache:
                 return self._yelp_cache[cache_key]
             return await self._fetch_yelp_uncached(cache_key, yelp_category, city, zip_code, category_id)
+
+    async def _resolve_yelp_website(self, client: httpx.AsyncClient, yelp_url: str) -> str:
+        r"""
+        Visita la URL de la ficha de Yelp y extrae la web oficial del negocio
+        siguiendo el redireccionador oficial:
+        re.search(r'href=[\'"]/biz_redir\?url=([^\'&"]+)[\'"]', yelp_html)
+        Si existe, lo decodifica con urllib.parse.unquote().
+        Si no se encuentra o hay error, mantiene la URL de Yelp como fallback.
+        """
+        if not yelp_url:
+            return ""
+        try:
+            resp = await client.get(
+                yelp_url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+                follow_redirects=True,
+                timeout=5.0
+            )
+            if resp.status_code == 200:
+                m = re.search(r'href=[\'"]/biz_redir\?url=([^\'&"]+)[\'"]', resp.text)
+                if m:
+                    decoded = urllib.parse.unquote(m.group(1))
+                    if decoded.startswith("http"):
+                        return decoded
+        except Exception:
+            pass
+        return yelp_url
 
     async def _fetch_yelp_uncached(
         self,
@@ -508,6 +697,15 @@ class LeadSourcingService:
                 }
             )
 
+        # Desempaquetar la web real del negocio desde la ficha de Yelp de forma concurrente
+        if candidates:
+            async with httpx.AsyncClient(timeout=6.0) as redir_client:
+                tasks = [self._resolve_yelp_website(redir_client, c.get("website_url", "")) for c in candidates]
+                real_urls = await asyncio.gather(*tasks, return_exceptions=True)
+                for c, r_url in zip(candidates, real_urls):
+                    if isinstance(r_url, str) and r_url:
+                        c["website_url"] = r_url
+
         candidates.sort(key=lambda c: c["distance_m"] or float("inf"))
         self._yelp_cache[cache_key] = candidates
         return candidates
@@ -552,13 +750,15 @@ class LeadSourcingService:
 
                         b_name = props.get("name") or props.get("formatted") or "Comercio Local"
                         phone = props.get("datasource", {}).get("raw", {}).get("phone") or props.get("contact", {}).get("phone", "")
+                        email = props.get("datasource", {}).get("raw", {}).get("email") or props.get("contact", {}).get("email", "")
                         addr = props.get("address_line1") or props.get("street", "")
                         website = props.get("website") or props.get("datasource", {}).get("raw", {}).get("website", "")
 
                         candidates.append({
                             "name": b_name,
                             "business_name": b_name,
-                            "phone": phone or "(951) 555-0150",
+                            "phone": (phone or "").strip(),
+                            "email": (email or "").strip(),
                             "address": addr,
                             "city": props.get("city", city),
                             "zip_code": props.get("postcode", zip_code),
@@ -788,6 +988,143 @@ class LeadSourcingService:
             })
         return candidates
 
+    async def extract_web_contacts_async(
+        self,
+        url: str,
+        client: Optional[httpx.AsyncClient] = None
+    ) -> Dict[str, str]:
+        r"""
+        Rastreador web inteligente asíncrono OSINT: analiza la web del cliente buscando correos
+        (mailto y regex) y teléfonos directos, con fallback SSL -> HTTP y rastreo a subpáginas.
+        Portado directamente de la lógica probada de D:\GenWebSite\prospector-de-sites\prospectar.py.
+        """
+        contacts = {"email": "", "phone": ""}
+        if not url or not url.startswith("http"):
+            return contacts
+
+        # Ignorar directorios genéricos o redes sociales que no son la web del anunciante
+        ignored_domains = ["yelp.com", "google.com", "facebook.com", "instagram.com", "yellowpages.com"]
+        if any(d in url.lower() for d in ignored_domains):
+            return contacts
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9,es;q=0.8",
+        }
+
+        should_close = False
+        if client is None:
+            client = httpx.AsyncClient(timeout=8.0, follow_redirects=True, headers=headers)
+            should_close = True
+
+        html = ""
+        try:
+            try:
+                resp = await client.get(url, timeout=8.0)
+                if resp.status_code == 200:
+                    html = resp.text
+            except Exception:
+                # Fallback SSL a HTTP si la conexión HTTPS falla (certificado, handshake o timeout)
+                if url.startswith("https://"):
+                    http_url = "http://" + url[8:]
+                    try:
+                        resp_http = await client.get(http_url, timeout=8.0)
+                        if resp_http.status_code == 200:
+                            html = resp_http.text
+                    except Exception:
+                        pass
+
+            if not html:
+                return contacts
+
+            # 1. Extracción de correos electrónicos en la home
+            emails_encontrados = set()
+            mailtos = re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', html, re.IGNORECASE)
+            for m in mailtos:
+                emails_encontrados.add(m.lower())
+
+            regex_emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', html)
+            bad_exts = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".js", ".css", ".ico", ".woff", ".woff2")
+            bad_domains = {"wix", "sentry", "wordpress", "example", "domain", "bootstrap", "google", "schema", "gravatar", "cloudflare", "yoursite"}
+
+            for e in regex_emails:
+                el = e.lower()
+                if not any(el.endswith(ext) for ext in bad_exts):
+                    if not any(bad in el for bad in bad_domains):
+                        emails_encontrados.add(el)
+
+            # 2. Extracción de teléfono de respaldo en la web (tel: links o regex US)
+            phone_found = ""
+            tel_links = re.findall(r'href=[\'"]tel:([^\'"]+)[\'"]', html, re.IGNORECASE)
+            if tel_links:
+                raw_tel = tel_links[0].strip()
+                digits = re.sub(r'\D', '', raw_tel)
+                if len(digits) == 11 and digits.startswith('1'):
+                    digits = digits[1:]
+                if len(digits) == 10:
+                    phone_found = f"+1 ({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+                elif raw_tel:
+                    phone_found = raw_tel
+
+            # 3. Rastreo profundo a subpáginas de contacto si no hubo correo en la Home
+            if not emails_encontrados:
+                contact_hrefs = re.findall(r'href=[\'"]([^\'"]*(?:contact|about|contacto)[^\'"]*)[\'"]', html, re.IGNORECASE)
+                seen_suburls = set()
+                for href in contact_hrefs:
+                    if href.startswith("mailto:") or href.startswith("tel:") or href.startswith("#") or href.startswith("javascript:"):
+                        continue
+                    sub_url = urllib.parse.urljoin(url, href)
+                    try:
+                        if urllib.parse.urlparse(sub_url).netloc != urllib.parse.urlparse(url).netloc:
+                            continue
+                    except Exception:
+                        continue
+                    if sub_url in seen_suburls:
+                        continue
+                    seen_suburls.add(sub_url)
+                    if len(seen_suburls) > 2:
+                        break
+
+                    try:
+                        c_resp = await client.get(sub_url, timeout=5.0)
+                        if c_resp.status_code == 200:
+                            c_html = c_resp.text
+                            c_mailtos = re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', c_html, re.IGNORECASE)
+                            for m in c_mailtos:
+                                emails_encontrados.add(m.lower())
+                            if not emails_encontrados:
+                                c_regex = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', c_html)
+                                for e in c_regex:
+                                    el = e.lower()
+                                    if not any(el.endswith(ext) for ext in bad_exts):
+                                        if not any(bad in el for bad in bad_domains):
+                                            emails_encontrados.add(el)
+                            if not phone_found:
+                                c_tel = re.findall(r'href=[\'"]tel:([^\'"]+)[\'"]', c_html, re.IGNORECASE)
+                                if c_tel:
+                                    c_raw = c_tel[0].strip()
+                                    c_digits = re.sub(r'\D', '', c_raw)
+                                    if len(c_digits) == 11 and c_digits.startswith('1'):
+                                        c_digits = c_digits[1:]
+                                    if len(c_digits) == 10:
+                                        phone_found = f"+1 ({c_digits[:3]}) {c_digits[3:6]}-{c_digits[6:]}"
+                            if emails_encontrados:
+                                break
+                    except Exception:
+                        pass
+
+            if emails_encontrados:
+                contacts["email"] = sorted(list(emails_encontrados))[0]
+            if phone_found:
+                contacts["phone"] = phone_found
+
+        finally:
+            if should_close:
+                await client.aclose()
+
+        return contacts
+
     async def search_candidates(
         self,
         category_id: int,
@@ -803,10 +1140,28 @@ class LeadSourcingService:
         - MOCK_MODE=false: OpenStreetMap primero (gratis), Yelp Fusion donde OSM
           no alcanza (oficios sin local: plomería, techado) y Geoapify de cola.
         - Excluye nombres en exclude_names (lista negra o descartados).
+        - Enriquecimiento asíncrono OSINT de correos y teléfonos de respaldo.
         """
         use_mock = self.is_mock_mode_default if mock_mode is None else mock_mode
         taxonomy = normalize_category(category_id)
         exclude_set = {n.strip().lower() for n in (exclude_names or []) if n.strip()}
+        center_lat, center_lon = get_campaign_center(city, zip_code)
+
+        def _candidate_rank(c: Dict[str, Any]) -> tuple:
+            # 1. Tiene teléfono (0=sí, 1=no)
+            has_phone = 0 if (c.get("phone") or "").strip() else 1
+            # 2. Tier geográfico (Tier 0: Eastvale local, Tier 1: ZIP 92880, Tier 2: Ciudades colindantes)
+            geo_tier = int(c.get("geo_tier") if c.get("geo_tier") is not None else 2)
+            # 3. Menor distancia en millas (distance_miles como float garantizado, nunca None)
+            dist_miles = float(c.get("distance_miles") if c.get("distance_miles") is not None else 999.0)
+            # 4. Prestigio de fuente
+            src = c.get("source") or ""
+            source_rank = 0 if src == "Yelp Fusion" else (1 if "OpenStreetMap" in src else 2)
+            # 5. Rating descendente
+            rating = float(c.get("rating") or 0.0)
+            # 6. Número de reseñas descendente
+            reviews = int(c.get("review_count") or 0)
+            return (has_phone, geo_tier, dist_miles, source_rank, -rating, -reviews)
 
         if use_mock:
             simulated = [
@@ -815,12 +1170,12 @@ class LeadSourcingService:
             ]
             for c in simulated:
                 c["simulated"] = True
+                normalize_candidate_record(c, target_city=city, target_zip=zip_code, center_lat=center_lat, center_lon=center_lon)
+            simulated.sort(key=_candidate_rank)
             return simulated[:limit]
 
         # The order is decided by what each source costs, not by which is best.
-        #
-        # OpenStreetMap is free and, for the whole card, already fetched: one
-        # query covers all fourteen niches and the answer is cached.
+        # OpenStreetMap is free and covers all fourteen niches.
         raw_osm = await self.fetch_from_osm(category_id, taxonomy["yelp_category"], city, zip_code)
         candidates = [
             c for c in raw_osm
@@ -839,9 +1194,6 @@ class LeadSourcingService:
                 if yc_name not in existing and yc_name not in exclude_set:
                     candidates.append(yc)
                     existing.add(yc_name)
-            # Yelp's rows carry a phone and a rating; they lead.
-            candidates.sort(key=lambda c: (0 if (c.get("phone") or "").strip() else 1,
-                                           0 if c.get("source") == "Yelp Fusion" else 1))
 
         if callable_count(candidates) < limit:
             existing = {c["name"].lower() for c in candidates}
@@ -867,7 +1219,29 @@ class LeadSourcingService:
                 if len(candidates) >= limit:
                     break
 
-        return candidates[:limit]
+        # Normalizar y unificar distancia geodésica para TODOS los candidatos (OSM, Yelp, Geoapify, Mock)
+        for c in candidates:
+            normalize_candidate_record(c, target_city=city, target_zip=zip_code, center_lat=center_lat, center_lon=center_lon)
+
+        # Ordenamiento jerárquico por relevancia y geografía garantizado sin fallas NoneType:
+        candidates.sort(key=_candidate_rank)
+
+        selected = candidates[:limit]
+
+        # Enriquecimiento web OSINT asíncrono para los candidatos finales seleccionados
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as enrich_client:
+            async def _enrich_candidate(cand: Dict[str, Any]):
+                web_url = cand.get("website_url") or ""
+                if web_url and not any(d in web_url.lower() for d in ["yelp.com", "google.com"]):
+                    contacts = await self.extract_web_contacts_async(web_url, client=enrich_client)
+                    if contacts.get("email"):
+                        cand["email"] = contacts["email"]
+                    if not (cand.get("phone") or "").strip() and contacts.get("phone"):
+                        cand["phone"] = contacts["phone"]
+
+            await asyncio.gather(*[_enrich_candidate(c) for c in selected], return_exceptions=True)
+
+        return selected
 
     def _resolve_ticket(self, niche: str) -> float:
         niche_lower = niche.lower()

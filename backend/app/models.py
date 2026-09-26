@@ -98,6 +98,8 @@ class Lead(Base):
     city = Column(String(128), nullable=True)
     zip = Column(String(10), nullable=True)
     phone = Column(String(32), nullable=True)
+    email = Column(String(128), nullable=True)
+    website_url = Column(String(512), nullable=True)
     rating = Column(Float, default=4.5)
     review_count = Column(Integer, default=25)
     source = Column(String(64), default="Yelp Fusion") # Yelp Fusion, Geoapify Places, Firecrawl
@@ -107,6 +109,7 @@ class Lead(Base):
     hook_en = Column(Text, nullable=True)
     hook_es = Column(Text, nullable=True)
     roi_pitch = Column(Text, nullable=True)
+    distance_miles = Column(Float, nullable=True)
     status = Column(String(32), default="NEW") # NEW, CONTACTED, REJECTED, WON
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 

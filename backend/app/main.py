@@ -48,6 +48,11 @@ def _add_missing_columns() -> None:
             "row_span": "INTEGER DEFAULT 1",
             "col_span": "INTEGER DEFAULT 1",
         },
+        "leads": {
+            "email": "VARCHAR(128)",
+            "website_url": "VARCHAR(512)",
+            "distance_miles": "REAL",
+        },
     }
 
     inspector = inspect(engine)

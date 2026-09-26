@@ -273,6 +273,64 @@ function csv(content: string, filename: string) {
 }
 
 
+function computeProspectDistance(item: any, idx: number, targetCity: string, targetZip: string): { distance_miles: number; distance_m: number; city: string; geo_tier: number } {
+  const isEastvaleTarget = targetZip === "92880" || targetCity.toLowerCase().includes("eastvale");
+  const rawCity = (item.city || "").trim();
+  const rawAddress = (item.address || "").toLowerCase();
+  const rawName = (item.business_name || "").toLowerCase();
+
+  let distMi = item.distance_miles;
+  if (distMi === undefined || distMi === null) {
+    if (rawName.includes("norco") || rawAddress.includes("norco")) {
+      distMi = 3.2;
+    } else if (rawName.includes("corona") || rawAddress.includes("corona")) {
+      distMi = 4.8;
+    } else if (rawName.includes("ontario") || rawAddress.includes("ontario") || rawAddress.includes("euclid")) {
+      distMi = 5.6;
+    } else if (rawName.includes("cucamonga") || rawAddress.includes("milliken") || rawAddress.includes("baseline")) {
+      distMi = 7.8;
+    } else {
+      distMi = 0.8 + ((idx * 7) % 15) * 0.1;
+    }
+  }
+
+  const distance_miles = Number(distMi.toFixed(1));
+  const distance_m = Number((distance_miles * 1609.344).toFixed(0));
+
+  let finalCity = targetCity;
+  let geo_tier = 0;
+
+  if (isEastvaleTarget) {
+    if ((item.zip === "92880" || item.zip_code === "92880") && rawName.includes("corona") && !rawName.includes("eastvale")) {
+      // 2. Normalización de etiqueta para ZIP 92880 (aunque histórico Corona)
+      finalCity = "Eastvale (92880)";
+      geo_tier = 1;
+    } else if (rawName.includes("norco") || rawAddress.includes("norco")) {
+      // 3. Formato legible Tier 2
+      geo_tier = 2;
+      finalCity = `Norco (A ${distance_miles.toFixed(1)} mi · Área de servicio)`;
+    } else if (rawName.includes("corona") && !rawName.includes("eastvale")) {
+      // 3. Formato legible Tier 2
+      geo_tier = 2;
+      finalCity = `Corona (A ${distance_miles.toFixed(1)} mi · Área de servicio)`;
+    } else if (rawName.includes("cucamonga") || rawAddress.includes("milliken") || rawAddress.includes("baseline")) {
+      geo_tier = 2;
+      finalCity = `Rancho Cucamonga (A ${distance_miles.toFixed(1)} mi · Área de servicio)`;
+    } else if (rawName.includes("ontario") || rawAddress.includes("ontario") || rawAddress.includes("euclid")) {
+      geo_tier = 2;
+      finalCity = `Ontario (A ${distance_miles.toFixed(1)} mi · Área de servicio)`;
+    } else {
+      finalCity = "Eastvale (92880)";
+      geo_tier = 0;
+    }
+  } else {
+    finalCity = rawCity || targetCity;
+    geo_tier = 0;
+  }
+
+  return { distance_miles, distance_m, city: finalCity, geo_tier };
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
@@ -760,29 +818,46 @@ export default {
         const filtered = list.filter(item => !excluded.includes(item.business_name.toLowerCase()));
         const slotDef = INITIAL_SLOT_DEFS.find(d => d.slot_number === catId);
 
-        const response = filtered.map((item, idx) => ({
-          id: `LEAD-${catId}-${idx + 1}-${targetZip}`,
-          category_id: catId,
-          category_name: slotDef?.name || "Comercio Local",
-          business_name: item.business_name,
-          name: item.business_name,
-          address: item.address,
-          city: targetCity,
-          zip: targetZip,
-          zip_code: targetZip,
-          phone: item.phone,
-          rating: item.rating,
-          review_count: item.review_count,
-          website_url: `https://www.${item.business_name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
-          source: "Simulación Edge / Yelp Fusion",
-          decision_maker: item.dm || "Owner / Decision Maker",
-          decision_maker_title: "Owner / Decision Maker",
-          avg_ticket_estimated: item.avg_ticket || 500,
-          hook_en: item.hook_en,
-          hook_es: item.hook_es,
-          roi_pitch: `Con solo 1 o 2 clientes nuevos este espacio se amortiza al 100%. Ticket estimado $${item.avg_ticket || 500}.`,
-          status: "NEW"
-        }));
+        const response = filtered.map((item, idx) => {
+          const norm = computeProspectDistance(item, idx, targetCity, targetZip);
+          return {
+            id: `LEAD-${catId}-${idx + 1}-${targetZip}`,
+            category_id: catId,
+            category_name: slotDef?.name || "Comercio Local",
+            business_name: item.business_name,
+            name: item.business_name,
+            address: item.address,
+            city: norm.city,
+            zip: targetZip,
+            zip_code: targetZip,
+            phone: item.phone,
+            rating: item.rating,
+            review_count: item.review_count,
+            distance_miles: norm.distance_miles,
+            distance_m: norm.distance_m,
+            geo_tier: norm.geo_tier,
+            website_url: `https://www.${item.business_name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
+            source: "Simulación Edge / Yelp Fusion",
+            decision_maker: item.dm || "Owner / Decision Maker",
+            decision_maker_title: "Owner / Decision Maker",
+            avg_ticket_estimated: item.avg_ticket || 500,
+            hook_en: item.hook_en,
+            hook_es: item.hook_es,
+            roi_pitch: `Con solo 1 o 2 clientes nuevos este espacio se amortiza al 100%. Ticket estimado $${item.avg_ticket || 500}.`,
+            status: "NEW"
+          };
+        });
+
+        // Ordenamiento jerárquico por relevancia y geografía
+        response.sort((a, b) => {
+          const aPhone = a.phone ? 0 : 1;
+          const bPhone = b.phone ? 0 : 1;
+          if (aPhone !== bPhone) return aPhone - bPhone;
+          if (a.geo_tier !== b.geo_tier) return a.geo_tier - b.geo_tier;
+          if (a.distance_miles !== b.distance_miles) return a.distance_miles - b.distance_miles;
+          if (b.rating !== a.rating) return b.rating - a.rating;
+          return b.review_count - a.review_count;
+        });
 
         return json(response);
       }
@@ -811,6 +886,7 @@ export default {
             hook_en: "Exclusive neighborhood resident promotion"
           };
         }
+        const norm = computeProspectDistance(candidate, 0, targetCity, targetZip);
         const slotDef = INITIAL_SLOT_DEFS.find(d => d.slot_number === catId);
         return json({
           id: `LEAD-${catId}-REP-${Date.now().toString().slice(-4)}`,
@@ -819,11 +895,14 @@ export default {
           business_name: candidate.business_name,
           name: candidate.business_name,
           address: candidate.address,
-          city: targetCity,
+          city: norm.city,
           zip_code: targetZip,
           phone: candidate.phone,
           rating: candidate.rating,
           review_count: candidate.review_count,
+          distance_miles: norm.distance_miles,
+          distance_m: norm.distance_m,
+          geo_tier: norm.geo_tier,
           website_url: `https://www.${candidate.business_name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
           source: "Simulación Edge / Yelp Fusion",
           decision_maker: candidate.dm,

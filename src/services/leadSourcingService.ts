@@ -1006,6 +1006,7 @@ export async function searchCategoryLeads(
           zip: item.zip_code || item.zip || targetZip,
           zipCode: item.zip_code || item.zip || targetZip,
           phone: item.phone || '',
+          email: item.email || '',
           rating: item.rating ?? undefined,
           reviewCount: item.review_count ?? undefined,
           websiteUrl: item.website_url || '',
@@ -1018,6 +1019,9 @@ export async function searchCategoryLeads(
             es: item.hook_es || '',
           },
           roiPitch: item.roi_pitch || '',
+          distanceMiles: item.distance_miles ?? item.distanceMiles ?? (item.distance_m ? Math.round((item.distance_m / 1609.344) * 10) / 10 : undefined),
+          distance_miles: item.distance_miles ?? item.distanceMiles,
+          geoTier: item.geo_tier,
           status: item.status || 'NEW',
         }));
 
@@ -1111,6 +1115,7 @@ export async function fetchReplacementLead(
           zip: item.zip_code || item.zip || targetZip,
           zipCode: item.zip_code || item.zip || targetZip,
           phone: item.phone || '',
+          email: item.email || '',
           rating: item.rating ?? undefined,
           reviewCount: item.review_count ?? undefined,
           websiteUrl: item.website_url || '',
@@ -1123,6 +1128,9 @@ export async function fetchReplacementLead(
             es: item.hook_es || '',
           },
           roiPitch: item.roi_pitch || '',
+          distanceMiles: item.distance_miles ?? item.distanceMiles ?? (item.distance_m ? Math.round((item.distance_m / 1609.344) * 10) / 10 : undefined),
+          distance_miles: item.distance_miles ?? item.distanceMiles,
+          geoTier: item.geo_tier,
           status: 'NEW',
         };
       }

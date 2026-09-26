@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Loader2,
   Lock,
+  Mail,
   MapPin,
   Phone,
   RotateCcw,
@@ -775,7 +776,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                                 {lead.businessName}
                               </span>
                             </p>
-                            <p className="mt-0.5 text-[0.68rem] text-muted-foreground truncate">
+                            <p className="mt-0.5 text-[0.68rem] text-muted-foreground truncate" title={`${lead.address}, ${lead.city}`}>
                               {lead.address}, {lead.city}
                             </p>
                           </div>
@@ -887,6 +888,16 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                               {lead.phone}
                             </a>
                           )}
+                          {lead.email && (
+                            <a
+                              href={`mailto:${lead.email}`}
+                              className="inline-flex items-center gap-1 font-mono text-xs text-foreground/80 hover:text-foreground hover:underline"
+                              title={lead.email}
+                            >
+                              <Mail className="h-3 w-3 text-primary/80 shrink-0" />
+                              <span className="truncate max-w-[130px]">{lead.email}</span>
+                            </a>
+                          )}
                           {lead.websiteUrl && (
                             <a
                               href={lead.websiteUrl}
@@ -896,14 +907,14 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                               title={lead.websiteUrl}
                             >
                               <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-                              <span className="truncate max-w-[140px]">
+                              <span className="truncate max-w-[130px]">
                                 {lead.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
                               </span>
                             </a>
                           )}
-                          <span className="flex items-center gap-0.5 truncate text-xs text-muted-foreground">
+                          <span className="flex items-center gap-0.5 truncate text-xs text-muted-foreground" title={lead.city || lead.address}>
                             <MapPin className="h-2.5 w-2.5 shrink-0" />
-                            <span className="truncate max-w-[150px]">{lead.city || lead.address}</span>
+                            <span className="truncate max-w-[240px]">{lead.city || lead.address}</span>
                           </span>
                         </div>
                       </div>

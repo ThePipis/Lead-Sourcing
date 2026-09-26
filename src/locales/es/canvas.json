@@ -162,5 +162,15 @@
     "unlockTitle": "Desbloquear cobro y regresar a Reservado",
     "hook": "Gancho",
     "assign": "Asignar al {{id}}"
+  },
+  "status": {
+    "vacant": "Vacante",
+    "calling": "Llamando",
+    "reserved": "Reservado (72h)",
+    "paid": "Pagado",
+    "vacantTooltip": "Espacio vacante disponible · Clic para prospectar o asignar cliente",
+    "paidLockedTooltip": "Slot pagado (usa el botón \"Desbloquear\" para modificar)",
+    "changeStatusTooltip": "Cambiar estado"
   }
 }
+

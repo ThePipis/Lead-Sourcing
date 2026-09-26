@@ -162,5 +162,15 @@
     "unlockTitle": "Unlock payment and return to Reserved",
     "hook": "Hook",
     "assign": "Assign to {{id}}"
+  },
+  "status": {
+    "vacant": "Vacant",
+    "calling": "Calling",
+    "reserved": "Reserved (72h)",
+    "paid": "Paid",
+    "vacantTooltip": "Vacant slot available · Click to prospect or assign client",
+    "paidLockedTooltip": "Paid slot (use \"Unlock\" button to modify)",
+    "changeStatusTooltip": "Change status"
   }
 }
+

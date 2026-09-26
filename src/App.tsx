@@ -527,6 +527,7 @@ export default function App() {
     }
 
     const isReserving = newStatus === 'RESERVED';
+    const isVacating = newStatus === 'VACANT';
     const reservedAt = isReserving ? new Date().toISOString() : undefined;
     const reservationExpiresAt = isReserving
       ? new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
@@ -536,6 +537,18 @@ export default function App() {
     const targetPrice = isReserving
       ? (currentSlot ? getSlotDiscountedPrice(currentSlot) : 300)
       : (currentSlot ? getSlotListPrice(currentSlot) : 350);
+
+    const vacantFields = isVacating
+      ? {
+          businessName: '',
+          phone: '',
+          contactPerson: '',
+          email: '',
+          website: '',
+          businessAddress: '',
+          offerHeadline: '',
+        }
+      : {};
 
     setIsSaving(true);
     patchSlots(campaign.id, (slots) =>
@@ -547,6 +560,7 @@ export default function App() {
               priceUsd: targetPrice,
               reservedAt,
               reservationExpiresAt,
+              ...vacantFields,
             }
           : s
       ),
@@ -558,6 +572,7 @@ export default function App() {
         ...(isReserving
           ? { reservedAt, reservationExpiresAt }
           : { reservedAt: null as any, reservationExpiresAt: null as any }),
+        ...vacantFields,
       });
       patchSlots(campaign.id, (slots) =>
         slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),

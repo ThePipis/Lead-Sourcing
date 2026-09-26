@@ -744,6 +744,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   onCloseMenu,
   blockRowOffset,
 }) => {
+  const { t } = useTranslation(['canvas', 'common']);
   const isPaid = slot.status === 'PAID';
   const isReserved = slot.status === 'RESERVED';
   const isProspecting = slot.status === 'PROSPECTING';
@@ -751,6 +752,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   const isExpired = isReservationExpired(slot);
   const hasBusiness = Boolean(slot.businessName && slot.businessName.trim().length > 0);
   const canMarkPaid = isDemo || hasBusiness;
+  const showVacantBadge = !isDemo && (isVacant || !hasBusiness);
 
   const format: SlotFormat =
     slot.format ||
@@ -1140,43 +1142,53 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
           )}
         </div>
 
-        {/* Status Dropdown */}
-        <select
-          value={slot.status}
-          disabled={isPaid}
-          onChange={(e) => {
-            const next = e.target.value as SlotStatus;
-            if (isPaid && next !== 'PAID') {
-              if (next === 'VACANT') {
-                onUndoPayment?.(slot.slotNumber, 'VACANT', true);
+        {/* Status Dropdown / Vacant Badge */}
+        {showVacantBadge ? (
+          <span
+            onClick={() => onInspect?.(slot.slotNumber)}
+            className="inline-flex items-center justify-center px-2 py-0.5 rounded text-[0.63rem] font-bold tracking-wide border border-clear/50 bg-clear/15 text-clear select-none shadow-2xs cursor-pointer hover:bg-clear/25 hover:border-clear/70 transition-colors"
+            title={t('canvas:status.vacantTooltip', 'Espacio vacante disponible · Clic para prospectar o asignar cliente')}
+          >
+            {t('canvas:status.vacant', 'Vacante')}
+          </span>
+        ) : (
+          <select
+            value={slot.status}
+            disabled={isPaid}
+            onChange={(e) => {
+              const next = e.target.value as SlotStatus;
+              if (isPaid && next !== 'PAID') {
+                if (next === 'VACANT') {
+                  onUndoPayment?.(slot.slotNumber, 'VACANT', true);
+                } else {
+                  onUndoPayment?.(slot.slotNumber, next, false);
+                }
               } else {
-                onUndoPayment?.(slot.slotNumber, next, false);
+                onUpdateStatus(slot.slotNumber, next);
               }
-            } else {
-              onUpdateStatus(slot.slotNumber, next);
-            }
-          }}
-          className={`bg-secondary text-foreground border border-border text-[0.63rem] font-semibold px-1 py-0.5 rounded focus:outline-none transition-all ${
-            isPaid ? 'opacity-60 cursor-not-allowed bg-muted/40' : 'cursor-pointer hover:border-foreground/40'
-          }`}
-          title={isPaid ? 'Slot pagado (usa el botón "Desbloquear" para modificar)' : 'Cambiar estado'}
-        >
-          {isPaid ? (
-            <option value="PAID">Pagado</option>
-          ) : isReserved ? (
-            <>
-              <option value="RESERVED">Reservado (72h)</option>
-              {canMarkPaid && <option value="PAID">Pagado</option>}
-            </>
-          ) : (
-            <>
-              <option value="VACANT">Vacante</option>
-              <option value="PROSPECTING">Llamando</option>
-              <option value="RESERVED">Reservado (72h)</option>
-              {canMarkPaid && <option value="PAID">Pagado</option>}
-            </>
-          )}
-        </select>
+            }}
+            className={`bg-secondary text-foreground border border-border text-[0.63rem] font-semibold px-1 py-0.5 rounded focus:outline-none transition-all ${
+              isPaid ? 'opacity-60 cursor-not-allowed bg-muted/40' : 'cursor-pointer hover:border-foreground/40'
+            }`}
+            title={isPaid ? t('canvas:status.paidLockedTooltip', 'Slot pagado (usa el botón "Desbloquear" para modificar)') : t('canvas:status.changeStatusTooltip', 'Cambiar estado')}
+          >
+            {isPaid ? (
+              <option value="PAID">{t('canvas:status.paid', 'Pagado')}</option>
+            ) : isReserved ? (
+              <>
+                <option value="RESERVED">{t('canvas:status.reserved', 'Reservado (72h)')}</option>
+                {canMarkPaid && <option value="PAID">{t('canvas:status.paid', 'Pagado')}</option>}
+              </>
+            ) : (
+              <>
+                <option value="VACANT">{t('canvas:status.vacant', 'Vacante')}</option>
+                <option value="PROSPECTING">{t('canvas:status.calling', 'Llamando')}</option>
+                <option value="RESERVED">{t('canvas:status.reserved', 'Reservado (72h)')}</option>
+                {canMarkPaid && <option value="PAID">{t('canvas:status.paid', 'Pagado')}</option>}
+              </>
+            )}
+          </select>
+        )}
       </div>
     </div>
   );

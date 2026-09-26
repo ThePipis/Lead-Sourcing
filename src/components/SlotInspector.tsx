@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   Check,
   CheckCircle,
+  Clock,
   Copy,
   Eraser,
   ExternalLink,
@@ -26,6 +27,12 @@ import {
   updateLeadStatus,
 } from '../services/leadSourcingService.ts';
 import { CategoryDefinition, LeadProspect, SlotState, SlotStatus } from '../types.ts';
+import {
+  formatReservationCountdown,
+  getSlotDiscountedPrice,
+  getSlotReservationInfo,
+  isReservationExpired,
+} from '../utils/modularGrid.ts';
 
 interface SlotInspectorProps {
   slot: SlotState;
@@ -40,6 +47,7 @@ interface SlotInspectorProps {
   onClose: () => void;
   onUpdateBusiness: (slotNumber: number, businessName: string, headline?: string) => void;
   onUpdateStatus: (slotNumber: number, status: SlotStatus) => void;
+  onReactivateOffer?: (slotNumber: number) => void;
   onSwapSlots: (source: number, target: number) => void;
   onClearSlot: (slotNumber: number) => void;
   onUndoPayment: (slotNumber: number, targetStatus?: SlotStatus, clearBusiness?: boolean) => void;
@@ -72,6 +80,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
   onClose,
   onUpdateBusiness,
   onUpdateStatus,
+  onReactivateOffer,
   onSwapSlots,
   onClearSlot,
   onUndoPayment,
@@ -569,24 +578,67 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                   </div>
                 ) : (
                   <>
-                    <button
-                      id="btn-inspector-reserve"
-                      type="button"
-                      onClick={() => onUpdateStatus(slot.slotNumber, 'RESERVED')}
-                      disabled={isSaving || !slot.businessName || slot.status === 'RESERVED'}
-                      className="min-h-9 border border-due/60 px-3 text-xs font-bold text-due transition-colors hover:bg-due hover:text-background disabled:opacity-30"
-                    >
-                      {t('canvas:inspector.reserve')}
-                    </button>
-                    <button
-                      id="btn-inspector-mark-paid"
-                      type="button"
-                      onClick={() => onUpdateStatus(slot.slotNumber, 'PAID')}
-                      disabled={isSaving || !slot.businessName}
-                      className="min-h-9 border border-clear px-3 text-xs font-bold text-clear transition-colors hover:bg-clear hover:text-background disabled:opacity-30"
-                    >
-                      {t('canvas:inspector.markPaid')}
-                    </button>
+                    {slot.status === 'RESERVED' ? (
+                      <div className="col-span-full w-full p-2.5 bg-amber-500/10 border border-amber-500/30 rounded space-y-2 mb-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
+                            <Clock className="h-3.5 w-3.5" />
+                            {isReservationExpired(slot)
+                              ? '🚨 Reserva 72h Vencida'
+                              : `⏳ Expira en: ${formatReservationCountdown(slot)}`}
+                          </span>
+                          <span className="font-mono font-bold text-xs bg-amber-500/20 px-1.5 py-0.5 rounded text-amber-700 dark:text-amber-300">
+                            ${getSlotDiscountedPrice(slot)} (-${getSlotReservationInfo(slot).discountUsd})
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {onReactivateOffer && (
+                            <button
+                              type="button"
+                              onClick={() => onReactivateOffer(slot.slotNumber)}
+                              disabled={isSaving}
+                              className="flex-1 py-1.5 px-2 bg-live text-primary-foreground font-bold text-xs rounded hover:opacity-90 transition-opacity flex items-center justify-center gap-1 cursor-pointer"
+                              title="Renovar 72 horas más y asegurar tarifa con descuento"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                              <span>Reactivar Oferta (-${getSlotReservationInfo(slot).discountUsd})</span>
+                            </button>
+                          )}
+                          <button
+                            id="btn-inspector-mark-paid"
+                            type="button"
+                            onClick={() => onUpdateStatus(slot.slotNumber, 'PAID')}
+                            disabled={isSaving || !slot.businessName}
+                            className="flex-1 py-1.5 px-2 bg-clear text-primary-foreground font-black text-xs rounded hover:opacity-90 transition-opacity flex items-center justify-center gap-1 cursor-pointer"
+                            title="Registrar cobro y sellar slot como pagado"
+                          >
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            <span>Cobrar / Pagar</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          id="btn-inspector-reserve"
+                          type="button"
+                          onClick={() => onUpdateStatus(slot.slotNumber, 'RESERVED')}
+                          disabled={isSaving || !slot.businessName}
+                          className="min-h-9 border border-due/60 px-3 text-xs font-bold text-due transition-colors hover:bg-due hover:text-background disabled:opacity-30 cursor-pointer"
+                        >
+                          {t('canvas:inspector.reserve')}
+                        </button>
+                        <button
+                          id="btn-inspector-mark-paid"
+                          type="button"
+                          onClick={() => onUpdateStatus(slot.slotNumber, 'PAID')}
+                          disabled={isSaving || !slot.businessName}
+                          className="min-h-9 border border-clear px-3 text-xs font-bold text-clear transition-colors hover:bg-clear hover:text-background disabled:opacity-30 cursor-pointer"
+                        >
+                          {t('canvas:inspector.markPaid')}
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
 

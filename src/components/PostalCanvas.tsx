@@ -68,6 +68,7 @@ export interface PostalCanvasProps {
   onMergeSlot?: (slotNumber: number, targetFormat: 'MEDIUM' | 'LARGE') => void;
   onSplitSlot?: (slotNumber: number, targetFormat?: 'SMALL' | 'MEDIUM') => void;
   onReleaseReservation?: (slotNumber: number) => void;
+  onReactivateOffer?: (slotNumber: number) => void;
   onResetLayout?: (wipe: boolean) => void;
   coveredHouseholds?: number;
   selectedRoutes?: number;
@@ -118,6 +119,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
   onMergeSlot,
   onSplitSlot,
   onReleaseReservation,
+  onReactivateOffer,
   onResetLayout,
   coveredHouseholds = 0,
   selectedRoutes = 0,
@@ -409,6 +411,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         onMerge={handleMerge}
                         onSplit={handleSplit}
                         onRelease={handleRelease}
+                        onReactivateOffer={onReactivateOffer}
                         onUpdateStatus={onUpdateSlotStatus}
                         onUndoPayment={onUndoPayment}
                         onPromptUnlock={(s) => setUnlockTargetSlot(s)}
@@ -448,6 +451,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         onMerge={handleMerge}
                         onSplit={handleSplit}
                         onRelease={handleRelease}
+                        onReactivateOffer={onReactivateOffer}
                         onUpdateStatus={onUpdateSlotStatus}
                         onUndoPayment={onUndoPayment}
                         onPromptUnlock={(s) => setUnlockTargetSlot(s)}
@@ -476,6 +480,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         onMerge={handleMerge}
                         onSplit={handleSplit}
                         onRelease={handleRelease}
+                        onReactivateOffer={onReactivateOffer}
                         onUpdateStatus={onUpdateSlotStatus}
                         onUndoPayment={onUndoPayment}
                         onPromptUnlock={(s) => setUnlockTargetSlot(s)}
@@ -523,6 +528,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                           onMerge={handleMerge}
                           onSplit={handleSplit}
                           onRelease={handleRelease}
+                          onReactivateOffer={onReactivateOffer}
                           onUpdateStatus={onUpdateSlotStatus}
                           onUndoPayment={onUndoPayment}
                           onPromptUnlock={(s) => setUnlockTargetSlot(s)}
@@ -701,6 +707,7 @@ interface ModularSlotCardProps {
   onMerge: (slotNumber: number, format: 'MEDIUM' | 'LARGE') => void;
   onSplit: (slotNumber: number, targetFormat?: 'SMALL' | 'MEDIUM') => void;
   onRelease: (slotNumber: number) => void;
+  onReactivateOffer?: (slotNumber: number) => void;
   onUpdateStatus: (slotNumber: number, status: SlotStatus) => void;
   onUndoPayment?: (slotNumber: number, targetStatus?: SlotStatus, clearBusiness?: boolean) => void;
   onPromptUnlock?: (slot: SlotState) => void;
@@ -720,6 +727,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   onMerge,
   onSplit,
   onRelease,
+  onReactivateOffer,
   onUpdateStatus,
   onUndoPayment,
   onPromptUnlock,
@@ -842,19 +850,23 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-            {isReserved && !isExpired ? (
+            {isReserved ? (
               <div
                 className="flex items-baseline gap-1 font-mono"
-                title={`Precio de lista: $${resInfo.listPrice} · Descuento 72h: -$${resInfo.discountUsd} (${resInfo.percentOff}% OFF)`}
+                title={`Precio de lista: $${resInfo.listPrice} · Tarifa con descuento: $${resInfo.discountedPrice} (-$${resInfo.discountUsd})`}
               >
                 <span className="text-[0.62rem] text-muted-foreground line-through font-semibold">
                   ${resInfo.listPrice}
                 </span>
-                <span className="text-xs font-black text-amber-600 dark:text-amber-400">
+                <span className={`text-xs font-black ${isExpired ? 'text-due' : 'text-amber-600 dark:text-amber-400'}`}>
                   ${slot.priceUsd || resInfo.discountedPrice}
                 </span>
-                <span className="text-[0.55rem] font-bold px-1 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                  {resInfo.percentOff}% OFF
+                <span className={`text-[0.55rem] font-bold px-1 py-0.2 rounded border ${
+                  isExpired
+                    ? 'bg-due/15 text-due border-due/30'
+                    : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                }`}>
+                  {isExpired ? 'EXPIRADA' : `${resInfo.percentOff}% OFF`}
                 </span>
               </div>
             ) : (
@@ -880,36 +892,51 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
 
         {/* 72h Reservation Timer Badge */}
         {isReserved && (
-          <div className="mb-1.5">
+          <div className="mb-1.5" onClick={(e) => e.stopPropagation()}>
             <div
               className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[0.6rem] font-bold border ${
                 isExpired
-                  ? 'bg-due/20 border-due text-due animate-pulse'
+                  ? 'bg-due/15 border-due/50 text-due'
                   : 'bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400'
               }`}
             >
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 truncate">
                 <Clock className="h-3 w-3 shrink-0" />
-                <span>
-                  {isExpired ? '🚨 RESERVA EXPIRADA' : `⏳ ${formatReservationCountdown(slot)}`}
+                <span className="truncate">
+                  {isExpired ? '🚨 72h VENCIDA' : `⏳ ${formatReservationCountdown(slot)}`}
                 </span>
                 {!isExpired && (
-                  <span className="text-[0.55rem] font-semibold opacity-90">
+                  <span className="text-[0.55rem] font-semibold opacity-90 shrink-0">
                     (-${resInfo.discountUsd})
                   </span>
                 )}
               </span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRelease(slot.slotNumber);
-                }}
-                className="ml-1 text-[0.58rem] underline hover:text-amber-700 dark:hover:text-amber-300 font-black cursor-pointer shrink-0"
-                title="Liberar slot y restaurar a precio de lista"
-              >
-                Liberar
-              </button>
+              <div className="flex items-center gap-1 shrink-0 ml-1">
+                {isExpired && onReactivateOffer && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReactivateOffer(slot.slotNumber);
+                    }}
+                    className="text-[0.58rem] bg-live/20 hover:bg-live/30 text-live border border-live/40 px-1.5 py-0.2 rounded font-black cursor-pointer transition-colors"
+                    title={`Reactivar oferta de $${resInfo.discountedPrice} y renovar 72 horas`}
+                  >
+                    🔄 Reactivar (-${resInfo.discountUsd})
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRelease(slot.slotNumber);
+                  }}
+                  className="text-[0.58rem] underline hover:text-foreground font-semibold cursor-pointer text-muted-foreground"
+                  title="Liberar slot y restaurar a vacante"
+                >
+                  Liberar
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -655,24 +655,49 @@ export default function App() {
     }
   };
 
-  // Automatically release expired 72h reservations back to VACANT at list price
-  useEffect(() => {
+  const handleReactivateOffer = async (slotNumber: number) => {
     if (!campaign) return;
-    const checkExpired = () => {
-      const expired = campaign.slots.filter(
-        (s) => s.status === 'RESERVED' && isReservationExpired(s),
-      );
-      if (expired.length > 0) {
-        expired.forEach((s) => {
-          handleReleaseReservation(s.slotNumber);
-        });
-      }
-    };
+    setIsSaving(true);
+    const currentSlot = campaign.slots.find((s) => s.slotNumber === slotNumber);
+    if (!currentSlot) {
+      setIsSaving(false);
+      return;
+    }
 
-    checkExpired();
-    const interval = setInterval(checkExpired, 30000);
-    return () => clearInterval(interval);
-  }, [campaign?.id, campaign?.slots]);
+    const discountedPrice = getSlotDiscountedPrice(currentSlot);
+    const nowIso = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+
+    patchSlots(campaign.id, (slots) =>
+      slots.map((s) =>
+        s.slotNumber === slotNumber
+          ? {
+              ...s,
+              status: 'RESERVED',
+              priceUsd: discountedPrice,
+              reservedAt: nowIso,
+              reservationExpiresAt: expiresAt,
+            }
+          : s
+      )
+    );
+
+    try {
+      const updated = await updateCampaignSlot(campaign.id, slotNumber, {
+        status: 'RESERVED',
+        priceUsd: discountedPrice,
+        reservedAt: nowIso,
+        reservationExpiresAt: expiresAt,
+      });
+      patchSlots(campaign.id, (slots) =>
+        slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s))
+      );
+    } catch (err) {
+      console.error('Failed to reactivate offer:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleConfirmPayment = async (record: {
     paymentRef: string;
@@ -1253,6 +1278,7 @@ export default function App() {
               onMergeSlot={handleMergeSlot}
               onSplitSlot={handleSplitSlot}
               onReleaseReservation={handleReleaseReservation}
+              onReactivateOffer={handleReactivateOffer}
               onResetLayout={handleResetSlotLayout}
               onAutofill={handleAutofillSlots}
               onMarkAllPaid={handleMarkAllPaid}
@@ -1290,6 +1316,7 @@ export default function App() {
                     onClose={closeInspector}
                     onUpdateBusiness={handleUpdateSlotBusiness}
                     onUpdateStatus={handleUpdateSlotStatus}
+                    onReactivateOffer={handleReactivateOffer}
                     onSwapSlots={(from, to) => {
                       handleSwapSlots(from, to);
                       setInspectedSlot(to);

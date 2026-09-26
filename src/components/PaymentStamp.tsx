@@ -2,6 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SlotState } from '../types.ts';
 import { CheckCircle2, Loader2, Phone, ShieldCheck, X } from 'lucide-react';
+import {
+  getSlotReservationInfo,
+  getSlotListPrice,
+  getSlotDiscountedPrice,
+} from '../utils/modularGrid.ts';
 
 interface PaymentStampProps {
   slot: SlotState;
@@ -34,9 +39,16 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
   isSaving,
 }) => {
   const { t } = useTranslation(['common']);
+  const resInfo = getSlotReservationInfo(slot);
+  const listPrice = resInfo.listPrice || getSlotListPrice(slot) || 350;
+  const discountedPrice = resInfo.discountedPrice || getSlotDiscountedPrice(slot) || 300;
+  const discountDiff = resInfo.discountUsd || (listPrice - discountedPrice);
+
   const [method, setMethod] = useState<string>(PAYMENT_METHODS[0]);
   const [reference, setReference] = useState<string>('Zelle');
-  const [amount, setAmount] = useState<string>(String(slot.priceUsd || 350));
+  const [amount, setAmount] = useState<string>(
+    String(slot.priceUsd || (slot.status === 'RESERVED' ? discountedPrice : listPrice))
+  );
   const [date, setDate] = useState<string>(todayIso());
   
   const amountInputRef = useRef<HTMLInputElement | null>(null);
@@ -73,8 +85,9 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
   const amountValid = Number.isFinite(parsedAmount) && parsedAmount > 0;
   const refValid = reference.trim().length > 0;
   const canSubmit = amountValid && refValid && !isSaving;
-  const belowList = amountValid && parsedAmount < slot.priceUsd;
-  const aboveList = amountValid && parsedAmount > slot.priceUsd;
+  const isDiscounted72h = amountValid && parsedAmount === discountedPrice && discountDiff > 0;
+  const belowList = amountValid && !isDiscounted72h && parsedAmount < listPrice;
+  const aboveList = amountValid && parsedAmount > listPrice;
 
   const handleMethodChange = (newMethod: string) => {
     setMethod(newMethod);
@@ -245,8 +258,33 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
                 className="field-value h-full w-full pl-2 pr-3 bg-transparent text-xs sm:text-sm font-mono font-bold tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </div>
-            <div className="mt-2 min-h-[1.1rem] flex items-center text-[0.63rem] font-mono tabular-nums text-muted-foreground">
-              <span>{t('common:payment.listPrice', { price: slot.priceUsd || formatBadge.price })}</span>
+            {/* Quick 1-Click Offer & List Chips */}
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setAmount(String(discountedPrice))}
+                className={`px-2 py-1 text-[0.68rem] font-mono font-bold rounded border transition-colors cursor-pointer flex items-center gap-1 ${
+                  parsedAmount === discountedPrice
+                    ? 'border-live bg-live/15 text-live ring-1 ring-live/30'
+                    : 'border-rule bg-secondary/60 text-muted-foreground hover:text-foreground hover:bg-secondary'
+                }`}
+                title={`Aplicar tarifa especial 72h con -$${discountDiff} de descuento`}
+              >
+                <span>⚡ Oferta 72h: ${discountedPrice}</span>
+                <span className="text-[0.6rem] font-normal opacity-80">(-${discountDiff})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAmount(String(listPrice))}
+                className={`px-2 py-1 text-[0.68rem] font-mono font-bold rounded border transition-colors cursor-pointer flex items-center gap-1 ${
+                  parsedAmount === listPrice
+                    ? 'border-foreground/40 bg-foreground/10 text-foreground ring-1 ring-foreground/20'
+                    : 'border-rule bg-secondary/60 text-muted-foreground hover:text-foreground hover:bg-secondary'
+                }`}
+                title="Aplicar tarifa estándar de lista sin descuento"
+              >
+                <span>Tarifa Lista: ${listPrice}</span>
+              </button>
             </div>
           </div>
 
@@ -273,12 +311,21 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
         </div>
 
         {/* Negotiated Delta Alerts */}
+        {isDiscounted72h && (
+          <div className="border-t border-rule bg-live/10 px-4 py-2 font-mono text-[0.68rem] tabular-nums text-live flex items-center gap-1.5">
+            <span>⚡</span>
+            <span>
+              Oferta especial 72h aplicada: Descuento de ${discountDiff} USD considerado (${discountedPrice} USD cobrado).
+            </span>
+          </div>
+        )}
+
         {belowList && (
           <div className="border-t border-rule bg-due/10 px-4 py-2 font-mono text-[0.68rem] tabular-nums text-due flex items-center gap-1.5">
             <span>⚠️</span>
             <span>
               {t('common:payment.belowList', {
-                diff: Math.round((slot.priceUsd || formatBadge.price) - parsedAmount),
+                diff: Math.round(listPrice - parsedAmount),
               })}
             </span>
           </div>
@@ -288,7 +335,7 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
           <div className="border-t border-rule bg-live/10 px-4 py-2 font-mono text-[0.68rem] tabular-nums text-live flex items-center gap-1.5">
             <span>★</span>
             <span>
-              Tarifa acordada con recargo premium: +${Math.round(parsedAmount - (slot.priceUsd || formatBadge.price))} USD sobre precio de lista.
+              Tarifa acordada con recargo premium: +${Math.round(parsedAmount - listPrice)} USD sobre precio de lista.
             </span>
           </div>
         )}

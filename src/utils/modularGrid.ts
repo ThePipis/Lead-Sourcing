@@ -11,6 +11,13 @@ export const MODULAR_PRICES: Record<SlotFormat, number> = {
 export const RESERVATION_HOLD_HOURS = 72;
 export const RESERVATION_HOLD_MS = RESERVATION_HOLD_HOURS * 60 * 60 * 1000;
 
+export const RESERVATION_72H_DISCOUNTS: Record<SlotFormat, number> = {
+  SMALL: 50,
+  MEDIUM: 100,
+  LARGE: 200,
+  USPS: 0,
+};
+
 export interface ModularCellDef {
   slotNumber: number;
   side: CardSide;
@@ -1233,6 +1240,80 @@ export function formatReservationCountdown(slot: SlotState): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${hours}h ${minutes}m`;
+}
+
+/**
+ * Returns base list price for a slot format
+ */
+export function getSlotListPrice(slot: {
+  format?: SlotFormat;
+  rowSpan?: number;
+  colSpan?: number;
+  slotNumber?: number;
+}): number {
+  if (slot.slotNumber === 32 || slot.format === 'USPS') return 0;
+  const fmt =
+    slot.format ||
+    (slot.rowSpan === 2 && slot.colSpan === 2
+      ? 'LARGE'
+      : slot.rowSpan === 2
+      ? 'MEDIUM'
+      : 'SMALL');
+  return MODULAR_PRICES[fmt] ?? 350;
+}
+
+/**
+ * Returns discounted price for 72-hour reservation
+ */
+export function getSlotDiscountedPrice(slot: {
+  format?: SlotFormat;
+  rowSpan?: number;
+  colSpan?: number;
+  slotNumber?: number;
+}): number {
+  const listPrice = getSlotListPrice(slot);
+  if (listPrice === 0) return 0;
+  const fmt =
+    slot.format ||
+    (slot.rowSpan === 2 && slot.colSpan === 2
+      ? 'LARGE'
+      : slot.rowSpan === 2
+      ? 'MEDIUM'
+      : 'SMALL');
+  const discount = RESERVATION_72H_DISCOUNTS[fmt] ?? 50;
+  return Math.max(0, listPrice - discount);
+}
+
+/**
+ * Returns comprehensive reservation pricing and discount info
+ */
+export function getSlotReservationInfo(slot: SlotState): {
+  listPrice: number;
+  discountUsd: number;
+  discountedPrice: number;
+  percentOff: number;
+  isDiscounted: boolean;
+} {
+  const listPrice = getSlotListPrice(slot);
+  const fmt =
+    slot.format ||
+    (slot.rowSpan === 2 && slot.colSpan === 2
+      ? 'LARGE'
+      : slot.rowSpan === 2
+      ? 'MEDIUM'
+      : 'SMALL');
+  const discountUsd = RESERVATION_72H_DISCOUNTS[fmt] ?? 0;
+  const discountedPrice = Math.max(0, listPrice - discountUsd);
+  const percentOff = listPrice > 0 ? Math.round((discountUsd / listPrice) * 100) : 0;
+  const isDiscounted = slot.status === 'RESERVED' && !isReservationExpired(slot);
+
+  return {
+    listPrice,
+    discountUsd,
+    discountedPrice,
+    percentOff,
+    isDiscounted,
+  };
 }
 
 /**

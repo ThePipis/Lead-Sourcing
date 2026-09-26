@@ -18,6 +18,9 @@ import {
   mergeModularSlot,
   splitModularSlot,
   swapModularSlots,
+  getSlotListPrice,
+  getSlotDiscountedPrice,
+  isReservationExpired,
 } from './utils/modularGrid.ts';
 import {
   Campaign,
@@ -74,9 +77,9 @@ function mergeSlotUpdate(existing: SlotState, updated: SlotState): SlotState {
       ? updated.format
       : existing.format && existing.format !== 'SMALL'
       ? existing.format
-      : existing.priceUsd === 1200 || updated.priceUsd === 1200
+      : existing.priceUsd === 1200 || updated.priceUsd === 1200 || existing.priceUsd === 1000 || updated.priceUsd === 1000
       ? 'LARGE'
-      : existing.priceUsd === 650 || updated.priceUsd === 650
+      : existing.priceUsd === 650 || updated.priceUsd === 650 || existing.priceUsd === 550 || updated.priceUsd === 550
       ? 'MEDIUM'
       : updated.format || existing.format || 'SMALL';
 
@@ -524,6 +527,11 @@ export default function App() {
       ? new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
       : undefined;
 
+    // Apply 72h reservation discount when RESERVED, or restore list price when moving to VACANT/PROSPECTING
+    const targetPrice = isReserving
+      ? (currentSlot ? getSlotDiscountedPrice(currentSlot) : 300)
+      : (currentSlot ? getSlotListPrice(currentSlot) : 350);
+
     setIsSaving(true);
     patchSlots(campaign.id, (slots) =>
       slots.map((s) =>
@@ -531,6 +539,7 @@ export default function App() {
           ? {
               ...s,
               status: newStatus,
+              priceUsd: targetPrice,
               reservedAt,
               reservationExpiresAt,
             }
@@ -540,7 +549,10 @@ export default function App() {
     try {
       const updated = await updateCampaignSlot(campaign.id, slotNumber, {
         status: newStatus,
-        ...(isReserving ? { reservedAt, reservationExpiresAt } : {}),
+        priceUsd: targetPrice,
+        ...(isReserving
+          ? { reservedAt, reservationExpiresAt }
+          : { reservedAt: null as any, reservationExpiresAt: null as any }),
       });
       patchSlots(campaign.id, (slots) =>
         slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
@@ -596,15 +608,23 @@ export default function App() {
   const handleReleaseReservation = async (slotNumber: number) => {
     if (!campaign) return;
     setIsSaving(true);
+    const currentSlot = campaign.slots.find((s) => s.slotNumber === slotNumber);
+    const listPrice = currentSlot ? getSlotListPrice(currentSlot) : 350;
+
     patchSlots(campaign.id, (slots) =>
       slots.map((s) =>
         s.slotNumber === slotNumber
           ? {
               ...s,
               status: 'VACANT',
+              priceUsd: listPrice,
               businessName: '',
               phone: '',
               contactPerson: '',
+              email: '',
+              website: '',
+              businessAddress: '',
+              offerHeadline: '',
               reservedAt: undefined,
               reservationExpiresAt: undefined,
             }
@@ -614,9 +634,16 @@ export default function App() {
     try {
       const updated = await updateCampaignSlot(campaign.id, slotNumber, {
         status: 'VACANT',
+        priceUsd: listPrice,
         businessName: '',
         phone: '',
         contactPerson: '',
+        email: '',
+        website: '',
+        businessAddress: '',
+        offerHeadline: '',
+        reservedAt: null as any,
+        reservationExpiresAt: null as any,
       });
       patchSlots(campaign.id, (slots) =>
         slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
@@ -627,6 +654,25 @@ export default function App() {
       setIsSaving(false);
     }
   };
+
+  // Automatically release expired 72h reservations back to VACANT at list price
+  useEffect(() => {
+    if (!campaign) return;
+    const checkExpired = () => {
+      const expired = campaign.slots.filter(
+        (s) => s.status === 'RESERVED' && isReservationExpired(s),
+      );
+      if (expired.length > 0) {
+        expired.forEach((s) => {
+          handleReleaseReservation(s.slotNumber);
+        });
+      }
+    };
+
+    checkExpired();
+    const interval = setInterval(checkExpired, 30000);
+    return () => clearInterval(interval);
+  }, [campaign?.id, campaign?.slots]);
 
   const handleConfirmPayment = async (record: {
     paymentRef: string;
@@ -727,6 +773,8 @@ export default function App() {
   const handleClearSlot = async (slotNumber: number) => {
     if (!campaign) return;
     setIsSaving(true);
+    const currentSlot = campaign.slots.find((s) => s.slotNumber === slotNumber);
+    const listPrice = currentSlot ? getSlotListPrice(currentSlot) : 350;
     const reset = {
       businessName: '',
       contactPerson: '',
@@ -736,14 +784,17 @@ export default function App() {
       businessAddress: '',
       offerHeadline: '',
       status: 'VACANT' as SlotStatus,
+      priceUsd: listPrice,
       paymentRef: '',
       amountCollectedUsd: 0,
       paidAt: null,
+      reservedAt: null as any,
+      reservationExpiresAt: null as any,
     };
     patchSlots(campaign.id, (slots) =>
       slots.map((s) =>
         s.slotNumber === slotNumber
-          ? { ...s, ...reset, paidAt: undefined, amountCollectedUsd: 0 }
+          ? { ...s, ...reset, paidAt: undefined, amountCollectedUsd: 0, reservedAt: undefined, reservationExpiresAt: undefined }
           : s,
       ),
     );
@@ -883,9 +934,15 @@ export default function App() {
     if (!campaign) return;
     setIsSaving(true);
     const shouldWipeBusiness = clearBusiness || targetStatus === 'VACANT';
+    const currentSlot = campaign.slots.find((s) => s.slotNumber === slotNumber);
+    const targetPrice = targetStatus === 'RESERVED'
+      ? (currentSlot ? getSlotDiscountedPrice(currentSlot) : 300)
+      : (currentSlot ? getSlotListPrice(currentSlot) : 350);
+
     try {
       const resetPayload: any = {
         status: targetStatus,
+        priceUsd: targetPrice,
         paymentRef: '',
         amountCollectedUsd: 0,
         paidAt: null,
@@ -898,6 +955,8 @@ export default function App() {
         resetPayload.website = '';
         resetPayload.businessAddress = '';
         resetPayload.offerHeadline = '';
+        resetPayload.reservedAt = null;
+        resetPayload.reservationExpiresAt = null;
       }
       const updated = await updateCampaignSlot(campaign.id, slotNumber, resetPayload);
       patchSlots(campaign.id, (slots) =>
@@ -906,6 +965,7 @@ export default function App() {
             ? {
                 ...mergeSlotUpdate(s, updated),
                 status: targetStatus,
+                priceUsd: targetPrice,
                 paymentRef: '',
                 amountCollectedUsd: 0,
                 paidAt: undefined,
@@ -944,6 +1004,11 @@ export default function App() {
       ? new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
       : undefined;
 
+    const currentSlot = campaign.slots.find((s) => s.slotNumber === slotNumber);
+    const targetPrice = isReserving
+      ? (currentSlot ? getSlotDiscountedPrice(currentSlot) : 300)
+      : (currentSlot ? getSlotListPrice(currentSlot) : 350);
+
     setIsSaving(true);
     try {
       const updated = await updateCampaignSlot(campaign.id, slotNumber, {
@@ -951,6 +1016,7 @@ export default function App() {
         contactPerson: lead.decisionMaker,
         phone: lead.phone,
         status: targetStatus,
+        priceUsd: targetPrice,
         offerHeadline: lead.bilingualHooks?.es || '',
         ...(isReserving ? { reservedAt, reservationExpiresAt } : {}),
       });

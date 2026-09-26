@@ -50,6 +50,9 @@ import {
   splitModularSlot,
   formatReservationCountdown,
   isReservationExpired,
+  getSlotReservationInfo,
+  getSlotListPrice,
+  getSlotDiscountedPrice,
   MODULAR_PRICES,
 } from '../utils/modularGrid.ts';
 
@@ -192,9 +195,9 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
   const paidCount = slots.filter((s) => s.status === 'PAID' && s.format !== 'USPS').length;
   const isMasterUnlocked = paidCount >= 10;
 
-  const smallPrice = slots.find((s) => s.format === 'SMALL' && s.priceUsd && s.slotNumber !== 32)?.priceUsd || 350;
-  const mediumPrice = slots.find((s) => s.format === 'MEDIUM' && s.priceUsd)?.priceUsd || 650;
-  const largePrice = slots.find((s) => s.format === 'LARGE' && s.priceUsd)?.priceUsd || 1200;
+  const smallPrice = slots.find((s) => s.format === 'SMALL' && s.priceUsd && s.slotNumber !== 32 && s.status !== 'RESERVED')?.priceUsd || MODULAR_PRICES.SMALL;
+  const mediumPrice = slots.find((s) => s.format === 'MEDIUM' && s.priceUsd && s.status !== 'RESERVED')?.priceUsd || MODULAR_PRICES.MEDIUM;
+  const largePrice = slots.find((s) => s.format === 'LARGE' && s.priceUsd && s.status !== 'RESERVED')?.priceUsd || MODULAR_PRICES.LARGE;
 
   // Split slots into Front & Back and filter out slots covered by merged parents
   const visibleSlots = slots.filter((s) => {
@@ -800,9 +803,10 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
     ? 'border-live border-l-4 border-l-live bg-card'
     : 'border-dashed border-border border-l-4 border-l-muted-foreground/30 bg-card hover:border-muted-foreground/60';
 
-  const activeSmallPrice = allSlots?.find((s) => s.format === 'SMALL' && s.priceUsd && s.slotNumber !== 32)?.priceUsd || 350;
-  const activeMedPrice = allSlots?.find((s) => s.format === 'MEDIUM' && s.priceUsd)?.priceUsd || 650;
-  const activeLgPrice = allSlots?.find((s) => s.format === 'LARGE' && s.priceUsd)?.priceUsd || 1200;
+  const activeSmallPrice = allSlots?.find((s) => s.format === 'SMALL' && s.priceUsd && s.slotNumber !== 32 && s.status !== 'RESERVED')?.priceUsd || MODULAR_PRICES.SMALL;
+  const activeMedPrice = allSlots?.find((s) => s.format === 'MEDIUM' && s.priceUsd && s.status !== 'RESERVED')?.priceUsd || MODULAR_PRICES.MEDIUM;
+  const activeLgPrice = allSlots?.find((s) => s.format === 'LARGE' && s.priceUsd && s.status !== 'RESERVED')?.priceUsd || MODULAR_PRICES.LARGE;
+  const resInfo = getSlotReservationInfo(slot);
 
   const formatBadge = {
     SMALL: { label: 'Chico (1×1)', color: 'bg-secondary text-ink-dim', price: activeSmallPrice },
@@ -838,9 +842,26 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-            <span className="font-mono text-xs font-black text-foreground">
-              ${slot.priceUsd || formatBadge.price}
-            </span>
+            {isReserved && !isExpired ? (
+              <div
+                className="flex items-baseline gap-1 font-mono"
+                title={`Precio de lista: $${resInfo.listPrice} · Descuento 72h: -$${resInfo.discountUsd} (${resInfo.percentOff}% OFF)`}
+              >
+                <span className="text-[0.62rem] text-muted-foreground line-through font-semibold">
+                  ${resInfo.listPrice}
+                </span>
+                <span className="text-xs font-black text-amber-600 dark:text-amber-400">
+                  ${slot.priceUsd || resInfo.discountedPrice}
+                </span>
+                <span className="text-[0.55rem] font-bold px-1 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                  {resInfo.percentOff}% OFF
+                </span>
+              </div>
+            ) : (
+              <span className="font-mono text-xs font-black text-foreground">
+                ${slot.priceUsd || formatBadge.price}
+              </span>
+            )}
 
             {/* Drag Handle */}
             {!isPaid && (
@@ -864,12 +885,19 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
               className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[0.6rem] font-bold border ${
                 isExpired
                   ? 'bg-due/20 border-due text-due animate-pulse'
-                  : 'bg-due/15 border-due/40 text-due'
+                  : 'bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400'
               }`}
             >
               <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                {isExpired ? '🚨 RESERVA EXPIRADA' : `⏳ ${formatReservationCountdown(slot)}`}
+                <Clock className="h-3 w-3 shrink-0" />
+                <span>
+                  {isExpired ? '🚨 RESERVA EXPIRADA' : `⏳ ${formatReservationCountdown(slot)}`}
+                </span>
+                {!isExpired && (
+                  <span className="text-[0.55rem] font-semibold opacity-90">
+                    (-${resInfo.discountUsd})
+                  </span>
+                )}
               </span>
               <button
                 type="button"
@@ -877,8 +905,8 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                   e.stopPropagation();
                   onRelease(slot.slotNumber);
                 }}
-                className="ml-1 text-[0.58rem] underline hover:text-due-dark font-black"
-                title="Liberar slot y devolver a vacante"
+                className="ml-1 text-[0.58rem] underline hover:text-amber-700 dark:hover:text-amber-300 font-black cursor-pointer shrink-0"
+                title="Liberar slot y restaurar a precio de lista"
               >
                 Liberar
               </button>
@@ -1080,6 +1108,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
         {/* Status Dropdown */}
         <select
           value={slot.status}
+          disabled={isPaid}
           onChange={(e) => {
             const next = e.target.value as SlotStatus;
             if (isPaid && next !== 'PAID') {
@@ -1092,12 +1121,15 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
               onUpdateStatus(slot.slotNumber, next);
             }
           }}
-          className="bg-card text-foreground border border-border text-[0.63rem] font-semibold px-1 py-0.5 rounded focus:outline-none cursor-pointer"
+          className={`bg-card text-foreground border border-border text-[0.63rem] font-semibold px-1 py-0.5 rounded focus:outline-none transition-all ${
+            isPaid ? 'opacity-60 cursor-not-allowed bg-muted/40' : 'cursor-pointer hover:border-foreground/40'
+          }`}
+          title={isPaid ? 'Slot pagado (usa el botón "Desbloquear" para modificar)' : 'Cambiar estado'}
         >
           <option value="VACANT">Vacante</option>
           <option value="PROSPECTING">Llamando</option>
           <option value="RESERVED">Reservado (72h)</option>
-          <option value="PAID">Pagado (${slot.priceUsd})</option>
+          <option value="PAID">Pagado</option>
         </select>
       </div>
     </div>

@@ -152,6 +152,14 @@
     "release": "Release",
     "releaseConfirm": "Release the box?",
     "prospectsSection": "Who to call",
+    "prospectsSubtitle": "Call a prospect and assign them to fill the box.",
+    "hideAlternatives": "▼ Hide alternative prospects",
+    "showAlternatives": "▶ View alternative / backup prospects ({{count}})",
+    "replaceWithThis": "Replace with this",
+    "manualEntry": "+ Enter business manually without prospect",
+    "paidNotice": "Paid and confirmed slot. You can customize the business name and offer headline for the print run.",
+    "unlock": "Unlock",
+    "unlockTitle": "Unlock payment and return to Reserved",
     "hook": "Hook",
     "assign": "Assign to {{id}}"
   }

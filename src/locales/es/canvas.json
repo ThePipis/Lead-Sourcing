@@ -152,6 +152,14 @@
     "release": "Liberar",
     "releaseConfirm": "¿Liberar el espacio?",
     "prospectsSection": "A quién llamar",
+    "prospectsSubtitle": "Llama a un prospecto y asígnalo para completar el espacio.",
+    "hideAlternatives": "▼ Ocultar prospectos alternativos",
+    "showAlternatives": "▶ Ver prospectos alternativos / respaldo ({{count}})",
+    "replaceWithThis": "Reemplazar por este",
+    "manualEntry": "+ Ingresar comercio manualmente sin prospecto",
+    "paidNotice": "Espacio pagado y confirmado. Puedes personalizar el nombre comercial y titular de la oferta para la tirada.",
+    "unlock": "Desbloquear",
+    "unlockTitle": "Desbloquear cobro y regresar a Reservado",
     "hook": "Gancho",
     "assign": "Asignar al {{id}}"
   }

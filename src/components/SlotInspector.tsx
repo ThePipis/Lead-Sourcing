@@ -86,7 +86,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
   onUndoPayment,
   onAssignLead,
 }) => {
-  const { t } = useTranslation(['canvas', 'prospecting', 'common']);
+  const { t, i18n } = useTranslation(['canvas', 'prospecting', 'common']);
 
   // The box gives the size and the price; the niche travels with the advertiser,
   // so a box someone was dragged into is still sold as their own trade.
@@ -108,7 +108,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
   const [loadingLeads, setLoadingLeads] = useState(false);
   const [crm, setCrm] = useState<Record<string, LeadProspect['status']>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [pitchLang, setPitchLang] = useState<'es' | 'en'>('es');
+  const pitchLang: 'es' | 'en' = (i18n.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [justReleasedName, setJustReleasedName] = useState<string | null>(null);
   const [replacingId, setReplacingId] = useState<string | null>(null);
@@ -427,16 +427,21 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                 <div className="flex items-start justify-between gap-2 border border-clear/50 bg-clear/10 px-3 py-2 text-xs leading-relaxed text-clear">
                   <div className="flex items-start gap-2">
                     <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>Espacio pagado y confirmado. Puedes personalizar el nombre comercial y titular de la oferta para la tirada.</span>
+                    <span>
+                      {t(
+                        'canvas:inspector.paidNotice',
+                        'Espacio pagado y confirmado. Puedes personalizar el nombre comercial y titular de la oferta para la tirada.'
+                      )}
+                    </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => onUndoPayment(slot.slotNumber, 'RESERVED', false)}
                     className="shrink-0 text-[0.68rem] font-bold text-due hover:underline flex items-center gap-1 cursor-pointer bg-due/10 px-2 py-0.5 border border-due/40 rounded"
-                    title="Desbloquear cobro y regresar a Reservado"
+                    title={t('canvas:inspector.unlockTitle', 'Desbloquear cobro y regresar a Reservado')}
                   >
                     <Unlock className="h-3 w-3" />
-                    Desbloquear
+                    {t('canvas:inspector.unlock', 'Desbloquear')}
                   </button>
                 </div>
               )}
@@ -690,8 +695,11 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                 >
                   <span>
                     {showAlternativeProspects
-                      ? '▼ Ocultar prospectos alternativos'
-                      : `▶ Ver prospectos alternativos / respaldo (${leads.filter((l) => l.businessName !== slot.businessName).length})`}
+                      ? t('canvas:inspector.hideAlternatives', '▼ Ocultar prospectos alternativos')
+                      : t('canvas:inspector.showAlternatives', {
+                          defaultValue: '▶ Ver prospectos alternativos / respaldo ({{count}})',
+                          count: leads.filter((l) => l.businessName !== slot.businessName).length,
+                        })}
                   </span>
                 </button>
                 {showAlternativeProspects && (
@@ -729,9 +737,9 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                                 type="button"
                                 onClick={() => handleAssign(lead)}
                                 disabled={isPaid || isSaving}
-                                className="px-2 py-1 text-[0.63rem] font-bold bg-secondary hover:bg-primary hover:text-primary-foreground border border-border"
+                                className="px-2 py-1 text-[0.63rem] font-bold bg-secondary hover:bg-primary hover:text-primary-foreground border border-border cursor-pointer"
                               >
-                                Reemplazar por este
+                                {t('canvas:inspector.replaceWithThis', 'Reemplazar por este')}
                               </button>
                             )}
                           </div>
@@ -746,48 +754,14 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
         ) : (
           /* ------------------------------------------------- who to call (VACANT / PROSPECTS FIRST) */
           <section className="px-3.5 py-3">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <h3 className="field-label">{t('canvas:inspector.prospectsSection')}</h3>
-                <p className="text-[0.69rem] text-muted-foreground mt-0.5">
-                  Llama a un prospecto y asígnalo para completar el espacio.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center space-x-1 border border-border bg-secondary p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setPitchLang('es')}
-                    className={`px-2 py-0.5 text-[0.63rem] font-semibold cursor-pointer transition-colors ${
-                      pitchLang === 'es'
-                        ? 'bg-primary text-primary-foreground font-bold'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    ES
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPitchLang('en')}
-                    className={`px-2 py-0.5 text-[0.63rem] font-semibold cursor-pointer transition-colors ${
-                      pitchLang === 'en'
-                        ? 'bg-primary text-primary-foreground font-bold'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    EN
-                  </button>
-                </div>
-                <span
-                  className={`border px-1.5 py-0.5 font-mono text-[0.63rem] font-bold ${
-                    mockMode
-                      ? 'border-live/40 bg-live/15 text-live'
-                      : 'border-clear/40 bg-clear/15 text-clear'
-                  }`}
-                >
-                  {mockMode ? t('common:mode.demo') : t('common:mode.live')}
-                </span>
-              </div>
+            <div className="mb-3">
+              <h3 className="field-label">{t('canvas:inspector.prospectsSection')}</h3>
+              <p className="text-[0.69rem] text-muted-foreground mt-0.5">
+                {t(
+                  'canvas:inspector.prospectsSubtitle',
+                  'Llama a un prospecto y asígnalo para completar el espacio.'
+                )}
+              </p>
             </div>
 
             {loadingLeads ? (
@@ -967,7 +941,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                           <div className="flex items-center justify-between">
                             <span className="flex items-center gap-1 font-mono text-[0.63rem] font-bold text-primary">
                               <Sparkles className="h-3 w-3" />
-                              {t('canvas:inspector.hook')} ({pitchLang.toUpperCase()})
+                              {t('canvas:inspector.hook')}
                             </span>
                             <button
                               type="button"
@@ -1058,9 +1032,9 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
               <button
                 type="button"
                 onClick={() => setShowManualForm(true)}
-                className="text-xs text-muted-foreground hover:text-primary transition-colors underline"
+                className="text-xs text-muted-foreground hover:text-primary transition-colors underline cursor-pointer"
               >
-                + Ingresar comercio manualmente sin prospecto
+                {t('canvas:inspector.manualEntry', '+ Ingresar comercio manualmente sin prospecto')}
               </button>
             </div>
           </section>

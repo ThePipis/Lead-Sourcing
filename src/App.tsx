@@ -1211,16 +1211,16 @@ export default function App() {
             ? t('common:header.toggleThemeLight')
             : t('common:header.toggleThemeDark')
         }
-        className="field-label flex min-h-11 min-w-11 sm:min-w-0 items-center justify-center px-2.5 transition-colors hover:bg-secondary hover:text-ink"
+        className="field-label flex min-h-11 min-w-11 sm:min-w-0 items-center justify-center gap-1.5 px-2.5 transition-colors hover:bg-secondary hover:text-ink"
       >
         {theme === 'dark' ? (
           <>
-            <Sun className="h-3.5 w-3.5 shrink-0 sm:hidden" />
+            <Sun className="h-3.5 w-3.5 shrink-0" />
             <span className="hidden sm:inline">{t('common:form.stockLight')}</span>
           </>
         ) : (
           <>
-            <Moon className="h-3.5 w-3.5 shrink-0 sm:hidden" />
+            <Moon className="h-3.5 w-3.5 shrink-0" />
             <span className="hidden sm:inline">{t('common:form.stockDark')}</span>
           </>
         )}

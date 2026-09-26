@@ -213,8 +213,8 @@
     "expertHint": "Gates unlocked. Development only; Ctrl+Shift+E to leave.",
     "stamped": "Stamped",
     "reserved": "For later use",
-    "stockLight": "Stock",
-    "stockDark": "Backlit",
+    "stockLight": "Light",
+    "stockDark": "Dark",
     "section": {
       "slots": "1 · Slot sales",
       "curation": "2 · Audience curation",

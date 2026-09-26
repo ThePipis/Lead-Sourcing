@@ -213,8 +213,8 @@
     "expertHint": "Puertas desbloqueadas. Solo en desarrollo; Ctrl+Shift+E para salir.",
     "stamped": "Sellado",
     "reserved": "Para uso posterior",
-    "stockLight": "Papel",
-    "stockDark": "Retroiluminado",
+    "stockLight": "Claro",
+    "stockDark": "Oscuro",
     "section": {
       "slots": "1 · Venta de espacios",
       "curation": "2 · Curación de audiencia",

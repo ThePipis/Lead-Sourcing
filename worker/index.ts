@@ -914,6 +914,42 @@ export default {
         });
       }
 
+      // Prospecting: POST /api/prospecting/generate-pitch
+      if (cleanPath === "/api/prospecting/generate-pitch" && request.method === "POST") {
+        let body: any = {};
+        try { body = await request.json(); } catch {}
+        const bName = (body.business_name || body.businessName || "Comercio Local").trim();
+        const niche = body.niche || body.category_name || "Comercio";
+        const ticket = Number(body.avg_ticket || body.avgTicket || 500);
+        const variant = Number(body.variant || 0);
+
+        const pitchesEs = [
+          `Doctor/Dueño de ${bName}, 5,000 familias propietarias en Eastvale recibirán la postal gigante 12x9 este mes. Con su ticket promedio de $${ticket.toLocaleString()} USD, un solo cliente nuevo amortiza completamente su participación y le deja ganancia neta.`,
+          `${bName}, en Google Ads su negocio compite pagando más de $15 por clic frente a cadenas corporativas. Con nuestra postal cooperativa obtiene exclusividad territorial blindada: ningún otro competidor de su categoría podrá anunciarse frente a estos 5,000 hogares.`,
+          `Estimado director de ${bName}, estamos cerrando la edición estacional para los vecindarios más exclusivos de Eastvale. Su anuncio llegará directamente a las barras de cocina de familias verificadas de alto poder adquisitivo con una inversión de menos de 10¢ por hogar.`,
+          `${bName}, seleccionamos comercios con excelente reputación local para ofrecer una promoción de alto impacto a 5,000 residentes. Un flujo de 10 a 25 nuevos prospectos calificados le garantizará un retorno masivo en los próximos 60 días.`
+        ];
+
+        const pitchesEn = [
+          `Owner of ${bName}, 5,000 verified homeowners in Eastvale are receiving our 12x9 jumbo co-op mailer this month. With an average ticket of $${ticket.toLocaleString()}, just one new customer pays off your campaign multiple times over.`,
+          `${bName}, stop wasting money bidding $15+ per click on Google Ads against corporate competitors. Our co-op mailer locks out all other businesses in your niche and guarantees territorial exclusivity.`,
+          `Director of ${bName}, we are finalizing the seasonal residential drop in Eastvale's top master-planned neighborhoods. Deliver your exclusive offer straight to 5,000 kitchen counters for under 10 cents per household.`,
+          `${bName}, partner with us to deliver an exclusive neighborhood incentive to 5,000 high-income households. A steady stream of 10 to 25 new premium clients will drive significant ROI over the next 60 days.`
+        ];
+
+        const selectedIndex = Math.abs(variant) % pitchesEs.length;
+        return json({
+          business_name: bName,
+          niche: niche,
+          avg_ticket: ticket,
+          en: pitchesEn[selectedIndex],
+          es: pitchesEs[selectedIndex],
+          decision_maker: "Owner / Decision Maker",
+          source: "Edge Generator",
+          variant: selectedIndex
+        });
+      }
+
       // Prospecting: PATCH /api/prospecting/leads/:id
       const leadMatch = cleanPath.match(/^\/api\/prospecting\/leads\/([^/]+)$/);
       if (leadMatch && request.method === "PATCH") {

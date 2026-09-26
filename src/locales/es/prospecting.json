@@ -27,6 +27,8 @@
     "hookHeader": "Gancho de Cierre Telefónico One-Shot ({{lang}}):",
     "copyPitch": "Copiar Guion",
     "copied": "Copiado",
+    "regenerateHook": "Regenerar Gancho",
+    "generating": "Generando...",
     "breakevenRoi": "ROI Comercial Breakeven:",
     "investment": "Inversión:",
     "ticket": "Ticket Promedio: {{ticket}} USD",

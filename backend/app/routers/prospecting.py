@@ -25,10 +25,13 @@ async def generate_pitch_endpoint(req: dict = Body(...)):
         except (ValueError, TypeError):
             avg_ticket = None
 
+    variant = int(req.get("variant", 0))
+
     result = await sourcing_service.generate_pitch(
         business_name=business_name,
         niche=niche,
-        avg_ticket=avg_ticket
+        avg_ticket=avg_ticket,
+        variant=variant
     )
     return result
 

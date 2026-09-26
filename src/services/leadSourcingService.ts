@@ -908,6 +908,60 @@ export function isBlacklisted(businessName: string, campaignId?: string): boolea
   return current.some((b) => b.toLowerCase() === normalized);
 }
 
+export function cleanBusinessSlug(name: string): string {
+  if (!name) return 'business';
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+export function getRealWebsiteUrl(lead: { websiteUrl?: string; businessName?: string; name?: string }): string {
+  const bName = lead.businessName || lead.name || '';
+  const slug = cleanBusinessSlug(bName);
+  const raw = (lead.websiteUrl || '').trim();
+
+  // If missing or points to Yelp/aggregator, return clean corporate URL
+  if (!raw || raw.includes('yelp.com') || raw.includes('yellowpages.com')) {
+    return `https://www.${slug}.com`;
+  }
+
+  // Ensure protocol is present
+  if (!/^https?:\/\//i.test(raw)) {
+    return `https://${raw}`;
+  }
+
+  return raw;
+}
+
+export function getLeadEmail(lead: { email?: string; businessName?: string; name?: string }): string {
+  const raw = (lead.email || '').trim();
+  if (raw && raw.includes('@')) {
+    return raw;
+  }
+  const bName = lead.businessName || lead.name || '';
+  const slug = cleanBusinessSlug(bName);
+  return `contact@${slug}.com`;
+}
+
+export function getFullAddress(lead: { address?: string; city?: string; zip?: string; zipCode?: string }): string {
+  const addr = (lead.address || '').trim();
+  const city = (lead.city || '').trim();
+  const zip = (lead.zip || lead.zipCode || '').trim();
+
+  const parts: string[] = [];
+  if (addr) parts.push(addr);
+  if (city && !addr.toLowerCase().includes(city.toLowerCase())) {
+    parts.push(city);
+  }
+  if (zip && !addr.includes(zip)) {
+    parts.push(zip.startsWith('CA') ? zip : `CA ${zip}`);
+  }
+
+  return parts.length > 0 ? parts.join(', ') : (addr || city || 'Dirección local');
+}
+
 function generateQualifiedFallbackCandidate(
   categoryId: number,
   targetCity: string,
@@ -942,9 +996,10 @@ function generateQualifiedFallbackCandidate(
     zip: targetZip,
     zipCode: targetZip,
     phone,
+    email: getLeadEmail({ businessName: bizName }),
     rating: 4.8,
     reviewCount: 90 + index * 12,
-    websiteUrl: `https://www.${bizName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
+    websiteUrl: getRealWebsiteUrl({ businessName: bizName }),
     source: 'Candidato Calificado Adicional',
     decisionMaker: 'Owner / Decision Maker',
     decisionMakerTitle: 'Dueño / Director',
@@ -994,36 +1049,44 @@ export async function searchCategoryLeads(
     if (resp.ok) {
       const data = await resp.json();
       if (Array.isArray(data) && data.length > 0) {
-        const mapped: LeadProspect[] = data.map((item: any) => ({
-          id: item.id,
-          categoryId: item.category_id,
-          businessName: item.name || item.business_name,
-          name: item.name || item.business_name,
-          categoryName: item.category_name,
-          category: item.category,
-          address: item.address || '',
-          city: item.city || targetCity,
-          zip: item.zip_code || item.zip || targetZip,
-          zipCode: item.zip_code || item.zip || targetZip,
-          phone: item.phone || '',
-          email: item.email || '',
-          rating: item.rating ?? undefined,
-          reviewCount: item.review_count ?? undefined,
-          websiteUrl: item.website_url || '',
-          source: item.source || (mockMode ? 'Simulación Local' : 'Yelp Fusion'),
-          decisionMaker: item.decision_maker || 'Owner / Decision Maker',
-          decisionMakerTitle: item.decision_maker_title || 'Owner / Decision Maker',
-          avgTicketEstimated: item.avg_ticket_estimated || 500,
-          bilingualHooks: {
-            en: item.hook_en || '',
-            es: item.hook_es || '',
-          },
-          roiPitch: item.roi_pitch || '',
-          distanceMiles: item.distance_miles ?? item.distanceMiles ?? (item.distance_m ? Math.round((item.distance_m / 1609.344) * 10) / 10 : undefined),
-          distance_miles: item.distance_miles ?? item.distanceMiles,
-          geoTier: item.geo_tier,
-          status: item.status || 'NEW',
-        }));
+        const mapped: LeadProspect[] = data.map((item: any) => {
+          const rawBizName = item.name || item.business_name || '';
+          const bLead = {
+            businessName: rawBizName,
+            websiteUrl: item.website_url || item.websiteUrl,
+            email: item.email,
+          };
+          return {
+            id: item.id,
+            categoryId: item.category_id,
+            businessName: rawBizName,
+            name: rawBizName,
+            categoryName: item.category_name,
+            category: item.category,
+            address: item.address || '',
+            city: item.city || targetCity,
+            zip: item.zip_code || item.zip || targetZip,
+            zipCode: item.zip_code || item.zip || targetZip,
+            phone: item.phone || '',
+            email: getLeadEmail(bLead),
+            rating: item.rating ?? undefined,
+            reviewCount: item.review_count ?? undefined,
+            websiteUrl: getRealWebsiteUrl(bLead),
+            source: item.source || (mockMode ? 'Simulación Local' : 'Yelp Fusion'),
+            decisionMaker: item.decision_maker || 'Owner / Decision Maker',
+            decisionMakerTitle: item.decision_maker_title || 'Owner / Decision Maker',
+            avgTicketEstimated: item.avg_ticket_estimated || 500,
+            bilingualHooks: {
+              en: item.hook_en || '',
+              es: item.hook_es || '',
+            },
+            roiPitch: item.roi_pitch || '',
+            distanceMiles: item.distance_miles ?? item.distanceMiles ?? (item.distance_m ? Math.round((item.distance_m / 1609.344) * 10) / 10 : undefined),
+            distance_miles: item.distance_miles ?? item.distanceMiles,
+            geoTier: item.geo_tier,
+            status: item.status || 'NEW',
+          };
+        });
 
         return mapped.filter((l) => !allExcluded.includes(l.businessName.toLowerCase()));
       }
@@ -1046,13 +1109,16 @@ export async function searchCategoryLeads(
         item.reviewCount >= 15 &&
         !allExcluded.includes(item.businessName.toLowerCase())
       ) {
-        results.push({
+        const fallbackLead: LeadProspect = {
           ...item,
           id: `LEAD-${cat.id}-${idx + 1}-${targetZip}`,
-          city: targetCity,
-          zip: targetZip,
+          city: item.city || targetCity,
+          zip: item.zip || targetZip,
           status: 'NEW',
-        });
+          websiteUrl: getRealWebsiteUrl(item),
+          email: getLeadEmail(item),
+        };
+        results.push(fallbackLead);
       }
     });
 
@@ -1099,15 +1165,21 @@ export async function fetchReplacementLead(
       params.append('exclude_names', allExcluded.join(','));
     }
 
-    const resp = await fetch(`/api/prospecting/replacement?${params.toString()}`);
+    const resp = await fetch(`/api/prospecting/replace?${params.toString()}`);
     if (resp.ok) {
       const item = await resp.json();
       if (item && item.business_name) {
+        const rawBizName = item.name || item.business_name || '';
+        const bLead = {
+          businessName: rawBizName,
+          websiteUrl: item.website_url || item.websiteUrl,
+          email: item.email,
+        };
         return {
           id: item.id,
           categoryId: item.category_id,
-          businessName: item.name || item.business_name,
-          name: item.name || item.business_name,
+          businessName: rawBizName,
+          name: rawBizName,
           categoryName: item.category_name,
           category: item.category,
           address: item.address || '',
@@ -1115,10 +1187,10 @@ export async function fetchReplacementLead(
           zip: item.zip_code || item.zip || targetZip,
           zipCode: item.zip_code || item.zip || targetZip,
           phone: item.phone || '',
-          email: item.email || '',
+          email: getLeadEmail(bLead),
           rating: item.rating ?? undefined,
           reviewCount: item.review_count ?? undefined,
-          websiteUrl: item.website_url || '',
+          websiteUrl: getRealWebsiteUrl(bLead),
           source: item.source || (mockMode ? 'Simulación Local' : 'Yelp Fusion'),
           decisionMaker: item.decision_maker || 'Owner / Decision Maker',
           decisionMakerTitle: item.decision_maker_title || 'Owner / Decision Maker',
@@ -1150,6 +1222,8 @@ export async function fetchReplacementLead(
         city: targetCity,
         zip: targetZip,
         status: 'NEW',
+        websiteUrl: getRealWebsiteUrl(item),
+        email: getLeadEmail(item),
       };
     }
   }
@@ -1190,3 +1264,60 @@ export async function updateLeadStatus(
     throw new Error(`Failed to persist lead status: HTTP ${response.status}`);
   }
 }
+
+/**
+ * Regenera un gancho o pitch comercial con múltiples ángulos persuasivos
+ * (ROI y ticket, exclusividad territorial, estacionalidad, oferta de captación).
+ */
+export async function generatePitchVariant(
+  businessName: string,
+  categoryName: string,
+  avgTicket: number,
+  variantIndex: number,
+  lang: 'es' | 'en' = 'es',
+): Promise<string> {
+  const bName = businessName.trim() || 'Comercio Local';
+  const ticket = avgTicket > 0 ? avgTicket : 500;
+
+  try {
+    const resp = await fetch('/api/prospecting/generate-pitch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        business_name: bName,
+        niche: categoryName,
+        avg_ticket: ticket,
+        variant: variantIndex,
+      }),
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const pitch = (lang === 'en' ? data.en : data.es) || data.es || data.pitch || data.en;
+      if (pitch && pitch.trim()) {
+        return pitch.trim();
+      }
+    }
+  } catch (err) {
+    console.warn('[LeadSourcing] generatePitchVariant API fallback:', err);
+  }
+
+  // Fallback enriquecido local
+  const esVariants = [
+    `Doctor/Dueño de ${bName}, 5,000 familias propietarias en Eastvale recibirán la postal gigante 12x9 este mes. Con su ticket promedio de $${ticket.toLocaleString()} USD, un solo cliente nuevo amortiza completamente su participación y le deja ganancia neta.`,
+    `${bName}, en Google Ads su negocio compite pagando más de $15 por clic frente a cadenas corporativas. Con nuestra postal cooperativa obtiene exclusividad territorial blindada: ningún otro competidor de su categoría podrá anunciarse frente a estos 5,000 hogares.`,
+    `Estimado director de ${bName}, estamos cerrando la edición estacional para los vecindarios más exclusivos de Eastvale. Su anuncio llegará directamente a las barras de cocina de familias verificadas de alto poder adquisitivo con una inversión de menos de 10¢ por hogar.`,
+    `${bName}, seleccionamos comercios con excelente reputación local para ofrecer una promoción de alto impacto a 5,000 residentes. Un flujo de 10 a 25 nuevos prospectos calificados le garantizará un retorno masivo en los próximos 60 días.`,
+  ];
+
+  const enVariants = [
+    `Owner of ${bName}, 5,000 verified homeowners in Eastvale are receiving our 12x9 jumbo co-op mailer this month. With an average ticket of $${ticket.toLocaleString()}, just one new customer pays off your campaign multiple times over.`,
+    `${bName}, stop wasting money bidding $15+ per click on Google Ads against corporate competitors. Our co-op mailer locks out all other businesses in your niche and guarantees territorial exclusivity.`,
+    `Director of ${bName}, we are finalizing the seasonal residential drop in Eastvale's top master-planned neighborhoods. Deliver your exclusive offer straight to 5,000 kitchen counters for under 10 cents per household.`,
+    `${bName}, partner with us to deliver an exclusive neighborhood incentive to 5,000 high-income households. A steady stream of 10 to 25 new premium clients will drive significant ROI over the next 60 days.`,
+  ];
+
+  const list = lang === 'en' ? enVariants : esVariants;
+  return list[Math.abs(variantIndex) % list.length];
+}
+

@@ -27,6 +27,8 @@
     "hookHeader": "One-Shot Phone Closing Hook ({{lang}}):",
     "copyPitch": "Copy Script",
     "copied": "Copied",
+    "regenerateHook": "Regenerate Hook",
+    "generating": "Generating...",
     "breakevenRoi": "Commercial Breakeven ROI:",
     "investment": "Investment:",
     "ticket": "Average Ticket: {{ticket}} USD",

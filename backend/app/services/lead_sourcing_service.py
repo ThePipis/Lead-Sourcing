@@ -1273,11 +1273,42 @@ class LeadSourcingService:
             return 68.0
         return 500.0
 
-    def get_niche_fallback(self, niche: str, business_name: str, avg_ticket: float) -> Dict[str, Any]:
+    def get_niche_fallback(self, niche: str, business_name: str, avg_ticket: float, variant: int = 0) -> Dict[str, Any]:
         niche_lower = niche.lower()
         cost = 850 if "odont" in niche_lower or "dent" in niche_lower else 497
 
-        if any(k in niche_lower for k in ["hvac", "aire", "clima", "calefacc"]):
+        var_idx = variant % 4 if variant else 0
+        if var_idx == 1:
+            en = (
+                f"Owner of {business_name}, stop wasting ad dollars bidding $15+ per click on Google Ads against corporate chains. "
+                f"Our 12x9 co-op mailer locks out all other competitors in your category and delivers territorial exclusivity right to 5,000 prime homeowners."
+            )
+            es = (
+                f"Estimado Director de {business_name}, en Google Ads su negocio compite pagando más de $15 por clic contra cadenas corporativas. "
+                f"Con nuestra postal 12x9 cooperativa bloquea a toda su competencia con exclusividad territorial garantizada frente a 5,000 hogares propietarios."
+            )
+            dm = "Owner / Decision Maker"
+        elif var_idx == 2:
+            en = (
+                f"Director of {business_name}, we are finalizing the seasonal residential drop in Eastvale's top neighborhoods. "
+                f"Deliver your high-impact promotion straight to 5,000 kitchen counters for under 10 cents per household."
+            )
+            es = (
+                f"Estimado Director de {business_name}, estamos cerrando la edición estacional para los vecindarios más exclusivos de Eastvale. "
+                f"Su anuncio llegará directamente a las barras de cocina de familias verificadas de alto poder adquisitivo por menos de 10¢ por hogar."
+            )
+            dm = "Owner / Decision Maker"
+        elif var_idx == 3:
+            en = (
+                f"Owner of {business_name}, partner with us to deliver an exclusive neighborhood incentive to 5,000 high-income households. "
+                f"A steady stream of 10 to 25 new premium clients will drive significant net revenue over the next 60 days."
+            )
+            es = (
+                f"Propietario de {business_name}, seleccionamos comercios con excelente reputación local para ofrecer una promoción de alto impacto a 5,000 residentes. "
+                f"Un flujo de 10 a 25 nuevos prospectos calificados le garantizará un retorno masivo en los próximos 60 días."
+            )
+            dm = "Owner / Decision Maker"
+        elif any(k in niche_lower for k in ["hvac", "aire", "clima", "calefacc"]):
             en = (
                 f"Owner, summer in the Inland Empire regularly exceeds 100°F. We are reaching 5,000 verified "
                 f"homeowners with older builder-grade A/C systems. A single system replacement or repair (${avg_ticket:,.0f}+) "
@@ -1411,7 +1442,8 @@ class LeadSourcingService:
         self,
         business_name: str,
         niche: str,
-        avg_ticket: Optional[float] = None
+        avg_ticket: Optional[float] = None,
+        variant: int = 0
     ) -> Dict[str, Any]:
         """
         Conecta la generación de pitches con el endpoint local de llama-server.
@@ -1424,12 +1456,20 @@ class LeadSourcingService:
         if not avg_ticket or avg_ticket <= 0:
             avg_ticket = self._resolve_ticket(niche)
 
+        angles = [
+            "contundente de retorno de inversión y ticket promedio",
+            "enfocado en exclusividad territorial y bloqueo total a competidores de Google Ads",
+            "enfocado en urgencia estacional y alcance garantizado a 5,000 hogares",
+            "enfocado en oferta gancho irresistible para captar 15 a 25 clientes nuevos",
+        ]
+        chosen_angle = angles[variant % len(angles)]
+
         system_prompt = (
             "Eres un estratega de ventas para correo directo cooperativo 9x12 en el Inland Empire. "
-            "Genera un guion de venta telefónica bilingüe (EN/ES) contundente de un solo golpe "
-            "basado en el ticket promedio del cliente frente a los $497 USD del espacio."
+            f"Genera un guion de venta telefónica bilingüe (EN/ES) {chosen_angle} "
+            f"basado en el ticket promedio (${avg_ticket:,.0f} USD) del cliente frente al espacio en la postal."
         )
-        user_prompt = f"Genera el pitch para el negocio: {business_name} del giro: {niche}."
+        user_prompt = f"Genera el pitch (variante {variant + 1}) para el negocio: {business_name} del giro: {niche}."
 
         payload = {
             "model": self.llama_model,
@@ -1446,7 +1486,7 @@ class LeadSourcingService:
         # into minutes of dead air, so the first failure disables it for the
         # rest of the process and the niche fallback answers immediately.
         if getattr(self, "_llama_offline", False):
-            fallback = self.get_niche_fallback(niche, business_name, avg_ticket)
+            fallback = self.get_niche_fallback(niche, business_name, avg_ticket, variant=variant)
             fallback["source"] = "fallback_niche"
             return fallback
 

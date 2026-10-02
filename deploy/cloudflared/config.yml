@@ -1,0 +1,15 @@
+# Cloudflare Tunnel: publishes ONLY the printed-QR paths of the local FastAPI
+# (127.0.0.1:8000) at https://qr-api.aisalesradar.com. The Worker on
+# directmail.aisalesradar.com forwards /q/<code> here (TRACKING_BACKEND_URL).
+# Everything else of the API (campaigns, money, telemetry, exports) stays private.
+#
+# Replace <TUNNEL_ID> with the id `cloudflared tunnel create` printed, then copy
+# this file to C:\Users\Gonzales\.cloudflared\config.yml.
+tunnel: <TUNNEL_ID>
+credentials-file: C:\Users\Gonzales\.cloudflared\<TUNNEL_ID>.json
+
+ingress:
+  - hostname: qr-api.aisalesradar.com
+    path: ^/(q/[A-Za-z0-9]{4,16}|r/courtesy|r/[^/]+/slot-[0-9]+)$
+    service: http://127.0.0.1:8000
+  - service: http_status:404

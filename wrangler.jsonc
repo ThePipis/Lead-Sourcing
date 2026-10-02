@@ -16,7 +16,16 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lead-sourcing-db",
+      "database_id": "3a0619ad-c222-4ebc-902e-950f15c956e3"
+    }
+  ],
   "vars": {
-    "USE_BUILTIN_API": "true"
+    "USE_BUILTIN_API": "true",
+    // Real backend for the printed QR links only (Cloudflare Tunnel to the PC).
+    "TRACKING_BACKEND_URL": "https://qr-api.aisalesradar.com"
   }
 }

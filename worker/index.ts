@@ -3,9 +3,22 @@
 
 interface Env {
   ASSETS: Fetcher;
+  DB?: D1Database;
   BACKEND_URL?: string;
   USE_BUILTIN_API?: string;
+  /**
+   * Public address of the real backend (a Cloudflare Tunnel to the FastAPI on
+   * the office PC). Only the printed QR links are sent there; see TRACKING_PATH.
+   */
+  TRACKING_BACKEND_URL?: string;
 }
+
+/**
+ * The only paths a reader at home ever opens: the short link printed on the
+ * card (/q/<code>), the older long form (/r/<campaign>/slot-<n>) and the page
+ * shown when a business has no website. Nothing else of the backend is public.
+ */
+const TRACKING_PATH = /^\/(q\/[A-Za-z0-9]{4,16}|r\/courtesy|r\/[^/]+\/slot-\d+)$/;
 
 interface SlotDef {
   slot_number: number;
@@ -331,6 +344,143 @@ function computeProspectDistance(item: any, idx: number, targetCity: string, tar
   return { distance_miles, distance_m, city: finalCity, geo_tier };
 }
 
+// --- Cloudflare D1 Database Helpers ---
+
+async function d1GetCampaigns(db: D1Database, mode: string, archived: boolean): Promise<any[]> {
+  try {
+    const query = archived
+      ? "SELECT * FROM campaigns WHERE archived_at IS NOT NULL ORDER BY created_at DESC"
+      : "SELECT * FROM campaigns WHERE mode = ? AND archived_at IS NULL ORDER BY created_at DESC";
+    const stmt = archived ? db.prepare(query) : db.prepare(query).bind(mode);
+    const { results } = await stmt.all();
+
+    if ((!results || results.length === 0) && mode === "DEMO" && !archived) {
+      const def = seedDefaultCampaign();
+      await d1SaveCampaign(db, def);
+      return [def];
+    }
+
+    const campaigns: any[] = [];
+    for (const row of (results || [])) {
+      const slotsRes = await db.prepare("SELECT * FROM slots WHERE campaign_id = ? ORDER BY slot_number ASC").bind(row.id).all();
+      campaigns.push({
+        ...row,
+        slots: slotsRes.results || []
+      });
+    }
+    return campaigns;
+  } catch (err) {
+    console.error("D1 getCampaigns error:", err);
+    return [];
+  }
+}
+
+async function d1GetCampaign(db: D1Database, id: string): Promise<any | null> {
+  try {
+    const c: any = await db.prepare("SELECT * FROM campaigns WHERE id = ?").bind(id).first();
+    if (!c) return null;
+    const slotsRes = await db.prepare("SELECT * FROM slots WHERE campaign_id = ? ORDER BY slot_number ASC").bind(id).all();
+    return {
+      ...c,
+      slots: slotsRes.results || []
+    };
+  } catch (err) {
+    console.error("D1 getCampaign error:", err);
+    return null;
+  }
+}
+
+async function d1SaveCampaign(db: D1Database, c: any) {
+  try {
+    await db.prepare(`
+      INSERT OR REPLACE INTO campaigns (
+        id, code, name, target_city, target_zip, radius_miles, target_households,
+        unit_cost_usd, target_gross_revenue, operating_cost_est, net_margin_est,
+        status, mode, production_at, mailed_at, archived_at, model_ack, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      c.id, c.code || "", c.name || "", c.target_city || "Eastvale", c.target_zip || "92880",
+      c.radius_miles || 5.0, c.target_households || 5000, c.unit_cost_usd || 0.60,
+      c.target_gross_revenue || 0, c.operating_cost_est || 0, c.net_margin_est || 0,
+      c.status || "PROSPECTING", c.mode || "DEMO", c.production_at || null, c.mailed_at || null,
+      c.archived_at || null, c.model_ack || null, c.created_at || new Date().toISOString(),
+      c.updated_at || new Date().toISOString()
+    ).run();
+
+    if (Array.isArray(c.slots)) {
+      for (const s of c.slots) {
+        await d1SaveSlot(db, c.id, s);
+      }
+    }
+  } catch (err) {
+    console.error("D1 saveCampaign error:", err);
+  }
+}
+
+async function d1SaveSlot(db: D1Database, campaignId: string, s: any) {
+  try {
+    await db.prepare("DELETE FROM slots WHERE campaign_id = ? AND slot_number = ?").bind(campaignId, s.slot_number).run();
+    await db.prepare(`
+      INSERT INTO slots (
+        campaign_id, slot_number, category_id, category_name, side, slot_type,
+        width_inches, height_inches, price_usd, avg_ticket_usd, business_name,
+        contact_person, phone, email, website, business_address, status, logo_url,
+        offer_headline, qr_code_url, short_url, payment_ref, paid_at, reserved_at,
+        reservation_expires_at, amount_collected_usd, scan_count, qr_token, notes,
+        format, row_span, col_span
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      campaignId, s.slot_number, s.category_id || s.slot_number, s.category_name || s.name || "",
+      s.side || "FRONT", s.slot_type || s.format || "SMALL", s.width_inches || s.width_in || 2.8,
+      s.height_inches || s.height_in || 1.8, s.price_usd || 0, s.avg_ticket_usd || s.default_ticket || 0,
+      s.business_name || "", s.contact_person || "", s.phone || "", s.email || "", s.website || "",
+      s.business_address || "", s.status || "VACANT", s.logo_url || "", s.offer_headline || "",
+      s.qr_code_url || "", s.short_url || "", s.payment_ref || "", s.paid_at || null, s.reserved_at || null,
+      s.reservation_expires_at || null, s.amount_collected_usd || 0, s.scan_count || 0, s.qr_token || null,
+      s.notes || null, s.format || "SMALL", s.row_span || 1, s.col_span || 1
+    ).run();
+  } catch (err) {
+    console.error("D1 saveSlot error:", err);
+  }
+}
+
+async function d1DeleteCampaign(db: D1Database, id: string) {
+  try {
+    await db.prepare("DELETE FROM slots WHERE campaign_id = ?").bind(id).run();
+    await db.prepare("DELETE FROM campaigns WHERE id = ?").bind(id).run();
+  } catch (err) {
+    console.error("D1 deleteCampaign error:", err);
+  }
+}
+
+async function d1RecordQrScan(db: D1Database, event: {
+  id: string;
+  campaign_id: string;
+  slot_number: number;
+  business_name: string;
+  device_type: string;
+  city: string;
+  user_agent: string;
+  client_ip: string;
+}) {
+  try {
+    await db.prepare(`
+      INSERT INTO analytics_events (
+        id, campaign_id, slot_number, business_name, timestamp, device_type, city, user_agent, client_ip
+      ) VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
+    `).bind(
+      event.id, event.campaign_id, event.slot_number, event.business_name,
+      event.device_type, event.city, event.user_agent, event.client_ip
+    ).run();
+
+    await db.prepare(`
+      UPDATE slots SET scan_count = scan_count + 1 WHERE campaign_id = ? AND slot_number = ?
+    `).bind(event.campaign_id, event.slot_number).run();
+  } catch (err) {
+    console.error("D1 recordQrScan error:", err);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
@@ -346,6 +496,73 @@ export default {
             "Access-Control-Allow-Headers": "Content-Type, Authorization"
           }
         });
+      }
+
+      // Printed QR links go to the real backend if reachable, or resolve directly
+      // against Cloudflare D1 24/7 if the office PC is offline.
+      if (TRACKING_PATH.test(cleanPath)) {
+        if (env.TRACKING_BACKEND_URL) {
+          const target = new URL(cleanPath + url.search, env.TRACKING_BACKEND_URL);
+          const headers = new Headers(request.headers);
+          headers.set("X-Coop-Client-IP", request.headers.get("CF-Connecting-IP") || "");
+          try {
+            const resp = await fetch(target.toString(), { method: request.method, headers, redirect: "manual" });
+            if (resp.status < 500) {
+              return resp;
+            }
+          } catch (err) {
+            console.warn("Tunnel backend unreachable, falling back to D1 Edge redirect:", err);
+          }
+        }
+
+        // Cloudflare D1 Autonomous Edge Resolution (runs 24/7 even if PC is off)
+        if (env.DB) {
+          let slotRes: any = null;
+          if (cleanPath.startsWith("/q/")) {
+            const token = cleanPath.slice(3);
+            slotRes = await env.DB.prepare("SELECT * FROM slots WHERE qr_token = ? LIMIT 1").bind(token).first();
+          } else {
+            const match = cleanPath.match(/^\/r\/([^/]+)\/slot-(\d+)$/);
+            if (match) {
+              const campId = match[1];
+              const sNum = parseInt(match[2]);
+              slotRes = await env.DB.prepare("SELECT * FROM slots WHERE campaign_id = ? AND slot_number = ? LIMIT 1").bind(campId, sNum).first();
+            }
+          }
+
+          if (slotRes) {
+            const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
+            const userAgent = request.headers.get("User-Agent") || "";
+            const deviceType = /mobile|android|iphone|ipad/i.test(userAgent) ? "Mobile" : "Desktop";
+            const city = request.headers.get("CF-IPCity") || "Eastvale";
+            await d1RecordQrScan(env.DB, {
+              id: `evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+              campaign_id: slotRes.campaign_id,
+              slot_number: slotRes.slot_number,
+              business_name: slotRes.business_name || `Slot #${slotRes.slot_number}`,
+              device_type: deviceType,
+              city,
+              user_agent: userAgent,
+              client_ip: clientIp
+            });
+
+            let dest = slotRes.website?.trim() || slotRes.short_url?.trim();
+            if (dest) {
+              if (!dest.startsWith("http://") && !dest.startsWith("https://")) dest = `https://${dest}`;
+              return Response.redirect(dest, 307);
+            }
+
+            return new Response(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${slotRes.business_name || 'Comercio Local'} • Co-Op Direct Mail</title><style>body{font-family:sans-serif;background:#020617;color:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:1rem;}.card{background:#0f172a;border:1px solid #1e293b;border-radius:16px;padding:2.5rem;max-width:480px;text-align:center;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);}.badge{display:inline-block;background:#f59e0b;color:#020617;font-size:11px;font-weight:800;padding:4px 12px;border-radius:9999px;text-transform:uppercase;margin-bottom:1rem;}.call{display:block;background:#16a34a;color:#fff;text-decoration:none;font-weight:800;padding:1rem;border-radius:12px;margin:1.5rem 0 1rem;font-size:1.05rem;}</style></head><body><div class="card"><div class="badge">Postal Gigante 12x9" • Inland Empire</div><h1>¡Gracias por escanear!</h1><p>Has escaneado la oferta de <strong>${slotRes.business_name || 'este comercio'}</strong>.</p>${slotRes.phone ? `<a class="call" href="tel:${slotRes.phone.replace(/[^\d+]/g, '')}">Llamar a ${slotRes.business_name}<br><span>${slotRes.phone}</span></a>` : ''}<div style="font-size:0.75rem;color:#64748b;font-family:monospace;">Slot #${slotRes.slot_number}</div></div></body></html>`, {
+              status: 200,
+              headers: { "Content-Type": "text/html; charset=utf-8" }
+            });
+          }
+        }
+
+        return new Response(
+          `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Co-Op Direct Mail</title></head><body style="font-family:sans-serif;padding:2rem;text-align:center"><h1>Un momento</h1><p>No pudimos abrir esta oferta ahora. Inténtalo de nuevo en unos minutos.</p></body></html>`,
+          { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Retry-After": "60" } },
+        );
       }
 
       const isApi = cleanPath.startsWith("/api") || cleanPath.startsWith("/r");
@@ -385,6 +602,10 @@ export default {
       if (cleanPath === "/api/campaigns" && request.method === "GET") {
         const mode = url.searchParams.get("mode") || "DEMO";
         const archived = url.searchParams.get("archived") === "true";
+        if (env.DB) {
+          const camps = await d1GetCampaigns(env.DB, mode, archived);
+          return json(camps);
+        }
         const filtered = campaignsStore.filter(c => {
           if (archived) return Boolean(c.archived_at);
           return c.mode === mode && !c.archived_at;
@@ -430,6 +651,9 @@ export default {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
+        if (env.DB) {
+          await d1SaveCampaign(env.DB, newCamp);
+        }
         campaignsStore.unshift(newCamp);
         return json(newCamp, 201);
       }
@@ -584,6 +808,9 @@ export default {
             }
           }
         }
+        if (env.DB) {
+          await d1SaveCampaign(env.DB, c);
+        }
         return json({ filled_count: filledCount, total_slots: c.slots.length, slots: c.slots });
       }
 
@@ -592,7 +819,7 @@ export default {
       if (nextCandidateMatch && request.method === "POST") {
         const campId = nextCandidateMatch[1];
         const slotNum = parseInt(nextCandidateMatch[2]);
-        const c = campaignsStore.find(x => String(x.id) === campId);
+        const c = env.DB ? (await d1GetCampaign(env.DB, campId) || campaignsStore.find(x => String(x.id) === campId)) : campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
         const s = c.slots.find((x: any) => x.slot_number === slotNum);
         if (!s) return json({ detail: "Slot not found" }, 404);
@@ -608,6 +835,9 @@ export default {
           s.contact_person = next.dm;
           s.business_address = next.address;
           s.status = "PROSPECTING";
+          if (env.DB) {
+            await d1SaveSlot(env.DB, campId, s);
+          }
         }
         return json({ candidate: next, slot: s });
       }
@@ -616,7 +846,7 @@ export default {
       const markAllPaidMatch = cleanPath.match(/^\/api\/campaigns\/([^/]+)\/slots\/mark-all-paid$/);
       if (markAllPaidMatch && request.method === "POST") {
         const campId = markAllPaidMatch[1];
-        const c = campaignsStore.find(x => String(x.id) === campId);
+        const c = env.DB ? (await d1GetCampaign(env.DB, campId) || campaignsStore.find(x => String(x.id) === campId)) : campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
         if (c.mode === "LIVE") {
           return json({ detail: "Mark all paid is only available in DEMO mode" }, 400);
@@ -690,6 +920,9 @@ export default {
         c.total_collected_usd = total;
         c.target_gross_revenue = commSlots.reduce((sum: number, s: any) => sum + (s.price_usd || 0), 0);
         c.status = "LOCKED_READY";
+        if (env.DB) {
+          await d1SaveCampaign(env.DB, c);
+        }
         return json({ stamped, collected: total });
       }
 
@@ -697,8 +930,13 @@ export default {
       const archiveMatch = cleanPath.match(/^\/api\/campaigns\/([^/]+)\/archive$/);
       if (archiveMatch && request.method === "POST") {
         const campId = archiveMatch[1];
-        const c = campaignsStore.find(x => String(x.id) === campId);
-        if (c) c.archived_at = new Date().toISOString();
+        const c = env.DB ? (await d1GetCampaign(env.DB, campId) || campaignsStore.find(x => String(x.id) === campId)) : campaignsStore.find(x => String(x.id) === campId);
+        if (c) {
+          c.archived_at = new Date().toISOString();
+          if (env.DB) {
+            await d1SaveCampaign(env.DB, c);
+          }
+        }
         return json({ ok: true });
       }
 
@@ -708,7 +946,7 @@ export default {
         const campId = slotMatch[1];
         const slotNum = parseInt(slotMatch[2]);
         const body: any = await request.json();
-        const c = campaignsStore.find(x => String(x.id) === campId);
+        const c = env.DB ? (await d1GetCampaign(env.DB, campId) || campaignsStore.find(x => String(x.id) === campId)) : campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
         const s = c.slots.find((x: any) => x.slot_number === slotNum);
         if (!s) return json({ detail: "Slot not found" }, 404);
@@ -754,6 +992,10 @@ export default {
           c.status = "LOCKED_READY";
         } else if (c.status === "LOCKED_READY") {
           c.status = "PROSPECTING";
+        }
+        if (env.DB) {
+          await d1SaveSlot(env.DB, campId, s);
+          await d1SaveCampaign(env.DB, c);
         }
         return json(s);
       }
@@ -835,6 +1077,10 @@ export default {
       const campMatch = cleanPath.match(/^\/api\/campaigns\/([^/]+)$/);
       if (campMatch && request.method === "GET") {
         const campId = campMatch[1];
+        if (env.DB) {
+          const c = await d1GetCampaign(env.DB, campId);
+          if (c) return json(c);
+        }
         const c = campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
         return json(c);
@@ -842,7 +1088,7 @@ export default {
 
       if (campMatch && request.method === "PATCH") {
         const campId = campMatch[1];
-        const c = campaignsStore.find(x => String(x.id) === campId);
+        const c = env.DB ? (await d1GetCampaign(env.DB, campId) || campaignsStore.find(x => String(x.id) === campId)) : campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
         const body: any = await request.json();
         const now = new Date().toISOString();
@@ -854,11 +1100,17 @@ export default {
           if (!c.mailed_at) c.mailed_at = now;
         }
         Object.assign(c, body, { updated_at: now });
+        if (env.DB) {
+          await d1SaveCampaign(env.DB, c);
+        }
         return json(c);
       }
 
       if (campMatch && request.method === "DELETE") {
         const campId = campMatch[1];
+        if (env.DB) {
+          await d1DeleteCampaign(env.DB, campId);
+        }
         const idx = campaignsStore.findIndex(x => String(x.id) === campId);
         if (idx >= 0) campaignsStore.splice(idx, 1);
         return new Response(null, { status: 204 });

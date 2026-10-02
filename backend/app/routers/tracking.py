@@ -438,7 +438,10 @@ async def track_qr_redirect(
     # Behind Cloudflare the reader's address is in CF-Connecting-IP; behind any
     # other proxy, the first X-Forwarded-For hop.
     forwarded_for = request.headers.get("x-forwarded-for")
-    if request.headers.get("cf-connecting-ip"):
+    if request.headers.get("x-coop-client-ip"):
+        # Set by our Cloudflare Worker, which sees the reader directly.
+        client_ip = request.headers["x-coop-client-ip"].strip()
+    elif request.headers.get("cf-connecting-ip"):
         client_ip = request.headers["cf-connecting-ip"].strip()
     elif forwarded_for:
         client_ip = forwarded_for.split(",")[0].strip()

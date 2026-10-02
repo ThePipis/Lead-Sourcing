@@ -828,6 +828,82 @@ async function d1DeleteCampaign(db: D1Database, id: string) {
   }
 }
 
+async function d1GetCachedProspects(db: D1Database, catId: number, targetZip: string, targetCity: string, excluded: string[]): Promise<any[]> {
+  try {
+    const res = await db.prepare(`
+      SELECT * FROM prospect_cache
+      WHERE category_id = ?
+        AND (zip_code = ? OR city LIKE ?)
+        AND datetime(created_at) >= datetime('now', '-72 hours')
+      ORDER BY rating DESC, review_count DESC
+    `).bind(catId, targetZip, `%${targetCity}%`).all();
+
+    if (res.results && res.results.length > 0) {
+      return res.results
+        .map((r: any) => ({
+          id: r.id,
+          category_id: r.category_id,
+          category_name: r.category_name,
+          business_name: r.business_name,
+          name: r.business_name,
+          address: r.address || '',
+          city: r.city || targetCity,
+          zip: r.zip_code || targetZip,
+          zip_code: r.zip_code || targetZip,
+          phone: r.phone || '',
+          email: r.email || '',
+          website_url: r.website_url || '',
+          rating: r.rating || 4.8,
+          review_count: r.review_count || 25,
+          source: r.source || 'Yelp Fusion',
+          decision_maker: r.decision_maker || 'Owner / Decision Maker',
+          decision_maker_title: r.decision_maker_title || 'Owner / Decision Maker',
+          avg_ticket_estimated: r.avg_ticket_estimated || 500,
+          distance_miles: r.distance_miles || 1.0,
+          geo_tier: r.geo_tier || 0,
+          status: 'NEW',
+          simulated: false
+        }))
+        .filter((item: any) => !excluded.includes(item.business_name.toLowerCase().trim()));
+    }
+  } catch (err) {
+    console.error("D1 getCachedProspects error:", err);
+  }
+  return [];
+}
+
+async function d1SaveCachedProspects(db: D1Database, catId: number, targetZip: string, targetCity: string, prospects: any[]) {
+  try {
+    const stmts: D1PreparedStatement[] = [];
+    for (const p of prospects) {
+      const cleanBiz = (p.business_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const cacheId = `cache_${catId}_${targetZip}_${cleanBiz}`;
+      stmts.push(
+        db.prepare(`
+          INSERT OR REPLACE INTO prospect_cache (
+            id, category_id, category_name, city, zip_code, business_name, address,
+            phone, email, website_url, rating, review_count, source, decision_maker,
+            decision_maker_title, avg_ticket_estimated, distance_miles, geo_tier, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        `).bind(
+          cacheId, catId, p.category_name || "Comercio", p.city || targetCity,
+          p.zip || p.zip_code || targetZip, p.business_name, p.address || "",
+          p.phone || "", p.email || "", p.website_url || "", p.rating || 4.8,
+          p.review_count || 25, p.source || "Yelp Fusion",
+          p.decision_maker || "Owner / Decision Maker",
+          p.decision_maker_title || "Owner / Decision Maker",
+          p.avg_ticket_estimated || 500, p.distance_miles || 1.0, p.geo_tier || 0
+        )
+      );
+    }
+    if (stmts.length > 0) {
+      await db.batch(stmts);
+    }
+  } catch (err) {
+    console.error("D1 saveCachedProspects error:", err);
+  }
+}
+
 async function d1RecordQrScan(db: D1Database, event: {
   id: string;
   campaign_id: string;
@@ -1918,7 +1994,22 @@ export default {
         const limitStr = url.searchParams.get("limit");
         const limit = limitStr ? parseInt(limitStr) : 3;
 
+        // 1. Check D1 persistent cache first
+        if (env.DB) {
+          const cached = await d1GetCachedProspects(env.DB, catId, targetZip, targetCity, excluded);
+          if (cached.length >= limit) {
+            return json(cached.slice(0, limit));
+          }
+        }
+
+        // 2. Fresh query via Yelp Fusion / Seed Catalog / Fallback
         const candidates = await getProspectsForCategory(env, catId, targetCity, targetZip);
+
+        // 3. Save into D1 persistent cache (72 hours validity)
+        if (env.DB && candidates.length > 0) {
+          await d1SaveCachedProspects(env.DB, catId, targetZip, targetCity, candidates);
+        }
+
         const filtered = candidates.filter(item => !excluded.includes(item.business_name.toLowerCase().trim()));
 
         // Ordenamiento jerárquico por relevancia y geografía
@@ -1944,12 +2035,25 @@ export default {
         const rawExclude = url.searchParams.get("exclude_names") || "";
         const excluded = rawExclude.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 
+        // Check D1 persistent cache first for an alternative
+        if (env.DB) {
+          const cached = await d1GetCachedProspects(env.DB, catId, targetZip, targetCity, excluded);
+          if (cached.length > 0) {
+            return json(cached[0]);
+          }
+        }
+
         const candidates = await getProspectsForCategory(env, catId, targetCity, targetZip);
         let candidate = candidates.find(item => !excluded.includes(item.business_name.toLowerCase().trim()));
         if (!candidate) {
           const generated = generateRealisticCandidates(catId, targetCity, targetZip, 1);
           candidate = generated[0];
         }
+
+        if (env.DB && candidate) {
+          await d1SaveCachedProspects(env.DB, catId, targetZip, targetCity, [candidate]);
+        }
+
         return json(candidate);
       }
 

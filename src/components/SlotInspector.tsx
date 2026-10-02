@@ -44,6 +44,8 @@ import {
   RegenerationReason,
   RegenerationRecord,
   searchCategoryLeads,
+  getCachedCategoryLeads,
+  setCachedCategoryLeads,
   updateLeadStatus,
   getCallFollowUpStatus,
 } from '../services/leadSourcingService.ts';
@@ -197,9 +199,10 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
 
   const [name, setName] = useState(slot.businessName ?? '');
   const [headline, setHeadline] = useState(slot.offerHeadline ?? '');
-  const [leads, setLeads] = useState<LeadProspect[]>([]);
+  const cachedInitial = getCachedCategoryLeads(targetCity, targetZip, niche.id, campaignId);
+  const [leads, setLeads] = useState<LeadProspect[]>(cachedInitial && cachedInitial.length >= 3 ? cachedInitial.slice(0, 3) : []);
   const [leadsError, setLeadsError] = useState<string | null>(null);
-  const [loadingLeads, setLoadingLeads] = useState(false);
+  const [loadingLeads, setLoadingLeads] = useState(!cachedInitial || cachedInitial.length < 3);
   const [crm, setCrm] = useState<Record<string, LeadProspect['status']>>({});
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [justReleasedName, setJustReleasedName] = useState<string | null>(null);
@@ -582,7 +585,9 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
       setQuarantineList((prev) => prev.filter((q) => q.business_key !== businessKey(name)));
       // Vuelve a la lista sin esperar a que caduque nada.
       const fresh = await searchCategoryLeads(targetCity, targetZip, niche.id, [], campaignId, 3);
-      setLeads(fresh.slice(0, 3));
+      const top3 = fresh.slice(0, 3);
+      setLeads(top3);
+      setCachedCategoryLeads(targetCity, targetZip, niche.id, top3, campaignId);
     } catch {
       setLeadsError(t('prospecting:quarantine.failed'));
       window.setTimeout(() => setLeadsError(null), 6000);
@@ -707,7 +712,11 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
         campaignId,
       );
       if (replacement) {
-        setLeads((prev) => prev.map((l) => (l.id === lead.id ? replacement : l)));
+        setLeads((prev) => {
+          const updated = prev.map((l) => (l.id === lead.id ? replacement : l));
+          setCachedCategoryLeads(targetCity, targetZip, niche.id, updated, campaignId);
+          return updated;
+        });
       } else {
         // Nothing left to offer. The card stays as it is rather than going
         // blank: a business with a history is still better than an empty slot.
@@ -770,11 +779,19 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
   // so it loads with it rather than waiting for a second click.
   useEffect(() => {
     let alive = true;
+    const cached = getCachedCategoryLeads(targetCity, targetZip, niche.id, campaignId);
+    if (cached && cached.length >= 3) {
+      setLeads(cached.slice(0, 3));
+      setLoadingLeads(false);
+      return;
+    }
     setLoadingLeads(true);
     searchCategoryLeads(targetCity, targetZip, niche.id, [], campaignId, 3)
       .then((data) => {
         if (!alive) return;
-        setLeads(data.slice(0, 3));
+        const top3 = data.slice(0, 3);
+        setLeads(top3);
+        setCachedCategoryLeads(targetCity, targetZip, niche.id, top3, campaignId);
         setLoadingLeads(false);
       })
       .catch(() => alive && setLoadingLeads(false));

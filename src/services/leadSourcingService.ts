@@ -86,6 +86,30 @@ export function getMapUrl(lead: {
 }
 
 
+// In-memory client cache for instantaneous UI rendering on repeat clicks
+const MEMORY_LEAD_CACHE = new Map<string, LeadProspect[]>();
+
+export function getCachedCategoryLeads(
+  targetCity: string,
+  targetZip: string,
+  categoryId?: number,
+  campaignId?: string,
+): LeadProspect[] | null {
+  const key = `${campaignId || ''}_${targetZip}_${targetCity}_${categoryId || 0}`;
+  return MEMORY_LEAD_CACHE.get(key) || null;
+}
+
+export function setCachedCategoryLeads(
+  targetCity: string,
+  targetZip: string,
+  categoryId: number,
+  leads: LeadProspect[],
+  campaignId?: string,
+) {
+  const key = `${campaignId || ''}_${targetZip}_${targetCity}_${categoryId}`;
+  MEMORY_LEAD_CACHE.set(key, leads);
+}
+
 /**
  * Searches for top 3 candidates per category across Yelp Fusion and Geoapify Places,
  * filters by rating >= 4.0 and reviewCount >= 15, and provides bilingual LLM sales hooks.
@@ -98,6 +122,16 @@ export async function searchCategoryLeads(
   campaignId?: string,
   limit = 3,
 ): Promise<LeadProspect[]> {
+  const cacheKey = `${campaignId || ''}_${targetZip}_${targetCity}_${categoryId || 0}`;
+
+  // Instant response from memory cache if no specific exclusions requested
+  if (excludeNames.length === 0 && MEMORY_LEAD_CACHE.has(cacheKey)) {
+    const cached = MEMORY_LEAD_CACHE.get(cacheKey)!;
+    if (cached.length >= limit) {
+      return cached.slice(0, limit);
+    }
+  }
+
   const allExcluded = Array.from(
     new Set([
       ...excludeNames.map((n) => n.trim().toLowerCase()),
@@ -163,7 +197,11 @@ export async function searchCategoryLeads(
           };
         });
 
-        return mapped.filter((l) => !allExcluded.includes(l.businessName.toLowerCase())).slice(0, limit);
+        const finalResults = mapped.filter((l) => !allExcluded.includes(l.businessName.toLowerCase())).slice(0, limit);
+        if (allExcluded.length === 0 && finalResults.length > 0) {
+          MEMORY_LEAD_CACHE.set(cacheKey, finalResults);
+        }
+        return finalResults;
       }
     }
   } catch (err) {

@@ -38,6 +38,10 @@ class Campaign(Base):
     # Filed away. The campaign keeps everything it had; it just stops competing
     # for attention in the drawer. Nothing is ever deleted by archiving.
     archived_at = Column(DateTime, nullable=True)
+    # Set only when the operator knowingly continued with a model that scored on
+    # fewer than its six variables. It records what was missing and when, so a
+    # campaign sold as "six variables" can never quietly have been five.
+    model_ack = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -76,6 +80,8 @@ class Slot(Base):
     short_url = Column(String(255), nullable=True)
     payment_ref = Column(String(128), nullable=True)
     paid_at = Column(DateTime, nullable=True)
+    reserved_at = Column(DateTime, nullable=True)
+    reservation_expires_at = Column(DateTime, nullable=True)
     amount_collected_usd = Column(Float, nullable=True)
     scan_count = Column(Integer, default=0)
     notes = Column(Text, nullable=True)
@@ -106,45 +112,20 @@ class Lead(Base):
     decision_maker = Column(String(128), nullable=True)
     decision_maker_title = Column(String(128), nullable=True)
     avg_ticket_estimated = Column(Float, default=500.0)
-    hook_en = Column(Text, nullable=True)
-    hook_es = Column(Text, nullable=True)
-    roi_pitch = Column(Text, nullable=True)
     distance_miles = Column(Float, nullable=True)
     status = Column(String(32), default="NEW") # NEW, CONTACTED, REJECTED, WON
+    # Everything the prospect card shows. Without these the cached answer would
+    # be a thinner version of the live one, and the screen would quietly get
+    # worse depending on whether the providers had been asked today.
+    website_ok = Column(Boolean, nullable=True)
+    website_source = Column(String(16), nullable=True)
+    has_street_address = Column(Boolean, nullable=True, default=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    geo_tier = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     campaign = relationship("Campaign", back_populates="leads")
-
-
-class Household(Base):
-    __tablename__ = "households"
-
-    id = Column(String(64), primary_key=True, index=True)
-    campaign_id = Column(String(64), ForeignKey("campaigns.id"), nullable=False, index=True)
-    resident_name = Column(String(128), nullable=False)
-    street_address = Column(String(255), nullable=False)
-    city = Column(String(128), nullable=False)
-    state = Column(String(2), default="CA")
-    zip5 = Column(String(5), nullable=False)
-    zip4 = Column(String(4), nullable=False)
-    carrier_route = Column(String(8), nullable=False) # e.g. C001, C012
-    walk_sequence = Column(Integer, nullable=False)
-
-    # Demographic attributes
-    income_score = Column(Float, nullable=False)
-    home_ownership_score = Column(Float, nullable=False)
-    home_age_years = Column(Integer, nullable=False)
-    home_age_score = Column(Float, nullable=False)
-    children_present_score = Column(Float, nullable=False)
-    vehicles_count = Column(Integer, nullable=False)
-    vehicles_score = Column(Float, nullable=False)
-    pet_owner_score = Column(Float, nullable=False)
-    home_value_score = Column(Float, nullable=False)
-
-    # Propensity results
-    match_scores_json = Column(JSON, nullable=True)
-    composite_score = Column(Float, default=0.0)
-    selected_for_drop = Column(Boolean, default=False)
 
 
 class AnalyticsEvent(Base):
@@ -277,5 +258,81 @@ class CampaignRoute(Base):
     facility = Column(String(64), default="")
     # Whether the census pass contributed to this route's score.
     census_enriched = Column(Boolean, default=False)
+    # Which variables the score was actually built from, comma separated. A
+    # score is a single number and says nothing about what went into it; this
+    # is what lets the screen show the advertiser the work behind it, and what
+    # keeps a route scored on four variables from being read as one scored on
+    # six.
+    scored_on = Column(String(160), default="")
+    # Where income and household size came from: USPS publishes them per route
+    # but leaves them empty in some ZIPs, and then the census stands in.
+    income_source = Column(String(16), default="")
+    size_source = Column(String(16), default="")
     selected = Column(Boolean, default=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class LeadRegeneration(Base):
+    """
+    A business the partner decided not to go with, and why.
+
+    This is not a blacklist. A "no" today is a "maybe" next quarter — the owner
+    was busy, the budget was spent, the decision-maker was away — and burning
+    the business forever because of one phone call throws away the only local
+    market there is. So the record counts how many times a business has been
+    set aside, and keeps the reason, and the business stays in the pool.
+
+    Keyed by the normalised business name rather than by lead id: the same shop
+    comes back with a different id on every search, and what the partner needs
+    to remember is the shop.
+    """
+
+    __tablename__ = "lead_regenerations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    campaign_id = Column(String(64), ForeignKey("campaigns.id"), nullable=True, index=True)
+    business_key = Column(String(160), nullable=False, index=True)
+    business_name = Column(String(160), nullable=False)
+    category_id = Column(Integer, nullable=True)
+    slot_number = Column(Integer, nullable=True)
+    # Copied here on purpose. Lead ids are `lead_{category}_{index}_{zip}` and
+    # get recycled as the provider's ordering changes, so by the time somebody
+    # searches the quarantine by street, the row that held the address belongs
+    # to a different business. History has to carry its own facts.
+    business_address = Column(String(255), nullable=True)
+    # A short code from the picker, so the reasons can be counted later.
+    reason_code = Column(String(32), nullable=False, default="OTRO")
+    # What the partner typed. The codes cover the common cases; this covers the
+    # conversation that actually happened.
+    reason_note = Column(Text, nullable=True)
+    # Until when this business rests. Set from the reason, because the reason is
+    # what decides: an absent owner is back next week, a signed advertising
+    # contract runs half a year. It expires by itself — the difference between
+    # a cooldown and the blacklist this replaced.
+    cooldown_until = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class LeadContact(Base):
+    """
+    A call that happened, and what came of it.
+
+    "Contacted" as a flag says almost nothing three weeks later: who answered,
+    what they asked for, when to try again. This keeps the note and the clock,
+    so a business the partner promised to call back stops being a memory and
+    starts being a reminder.
+    """
+
+    __tablename__ = "lead_contacts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    campaign_id = Column(String(64), ForeignKey("campaigns.id"), nullable=True, index=True)
+    business_key = Column(String(160), nullable=False, index=True)
+    business_name = Column(String(160), nullable=False)
+    category_id = Column(Integer, nullable=True)
+    slot_number = Column(Integer, nullable=True)
+    outcome_code = Column(String(32), nullable=False, default="OTRO")
+    note = Column(Text, nullable=True)
+    # When to nudge the partner again. Set from the outcome, or by hand.
+    follow_up_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

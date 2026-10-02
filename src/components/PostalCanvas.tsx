@@ -7,6 +7,8 @@ import {
   CheckCheck,
   Building2,
   Loader2,
+  Info,
+  RefreshCw,
   Lock,
   Unlock,
   GripVertical,
@@ -16,6 +18,7 @@ import {
   MapPin,
   Maximize2,
   Minimize2,
+  AlertCircle,
   AlertTriangle,
   ChevronDown,
   Layers,
@@ -23,6 +26,7 @@ import {
   ShieldAlert,
   Trash2,
   X,
+  MessageSquare,
 } from 'lucide-react';
 import {
   DndContext,
@@ -42,6 +46,7 @@ import {
 } from '@dnd-kit/core';
 import { CLOSED_CATEGORIES, USPS_TECHNICAL_SLOT } from '../data/categories.ts';
 import { SlotState, SlotStatus, CardSide, SlotFormat, CategoryDefinition } from '../types.ts';
+import { SlotCall, getCallFollowUpStatus } from '../services/leadSourcingService.ts';
 import {
   normalizeModularSlots,
   canMergeVertical,
@@ -77,10 +82,19 @@ export interface PostalCanvasProps {
   onUndoPayment?: (slotNumber: number, targetStatus?: SlotStatus, clearBusiness?: boolean) => void;
   isDemo?: boolean;
   onInspectSlot?: (slotNumber: number) => void;
+  /** Last call per business, keyed by normalised name. */
+  /** Every call made in each box, newest worry first. Keyed by slot number. */
+  slotContacts?: Record<string, SlotCall[]>;
   selectedSlot?: number | null;
   onNextCandidate?: (slotNumber: number) => void;
   isFilling?: boolean;
   busySlot?: number | null;
+  /** What the last autofill did, and why any box came back empty. */
+  fillReport?: {
+    filled: { slot: number; business: string }[];
+    skipped: { slot: number; reason: string }[];
+    sources?: { source: string; status: string; detail: string }[];
+  } | null;
   onQuickSimulateAllPaid?: () => void;
   onExecuteCuration?: () => void;
   isSaving?: boolean;
@@ -89,6 +103,21 @@ export interface PostalCanvasProps {
   onCloseInspector?: () => void;
   inspectorNode?: React.ReactNode;
 }
+
+const SOURCE_LABEL: Record<string, string> = {
+  yelp: 'Yelp Fusion',
+  geoapify: 'Geoapify Places',
+  osm: 'OpenStreetMap',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  NO_KEY: 'falta la clave',
+  KEY_REJECTED: 'clave rechazada',
+  QUOTA: 'cuota agotada',
+  UNREACHABLE: 'no responde',
+  BAD_REQUEST: 'fallo de configuración del sistema',
+  NOT_COVERED: 'sin cobertura para este giro',
+};
 
 function useSlotDrag(id: number, locked = false) {
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
@@ -125,6 +154,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
   selectedRoutes = 0,
   onAutofill,
   onInspectSlot,
+  slotContacts = {},
   selectedSlot = null,
   onMarkAllPaid,
   onUndoPayment,
@@ -132,6 +162,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
   onNextCandidate,
   isFilling = false,
   busySlot = null,
+  fillReport = null,
   onQuickSimulateAllPaid,
   onExecuteCuration,
   isSaving = false,
@@ -167,7 +198,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
   useEffect(() => {
     const timer = setInterval(() => {
       setTimerTick((t) => t + 1);
-    }, 15000);
+    }, 5000);
     return () => clearInterval(timer);
   }, []);
 
@@ -325,17 +356,48 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
               </button>
             )}
 
+            {/* Reiniciar borra la tarjeta y, con ella, las llamadas, las
+                cuarentenas y la caché de prospectos de esta campaña. Antes lo
+                hacía al primer clic y sin decirlo; ahora lo dice y pregunta. */}
             {isDemo && onResetLayout && (
-              <button
-                id="btn-reset-layout"
-                type="button"
-                onClick={() => onResetLayout(isDemo)}
-                disabled={isSaving}
-                className="flex min-h-10 items-center gap-1.5 border border-border px-3 text-xs font-bold text-secondary-foreground hover:bg-secondary"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Reiniciar
-              </button>
+              confirmingReset ? (
+                <span className="flex min-h-10 items-center gap-1 border border-due px-2">
+                  <span className="text-[0.69rem] font-bold text-due">
+                    {t('canvas:actions.resetWipeConfirm')}
+                  </span>
+                  <button
+                    id="btn-reset-layout-yes"
+                    type="button"
+                    onClick={() => {
+                      setConfirmingReset(false);
+                      onResetLayout(isDemo);
+                    }}
+                    disabled={isSaving}
+                    className="min-h-10 px-2 text-[0.69rem] font-bold text-due transition-colors hover:bg-due hover:text-background disabled:opacity-40 cursor-pointer"
+                  >
+                    {t('canvas:actions.resetWipeYes')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingReset(false)}
+                    className="min-h-10 px-2 text-[0.69rem] font-bold text-ink-dim transition-colors hover:text-ink cursor-pointer"
+                  >
+                    {t('canvas:actions.resetWipeNo')}
+                  </button>
+                </span>
+              ) : (
+                <button
+                  id="btn-reset-layout"
+                  type="button"
+                  onClick={() => setConfirmingReset(true)}
+                  disabled={isSaving}
+                  title={t('canvas:actions.resetWipeTitle')}
+                  className="flex min-h-10 items-center gap-1.5 border border-border px-3 text-xs font-bold text-secondary-foreground hover:bg-secondary cursor-pointer"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reiniciar
+                </button>
+              )
             )}
 
             {onExecuteCuration && (
@@ -357,6 +419,72 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
         </div>
       </div>
 
+
+      {/* What the autofill actually did, and why a box came back empty.
+          "Sin candidatos" has two causes that look identical on screen and are
+          nothing alike: this microzone has no roofers, or a key expired. Only
+          one of them is the operator's to fix, and the other is not fixed by
+          trying again tomorrow. */}
+      {fillReport && (fillReport.sources?.length || fillReport.skipped.length > 0) && (
+        <div id="fill-report" className="space-y-2">
+          {(fillReport.sources ?? []).map((s) => {
+            const blocking = s.status !== 'NOT_COVERED';
+            return (
+              <div
+                key={s.source}
+                role={blocking ? 'alert' : undefined}
+                className={`border p-3 ${
+                  blocking ? 'border-due bg-due/10' : 'border-border bg-secondary/40'
+                }`}
+              >
+                <p
+                  className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${
+                    blocking ? 'text-due' : 'text-ink-dim'
+                  }`}
+                >
+                  {blocking ? (
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <Info className="h-4 w-4 shrink-0" />
+                  )}
+                  {SOURCE_LABEL[s.source] ?? s.source} · {STATUS_LABEL[s.status] ?? s.status}
+                </p>
+                <p className="mt-1.5 max-w-[80ch] text-xs leading-relaxed text-foreground">
+                  {s.detail}
+                </p>
+                {s.status !== 'NOT_COVERED' && s.status !== 'QUOTA' && onAutofill && (
+                  <button
+                    type="button"
+                    onClick={onAutofill}
+                    disabled={isFilling}
+                    className="mt-2 flex min-h-10 items-center gap-1.5 border border-live px-3 text-[0.69rem] font-bold text-live transition-colors hover:bg-live hover:text-background disabled:opacity-40"
+                  >
+                    {isFilling ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    Reintentar autollenado
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          {fillReport.skipped.length > 0 && (
+            <p className="border border-border bg-secondary/40 px-3 py-2 font-mono text-[0.69rem] leading-relaxed text-ink-dim">
+              Espacios sin comercio:{' '}
+              <span className="text-foreground">
+                {fillReport.skipped.map((s) => s.slot).join(', ')}
+              </span>
+              . {(fillReport.sources ?? []).length > 0
+                ? 'Revisa el aviso de arriba antes de darlos por vacíos.'
+                : 'Las fuentes respondieron; en esta microzona no hay comercios de ese giro.'}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Postcard Physical Frame (12" x 9") */}
       <div className="relative bg-canvas-bg border border-dashed border-border p-3 sm:p-5 overflow-x-auto">
         <div className="min-w-[720px]">
@@ -371,9 +499,9 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
               </span>
               <span className="text-muted-foreground hidden sm:inline">|</span>
               <span className="flex items-center gap-3 hidden sm:flex text-ink">
-                <span>🟩 Chico: ${smallPrice} (1×1)</span>
-                <span>🟦 Mediano: ${mediumPrice} (1×2)</span>
-                <span>🟪 Grande: ${largePrice.toLocaleString('en-US')} (2×2)</span>
+                <span>🟩 Chico: ${smallPrice} (1×1 · 2.8" × 1.8")</span>
+                <span>🟦 Mediano: ${mediumPrice} (1×2 · 2.8" × 3.6")</span>
+                <span>🟪 Grande: ${largePrice.toLocaleString('en-US')} (2×2 · 5.6" × 3.6")</span>
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -409,6 +537,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         isDemo={isDemo}
                         isSelected={selectedSlot === slot.slotNumber}
                         onInspect={onInspectSlot}
+                        calls={slotContacts[String(slot.slotNumber)]}
                         onMerge={handleMerge}
                         onSplit={handleSplit}
                         onRelease={handleRelease}
@@ -427,17 +556,23 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                   </div>
 
                   {/* Center Front Banner (The Clarion Spotlight / Co-Op Style) */}
-                  <div className="border-y-2 border-border bg-secondary/80 py-2.5 px-4 text-center select-none shadow-inner">
-                    <div className="flex items-center justify-between text-[0.65rem] font-mono uppercase tracking-widest text-muted-foreground">
-                      <span>Edición Comunitaria Inland Empire</span>
-                      <span>Otoño - Invierno 2026</span>
+                  <div className="border-y-2 border-border bg-secondary/80 py-1.5 px-4 select-none shadow-inner">
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
+                      <div className="text-[0.65rem] font-mono uppercase tracking-widest text-muted-foreground text-left whitespace-nowrap">
+                        Edición Comunitaria Inland Empire
+                      </div>
+                      <div className="text-center px-1">
+                        <h2 className="text-xs sm:text-sm md:text-base font-black tracking-tight text-foreground uppercase leading-tight">
+                          ★ The Inland Spotlight · Eastvale Local Co-Op ★
+                        </h2>
+                        <p className="text-[0.65rem] sm:text-[0.68rem] text-muted-foreground leading-tight mt-0.5">
+                          Cupónera Comunitaria Directa a 5,000 Hogares Seleccionados · Co-Op Direct Mail
+                        </p>
+                      </div>
+                      <div className="text-[0.65rem] font-mono uppercase tracking-widest text-muted-foreground text-right whitespace-nowrap">
+                        Otoño - Invierno 2026
+                      </div>
                     </div>
-                    <h2 className="text-base sm:text-lg font-black tracking-tight text-foreground uppercase mt-0.5">
-                      ★ The Inland Spotlight · Eastvale Local Co-Op ★
-                    </h2>
-                    <p className="text-[0.68rem] text-muted-foreground">
-                      Cupónera Comunitaria Directa a 5,000 Hogares Seleccionados · Co-Op Direct Mail
-                    </p>
                   </div>
 
                   {/* Bottom Block: Rows 3 & 4 (8 atomic cells) */}
@@ -450,6 +585,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         isDemo={isDemo}
                         isSelected={selectedSlot === slot.slotNumber}
                         onInspect={onInspectSlot}
+                        calls={slotContacts[String(slot.slotNumber)]}
                         onMerge={handleMerge}
                         onSplit={handleSplit}
                         onRelease={handleRelease}
@@ -480,6 +616,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                         isDemo={isDemo}
                         isSelected={selectedSlot === slot.slotNumber}
                         onInspect={onInspectSlot}
+                        calls={slotContacts[String(slot.slotNumber)]}
                         onMerge={handleMerge}
                         onSplit={handleSplit}
                         onRelease={handleRelease}
@@ -529,6 +666,7 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                           isDemo={isDemo}
                           isSelected={selectedSlot === slot.slotNumber}
                           onInspect={onInspectSlot}
+                        calls={slotContacts[String(slot.slotNumber)]}
                           onMerge={handleMerge}
                           onSplit={handleSplit}
                           onRelease={handleRelease}
@@ -703,6 +841,19 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
 /* ========================================================================= */
 /* MODULAR SLOT CARD COMPONENT (Supports SMALL, MEDIUM, LARGE)               */
 /* ========================================================================= */
+/** "hace 40 min", "hace 3 h", "hace 2 días": la unidad sigue al hueco. */
+function elapsedSince(iso: string | null): string {
+  if (!iso) return '';
+  const then = new Date(iso.endsWith('Z') ? iso : iso + 'Z').getTime();
+  if (Number.isNaN(then)) return '';
+  const mins = Math.max(0, Math.floor((Date.now() - then) / 60000));
+  if (mins < 60) return `hace ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? 'hace 1 día' : `hace ${days} días`;
+}
+
 interface ModularSlotCardProps {
   slot: SlotState;
   allSlots: SlotState[];
@@ -718,6 +869,8 @@ interface ModularSlotCardProps {
   onPromptUnlock?: (slot: SlotState) => void;
   busy?: boolean;
   onNextCandidate?: (slotNumber: number) => void;
+  /** Última llamada a este comercio, si la hubo. */
+  calls?: SlotCall[];
   menuOpen: boolean;
   onToggleMenu: (slotNumber: number) => void;
   onCloseMenu?: () => void;
@@ -739,6 +892,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   onPromptUnlock,
   busy,
   onNextCandidate,
+  calls,
   menuOpen,
   onToggleMenu,
   onCloseMenu,
@@ -827,39 +981,43 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
   const resInfo = getSlotReservationInfo(slot);
 
   const formatBadge = {
-    SMALL: { label: 'Chico (1×1)', color: 'bg-secondary text-ink-dim', price: activeSmallPrice },
-    MEDIUM: { label: 'Mediano (1×2)', color: 'bg-live/15 text-live font-bold', price: activeMedPrice },
-    LARGE: { label: 'Grande (2×2)', color: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 font-black', price: activeLgPrice },
-    USPS: { label: 'USPS Postal', color: 'bg-secondary text-muted-foreground', price: 0 },
+    SMALL: { label: 'Chico (1×1)', dimensions: '2.8" × 1.8"', color: 'bg-secondary text-ink-dim', price: activeSmallPrice },
+    MEDIUM: { label: 'Mediano (1×2)', dimensions: '2.8" × 3.6"', color: 'bg-live/15 text-live font-bold', price: activeMedPrice },
+    LARGE: { label: 'Grande (2×2)', dimensions: '5.6" × 3.6"', color: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 font-black', price: activeLgPrice },
+    USPS: { label: 'USPS Postal', dimensions: '2.8" × 1.8"', color: 'bg-secondary text-muted-foreground', price: 0 },
   }[format];
 
   return (
     <div
       ref={setNodeRef}
+      data-slot-number={slot.slotNumber}
       onClick={() => onInspect?.(slot.slotNumber)}
       style={{
         gridColumn: `${gridCol} / span ${colSpan}`,
         gridRow: `${gridRow} / span ${rowSpan}`,
       }}
-      className={`relative flex flex-col justify-between p-2.5 sm:p-3 border transition-all cursor-pointer select-none bg-slot-bg ${
+      className={`relative flex flex-col justify-between pt-0.5 pb-1 px-1.5 border transition-all cursor-pointer select-none bg-slot-bg ${
         rowSpan === 2 ? 'min-h-[220px]' : 'min-h-[105px]'
       } ${statusBorderClass} ${
         isSelected ? 'ring-2 ring-live shadow-md' : ''
       } ${isOver ? 'scale-[1.01] ring-2 ring-primary' : ''}`}
     >
-      {/* Top Header: Slot Number + Format Tag + Price */}
-      <div>
-        <div className="flex items-center justify-between gap-1 mb-1">
-          <div className="flex items-center gap-1.5">
-            <span className="font-mono text-[0.62rem] font-black text-muted-foreground">
+      {/* Top Header: Slot Number + Category Name + Price */}
+      <div className="shrink-0">
+        <div className="flex items-center justify-between gap-1.5 mb-0.5 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <span className="font-mono text-[0.62rem] font-black text-muted-foreground shrink-0">
               #{slot.displayNumber ?? slot.slotNumber}
             </span>
-            <span className={`text-[0.58rem] px-1 py-0.2 rounded border border-rule/50 ${formatBadge.color}`}>
-              {formatBadge.label}
+            <span
+              className="text-xs font-bold truncate text-foreground leading-tight"
+              title={slot.categoryName || catDef.name}
+            >
+              {slot.categoryName || catDef.name}
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
             {isReserved ? (
               <div
                 className="flex items-baseline gap-1 font-mono"
@@ -891,10 +1049,10 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                 type="button"
                 {...attributes}
                 {...listeners}
-                className="text-muted-foreground hover:text-foreground p-1.5 -mr-1 rounded hover:bg-secondary cursor-grab active:cursor-grabbing touch-none flex items-center transition-colors"
+                className="text-muted-foreground hover:text-foreground p-0.5 -mr-0.5 rounded hover:bg-secondary cursor-grab active:cursor-grabbing touch-none flex items-center transition-colors"
                 title="Arrastrar para intercambiar posición"
               >
-                <GripVertical className="h-4 w-4" />
+                <GripVertical className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
@@ -902,7 +1060,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
 
         {/* 72h Reservation Timer Badge */}
         {isReserved && (
-          <div className="mb-1.5" onClick={(e) => e.stopPropagation()}>
+          <div className="mb-1" onClick={(e) => e.stopPropagation()}>
             <div
               className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[0.6rem] font-bold border ${
                 isExpired
@@ -953,7 +1111,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
 
         {/* Paid Status & Quick Unlock Action */}
         {isPaid && (
-          <div className="mb-1.5" onClick={(e) => e.stopPropagation()}>
+          <div className="mb-1" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-1.5 py-0.5 rounded text-[0.6rem] font-bold border bg-clear/15 border-clear/40 text-clear">
               <span className="flex items-center gap-1 truncate">
                 <Lock className="h-3 w-3 shrink-0" />
@@ -971,49 +1129,178 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
             </div>
           </div>
         )}
+      </div>
 
-        {/* Business Name & Niche */}
-        <div className="mt-0.5">
-          <h4 className="text-xs font-bold line-clamp-1 text-foreground">
-            {slot.businessName || (
-              <span className="text-muted-foreground italic font-medium">
-                {slot.categoryName || catDef.name}
-              </span>
+      {/* Business Name / Contacts / Pitch - Centrado verticalmente */}
+      <div className="min-w-0 flex-1 flex flex-col justify-center my-auto">
+        {slot.businessName && (
+          <div>
+            <h4 className="text-xs font-bold line-clamp-1 text-foreground" title={slot.businessName}>
+              {slot.businessName}
+            </h4>
+            {slot.phone && (
+              <p className="text-[0.62rem] font-mono text-muted-foreground flex items-center gap-1 mt-0.5">
+                <Phone className="h-2.5 w-2.5 text-live shrink-0" />
+                {slot.phone}
+              </p>
             )}
-          </h4>
+          </div>
+        )}
 
-          {slot.phone && (
-            <p className="text-[0.62rem] font-mono text-muted-foreground flex items-center gap-1 mt-0.5">
-              <Phone className="h-2.5 w-2.5 text-live shrink-0" />
-              {slot.phone}
+        {(() => {
+          // Una casilla sin cobrar o sin reservar necesita ver a quién le debe una
+          // llamada y desde cuándo. Una vez reservada (con exclusividad y reloj de 72h)
+          // o pagada, los avisos de llamadas dejan de mostrarse y se muestra el titular del anuncio.
+          const open = !isPaid && !isReserved ? (calls ?? []) : [];
+
+          if (open.length > 0) {
+            return (
+              <div className="space-y-0.5">
+                {open.slice(0, 3).map((c) => {
+                  const status = getCallFollowUpStatus(c.at, c.follow_up_at);
+                  const isUrgentDue = status.isDue && status.isOverdue1h;
+
+                  return (
+                    <div
+                      key={c.business_name}
+                      title={`${c.business_name} · ${c.outcome_label}${c.note ? ` — “${c.note}”` : ''} · ${status.badgeText} · ×${c.count}`}
+                      className="flex items-center justify-between gap-1.5 font-sans text-[0.72rem] leading-tight"
+                    >
+                      <div className="flex items-center gap-1 min-w-0 flex-1">
+                        <Phone className="h-2.5 w-2.5 shrink-0 opacity-80" />
+                        <strong className="truncate font-semibold text-foreground/90">
+                          {c.business_name}
+                        </strong>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0 ml-1">
+                        <span
+                          className={`flex items-center gap-0.5 ${
+                            isUrgentDue
+                              ? 'text-due font-bold animate-pulse'
+                              : status.isDue
+                                ? 'text-live font-semibold animate-pulse'
+                                : status.isScheduledFuture
+                                  ? 'text-amber-600 dark:text-amber-400 font-medium'
+                                  : 'text-muted-foreground'
+                          }`}
+                        >
+                          <span>
+                            {status.isDue || status.isScheduledFuture
+                              ? status.badgeText
+                              : `${c.outcome_label}${c.note ? ` — “${c.note}”` : ''} · ${status.badgeText}`}
+                          </span>
+                          {isUrgentDue && (
+                            <span title="Más de 1 hora sin insistir" className="inline-flex items-center">
+                              <AlertCircle
+                                className="h-3 w-3 shrink-0 text-due stroke-[2.5]"
+                              />
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-mono text-[0.62rem] opacity-80">· ×{c.count}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {open.length > 3 && (
+                  <p className="font-sans text-[0.62rem] leading-tight text-ink-faint">
+                    +{open.length - 3} más en curso
+                  </p>
+                )}
+              </div>
+            );
+          }
+
+          // Espacio ya asignado pero sin una sola llamada (solo en prospección activa):
+          // eso también es información, y es la que dice qué hacer a continuación.
+          if (Boolean(slot.businessName) && !isPaid && !isReserved) {
+            return (
+              <p className="flex items-center gap-1 font-sans text-[0.72rem] leading-tight text-ink-faint">
+                <Phone className="h-2.5 w-2.5 shrink-0 opacity-70" />
+                <span className="truncate">Sin intentos de contacto todavía</span>
+              </p>
+            );
+          }
+
+          // En fase de separación (RESERVED): mostrar comentarios de la conversación/reserva en lugar del gancho
+          if (isReserved) {
+            const comment = slot.notes && !slot.notes.startsWith('Covered by') ? slot.notes.trim() : '';
+            if (comment) {
+              return (
+                <div
+                  className="flex items-start gap-1 font-sans text-[0.68rem] leading-snug text-foreground/85 line-clamp-2"
+                  title={`Comentario de separación: ${comment}`}
+                >
+                  <MessageSquare className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <span className="italic font-medium">“{comment}”</span>
+                </div>
+              );
+            }
+            return (
+              <p className="flex items-center gap-1 font-sans text-[0.64rem] leading-tight text-ink-faint italic">
+                <MessageSquare className="h-2.5 w-2.5 shrink-0 opacity-60" />
+                <span className="truncate">Sin comentarios de separación (clic para registrar)</span>
+              </p>
+            );
+          }
+
+          if (isPaid) {
+            const comment = slot.notes && !slot.notes.startsWith('Covered by') ? slot.notes.trim() : '';
+            if (comment) {
+              return (
+                <div
+                  className="flex items-start gap-1 font-sans text-[0.68rem] leading-snug text-foreground/85 line-clamp-2"
+                  title={`Comentario: ${comment}`}
+                >
+                  <MessageSquare className="h-2.5 w-2.5 text-clear shrink-0 mt-0.5" />
+                  <span className="italic font-medium">“{comment}”</span>
+                </div>
+              );
+            }
+            return (
+              <p className="text-[0.65rem] text-muted-foreground/80 line-clamp-2 leading-tight font-sans">
+                {slot.categoryName || catDef.name} · Confirmado
+              </p>
+            );
+          }
+
+          return (
+            <p className="text-[0.65rem] text-muted-foreground line-clamp-2 leading-tight font-sans">
+              {slot.categoryName || catDef.name}
             </p>
-          )}
-
-          <p className="text-[0.65rem] text-muted-foreground line-clamp-2 mt-1 leading-tight">
-            {slot.offerHeadline || catDef.defaultHeadline}
-          </p>
-        </div>
+          );
+        })()}
       </div>
 
       {/* Bottom Footer: Format Modifiers & Status Dropdown */}
-      <div className="pt-2 border-t border-border/70 flex items-center justify-between gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
+      <div className="shrink-0 pt-1 border-t border-border/70 flex items-center justify-between gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
         {/* Format Selector / Revert Button */}
         <div ref={menuRef} className="relative">
           {format === 'SMALL' ? (
             <div>
               <button
                 type="button"
-                onClick={() => onToggleMenu(slot.slotNumber)}
-                className="flex items-center gap-0.5 text-[0.6rem] font-medium text-ink-dim hover:text-ink border border-rule px-1.5 py-0.5 rounded bg-secondary hover:bg-accent cursor-pointer transition-colors"
-                title="Ampliar o fusionar espacio para este cliente"
+                disabled={isPaid}
+                onClick={() => !isPaid && onToggleMenu(slot.slotNumber)}
+                className={`flex items-center gap-0.5 text-[0.6rem] font-medium border border-rule px-1.5 py-0.5 rounded transition-colors ${
+                  isPaid
+                    ? 'opacity-60 cursor-not-allowed bg-muted/40 text-muted-foreground'
+                    : 'text-ink-dim hover:text-ink bg-secondary hover:bg-accent cursor-pointer'
+                }`}
+                title={
+                  isPaid
+                    ? t('canvas:status.paidLockedTooltip', 'Slot pagado (usa el botón "Desbloquear" para modificar)')
+                    : 'Ampliar o fusionar espacio para este cliente'
+                }
               >
-                <Maximize2 className="h-2.5 w-2.5 text-live" />
+                <Maximize2 className={`h-2.5 w-2.5 ${isPaid ? 'text-muted-foreground' : 'text-live'}`} />
                 <span>Modificar</span>
                 <ChevronDown className="h-2.5 w-2.5" />
               </button>
 
-              {menuOpen && (
-                <div className="absolute left-0 bottom-full mb-1 z-30 w-44 bg-card border border-border shadow-xl p-1 text-xs">
+              {menuOpen && !isPaid && (
+                <div className="absolute left-0 bottom-full mb-1 z-30 w-56 bg-card border border-border shadow-xl p-1 text-xs">
                   <div className="text-[0.62rem] font-bold text-muted-foreground px-2 py-1 uppercase border-b border-border">
                     Formato del Anuncio
                   </div>
@@ -1026,7 +1313,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                       }}
                       className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-live font-bold cursor-pointer"
                     >
-                      <span>Mediano (1×2)</span>
+                      <span>Mediano (1×2 · 2.8"×3.6")</span>
                       <span>${activeMedPrice}</span>
                     </button>
                   )}
@@ -1039,7 +1326,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                       }}
                       className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-purple-600 font-bold cursor-pointer"
                     >
-                      <span>Grande (2×2)</span>
+                      <span>Grande (2×2 · 5.6"×3.6")</span>
                       <span>${activeLgPrice.toLocaleString('en-US')}</span>
                     </button>
                   )}
@@ -1055,17 +1342,26 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
             <div>
               <button
                 type="button"
-                onClick={() => onToggleMenu(slot.slotNumber)}
-                className="flex items-center gap-0.5 text-[0.6rem] font-medium text-ink-dim hover:text-ink border border-rule px-1.5 py-0.5 rounded bg-secondary hover:bg-accent cursor-pointer transition-colors"
-                title="Ampliar a Grande o Dividir"
+                disabled={isPaid}
+                onClick={() => !isPaid && onToggleMenu(slot.slotNumber)}
+                className={`flex items-center gap-0.5 text-[0.6rem] font-medium border border-rule px-1.5 py-0.5 rounded transition-colors ${
+                  isPaid
+                    ? 'opacity-60 cursor-not-allowed bg-muted/40 text-muted-foreground'
+                    : 'text-ink-dim hover:text-ink bg-secondary hover:bg-accent cursor-pointer'
+                }`}
+                title={
+                  isPaid
+                    ? t('canvas:status.paidLockedTooltip', 'Slot pagado (usa el botón "Desbloquear" para modificar)')
+                    : 'Ampliar a Grande o Dividir'
+                }
               >
-                <Maximize2 className="h-2.5 w-2.5 text-purple-600" />
+                <Maximize2 className={`h-2.5 w-2.5 ${isPaid ? 'text-muted-foreground' : 'text-purple-600'}`} />
                 <span>Modificar</span>
                 <ChevronDown className="h-2.5 w-2.5" />
               </button>
 
-              {menuOpen && (
-                <div className="absolute left-0 bottom-full mb-1 z-30 w-48 bg-card border border-border shadow-xl p-1 text-xs">
+              {menuOpen && !isPaid && (
+                <div className="absolute left-0 bottom-full mb-1 z-30 w-56 bg-card border border-border shadow-xl p-1 text-xs">
                   <div className="text-[0.62rem] font-bold text-muted-foreground px-2 py-1 uppercase border-b border-border">
                     Formato del Anuncio
                   </div>
@@ -1078,7 +1374,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                       }}
                       className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-purple-600 font-bold cursor-pointer"
                     >
-                      <span>Grande (2×2)</span>
+                      <span>Grande (2×2 · 5.6"×3.6")</span>
                       <span>${activeLgPrice.toLocaleString('en-US')}</span>
                     </button>
                   )}
@@ -1090,7 +1386,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                     }}
                     className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-due font-bold cursor-pointer border-t border-border mt-0.5"
                   >
-                    <span>Dividir en Chicos (1×1)</span>
+                    <span>Dividir en Chicos (1×1 · 2.8"×1.8")</span>
                     <span>${activeSmallPrice}</span>
                   </button>
                 </div>
@@ -1100,17 +1396,26 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
             <div>
               <button
                 type="button"
-                onClick={() => onToggleMenu(slot.slotNumber)}
-                className="flex items-center gap-0.5 text-[0.6rem] font-medium text-ink-dim hover:text-ink border border-rule px-1.5 py-0.5 rounded bg-secondary hover:bg-accent cursor-pointer transition-colors"
-                title="Dividir en Medianos o Chicos"
+                disabled={isPaid}
+                onClick={() => !isPaid && onToggleMenu(slot.slotNumber)}
+                className={`flex items-center gap-0.5 text-[0.6rem] font-medium border border-rule px-1.5 py-0.5 rounded transition-colors ${
+                  isPaid
+                    ? 'opacity-60 cursor-not-allowed bg-muted/40 text-muted-foreground'
+                    : 'text-ink-dim hover:text-ink bg-secondary hover:bg-accent cursor-pointer'
+                }`}
+                title={
+                  isPaid
+                    ? t('canvas:status.paidLockedTooltip', 'Slot pagado (usa el botón "Desbloquear" para modificar)')
+                    : 'Dividir en Medianos o Chicos'
+                }
               >
-                <Minimize2 className="h-2.5 w-2.5 text-due" />
+                <Minimize2 className={`h-2.5 w-2.5 ${isPaid ? 'text-muted-foreground' : 'text-due'}`} />
                 <span>Modificar</span>
                 <ChevronDown className="h-2.5 w-2.5" />
               </button>
 
-              {menuOpen && (
-                <div className="absolute left-0 bottom-full mb-1 z-30 w-52 bg-card border border-border shadow-xl p-1 text-xs">
+              {menuOpen && !isPaid && (
+                <div className="absolute left-0 bottom-full mb-1 z-30 w-56 bg-card border border-border shadow-xl p-1 text-xs">
                   <div className="text-[0.62rem] font-bold text-muted-foreground px-2 py-1 uppercase border-b border-border">
                     Dividir Espacio Grande
                   </div>
@@ -1122,7 +1427,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                     }}
                     className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-live font-bold cursor-pointer"
                   >
-                    <span>Medianos (1×2)</span>
+                    <span>Medianos (1×2 · 2.8"×3.6")</span>
                     <span>${activeMedPrice.toLocaleString('en-US')} c/u</span>
                   </button>
                   <button
@@ -1133,7 +1438,7 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
                     }}
                     className="w-full text-left px-2 py-1.5 hover:bg-secondary flex items-center justify-between text-[0.68rem] text-due font-bold cursor-pointer border-t border-border mt-0.5"
                   >
-                    <span>Dividir en Chicos (1×1)</span>
+                    <span>Dividir en Chicos (1×1 · 2.8"×1.8")</span>
                     <span>${activeSmallPrice.toLocaleString('en-US')} c/u</span>
                   </button>
                 </div>
@@ -1141,6 +1446,14 @@ const ModularSlotCard: React.FC<ModularSlotCardProps> = ({
             </div>
           )}
         </div>
+
+        {/* Size Format Badge */}
+        <span
+          className={`text-[0.58rem] px-1.5 py-0.5 rounded border border-rule/50 shrink-0 select-none ${formatBadge.color}`}
+          title={`Formato: ${formatBadge.label} · ${formatBadge.dimensions}`}
+        >
+          {formatBadge.label}
+        </span>
 
         {/* Status Dropdown / Vacant Badge */}
         {showVacantBadge ? (
@@ -1207,10 +1520,10 @@ const UspsZoneCard: React.FC<{ coveredHouseholds: number; selectedRoutes: number
     <div
       ref={setNodeRef}
       style={{ gridColumn: '4 / span 1', gridRow: '2 / span 1' }}
-      className="border-2 border-dashed border-live/70 bg-live/5 p-2 flex flex-col justify-between min-h-[105px] select-none text-foreground"
+      className="border-2 border-dashed border-live/70 bg-live/5 pt-0.5 pb-1 px-1.5 flex flex-col justify-between min-h-[105px] select-none text-foreground"
     >
       <div>
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between mb-0.5">
           <span className="text-[0.6rem] font-black uppercase tracking-wider text-live font-mono">
             USPS EDDM Indicia
           </span>

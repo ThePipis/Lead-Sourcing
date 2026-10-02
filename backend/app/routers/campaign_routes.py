@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Campaign, CampaignRoute
-from ..services import census_service, eddm_service
+from ..services import census_service, eddm_service, parcel_service
+from .datasources import is_source_enabled
 
 router = APIRouter(prefix="/campaigns", tags=["Campaign Routes"])
 
@@ -49,6 +50,9 @@ def _serialize(rows: List[CampaignRoute]) -> dict:
                 "score": r.score,
                 "facility": r.facility,
                 "census_enriched": bool(r.census_enriched),
+                "scored_on": [v for v in (r.scored_on or "").split(",") if v],
+                "income_source": r.income_source or "",
+                "size_source": r.size_source or "",
                 "selected": bool(r.selected),
             }
             for r in sorted(rows, key=lambda x: (-x.score, -x.residential))
@@ -58,6 +62,8 @@ def _serialize(rows: List[CampaignRoute]) -> dict:
         "available": sum(r.residential for r in rows),
         "available_routes": len(rows),
         "census_enriched": any(r.census_enriched for r in rows),
+        "weights": eddm_service.WEIGHTS,
+        "household_size_nudge": 0.10,
     }
 
 
@@ -73,6 +79,10 @@ async def plan_routes(
     campaign_id: str,
     zip_code: str = Query("", alias="zip"),
     target: int = Query(0, ge=0, le=200000),
+    allow_degraded: bool = Query(
+        False,
+        description="Plan even if the census did not answer, scoring on fewer variables",
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -90,19 +100,48 @@ async def plan_routes(
     except eddm_service.EddmError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    # Optional by design: no key, no network or no coverage leaves the routes
-    # scored on the USPS variables instead of failing the request.
-    try:
-        enriched_count = await census_service.enrich_routes(routes)
-    except Exception as e:
-        print(f"[Routes] census enrichment skipped: {e}")
-        enriched_count = 0
+    # The census is not optional any more.
+    #
+    # USPS publishes no income and no household size in any of the operator's
+    # microzones, so four of the six variables — and the heaviest of them — come
+    # from the census alone. Scoring without it does not produce a slightly
+    # worse plan, it produces a different product sold under the same name. So
+    # a census that cannot answer stops the plan here, before anything is
+    # written, and says which of the three things went wrong. `allow_degraded`
+    # is the deliberate way past, for an outage with a drop already sold.
+    census_on = is_source_enabled(db, "CENSUS_ACS", camp.mode)
+    enriched_count = 0
+    if census_on:
+        try:
+            enriched_count = await census_service.enrich_routes(routes)
+        except Exception as e:
+            print(f"[Routes] census enrichment failed: {e}")
+
+    if enriched_count == 0 and not allow_degraded:
+        problem = (
+            await census_service.diagnose()
+            if census_on
+            else {"status": "DISABLED", "detail": "El Census (ACS) está desactivado en Configuración → Fuentes de datos."}
+        )
+        raise HTTPException(
+            status_code=424,
+            detail={
+                "reason": problem["status"],
+                "message": problem["detail"],
+                "zip": zip_code,
+                "routes_found": len(routes),
+            },
+        )
 
     scored = eddm_service.score_routes(routes)
     selection = eddm_service.select_routes(scored, target)
     chosen = {r["route_id"] for r in selection["routes"]}
 
     db.query(CampaignRoute).filter(CampaignRoute.campaign_id == campaign_id).delete()
+    # A new plan supersedes the old acknowledgement. Leaving it would leave a
+    # campaign flagged as planned-on-an-incomplete-model after the very re-run
+    # that fixed it, which teaches the operator to ignore the flag.
+    camp.model_ack = None
     for r in scored:
         db.add(
             CampaignRoute(
@@ -119,6 +158,9 @@ async def plan_routes(
                 score=r["score"],
                 facility=r["facility"],
                 census_enriched=r.get("owner_occupied") is not None,
+                scored_on=",".join(r.get("scored_on") or []),
+                income_source=r.get("income_source") or ("USPS" if r["median_income"] else ""),
+                size_source=r.get("size_source") or ("USPS" if r["avg_household_size"] else ""),
                 selected=r["route_id"] in chosen,
             )
         )
@@ -179,8 +221,11 @@ def route_manifest(campaign_id: str, db: Session = Depends(get_db)):
                 "residential": r.residential,
                 "business": r.business,
                 "median_income": r.median_income,
+                "income_source": r.income_source or "",
                 "avg_household_size": r.avg_household_size,
+                "size_source": r.size_source or "",
                 "score": r.score,
+                "scored_on": [v for v in (r.scored_on or "").split(",") if v],
                 "facility": r.facility,
             }
             for r in sorted(rows, key=lambda x: (-x.score, -x.residential))
@@ -195,3 +240,31 @@ def route_manifest(campaign_id: str, db: Session = Depends(get_db)):
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@router.get("/{campaign_id}/routes/profile")
+async def route_profile(campaign_id: str, db: Session = Depends(get_db)):
+    """
+    What the selected routes are built of, from the county parcel roll.
+
+    This is evidence for the advertiser, never a mailing list: the drop is a
+    saturation drop and reaches every box on the route regardless. `profile`
+    comes back null when the county did not answer, so the interface can say
+    "unavailable" instead of printing a figure nobody checked.
+    """
+    _campaign(db, campaign_id)
+    rows = (
+        db.query(CampaignRoute)
+        .filter(CampaignRoute.campaign_id == campaign_id, CampaignRoute.selected == True)  # noqa: E712
+        .all()
+    )
+    if not rows:
+        raise HTTPException(
+            status_code=409,
+            detail="No hay rutas seleccionadas todavía: ejecuta el motor de rutas primero.",
+        )
+
+    profile = await parcel_service.route_profile(
+        rows[0].zip_code, [r.route_id for r in rows]
+    )
+    return {"profile": profile, "available": profile is not None}

@@ -43,6 +43,5 @@ export function useAppMode() {
     mode,
     setAppMode,
     /** Lead sourcing and curation run against mocks only in the practice file. */
-    mockMode: mode === 'DEMO',
   };
 }

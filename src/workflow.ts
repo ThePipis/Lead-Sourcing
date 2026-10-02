@@ -2,9 +2,9 @@ import { Campaign } from './types.ts';
 
 /**
  * A campaign is one acceptance form with four numbered sections worked in
- * order. The dependencies below are the business's, not the UI's: curation is
+ * order. The dependencies below are the business's, not the UI's: routes are
  * not paid for before the campaign is funded, a manifest cannot be cut from
- * households that were never scored, and nothing is mailed before it is
+ * routes that were never selected, and nothing is mailed before it is
  * printed. The gate is what makes the order visible instead of remembered.
  */
 
@@ -62,7 +62,7 @@ export interface CampaignProgress {
 
 const isInProduction = (c: Campaign) => c.status === 'IN_PRODUCTION' || c.status === 'MAILED';
 
-export function computeProgress(campaign: Campaign, curatedCount: number): CampaignProgress {
+export function computeProgress(campaign: Campaign): CampaignProgress {
   const paid = campaign.slots.filter(
     (s) => s.status === 'PAID' && s.slotNumber !== 32 && s.format !== 'USPS' && !s.notes?.startsWith('Covered by'),
   ).length;
@@ -71,7 +71,15 @@ export function computeProgress(campaign: Campaign, curatedCount: number): Campa
   const costCovered = collected >= cost;
   const slotsMet = paid >= OPERATING_FLOOR;
   const floorMet = costCovered && slotsMet;
-  const curated = curatedCount > 0;
+  // A saturation drop is bought by the route, so the section is done once
+  // routes are selected. The backend recomputes this from CampaignRoute on
+  // every read, which is why the gate survives a page reload.
+  const routesPicked = (campaign.selectedRoutes ?? 0) > 0;
+  // Selecting routes is not enough to seal section 2: the drop is sold as six
+  // variables, so a score built on fewer does not close the phase. The gate can
+  // be passed deliberately — `modelAck` — and then it is on the record.
+  const modelShort = routesPicked && campaign.modelComplete === false && !campaign.modelAck;
+  const curated = routesPicked && !modelShort;
   const inProduction = isInProduction(campaign);
   const mailed = campaign.status === 'MAILED';
 
@@ -107,15 +115,31 @@ export function computeProgress(campaign: Campaign, curatedCount: number): Campa
         : !costCovered
           ? { missing: Math.ceil(cost - collected).toLocaleString('en-US') }
           : { missing: OPERATING_FLOOR - paid, floor: OPERATING_FLOOR },
-      summaryKey: curated ? 'form.summary.curationDone' : 'form.summary.curationPending',
-      summaryParams: { count: curatedCount.toLocaleString('en-US') },
+      summaryKey: curated
+        ? 'form.summary.curationDone'
+        : modelShort
+          ? 'form.summary.curationShort'
+          : 'form.summary.curationPending',
+      summaryParams: {
+        count: (campaign.coveredHouseholds ?? 0).toLocaleString('en-US'),
+        routes: campaign.selectedRoutes ?? 0,
+        used: campaign.modelVariables ?? 0,
+        missing: (campaign.modelMissing ?? []).length,
+      },
     },
     {
       id: 'manifest',
       number: 3,
       done: inProduction,
       open: curated,
-      blockedKey: curated ? undefined : 'form.blocked.manifest',
+      blockedKey: curated
+        ? undefined
+        : modelShort
+          ? 'form.blocked.manifestModel'
+          : 'form.blocked.manifest',
+      blockedParams: modelShort
+        ? { used: campaign.modelVariables ?? 0, missing: (campaign.modelMissing ?? []).length }
+        : undefined,
       summaryKey: inProduction ? 'form.summary.manifestDone' : 'form.summary.manifestPending',
     },
     {
@@ -235,11 +259,13 @@ export function scaleCampaignToReach(campaign: Campaign, households: number): Ca
 /** Money actually collected, which can differ from list price after negotiation. */
 export function collectedUsd(campaign: Campaign): number {
   return campaign.slots
-    .filter((s) => s.status === 'PAID')
-    .reduce((acc, s) => acc + (s.amountCollectedUsd ?? s.priceUsd), 0);
+    .filter((s) => s.status === 'PAID' && s.format !== 'USPS' && s.slotNumber !== 32 && !s.notes?.includes('Covered by'))
+    .reduce((acc, s) => acc + (s.amountCollectedUsd ?? s.priceUsd ?? 0), 0);
 }
 
 /** List value of every slot on the card, sold or not. */
 export function contractedUsd(campaign: Campaign): number {
-  return campaign.slots.reduce((acc, s) => acc + s.priceUsd, 0);
+  return campaign.slots
+    .filter((s) => s.format !== 'USPS' && s.slotNumber !== 32 && !s.notes?.includes('Covered by'))
+    .reduce((acc, s) => acc + (s.priceUsd || 0), 0);
 }

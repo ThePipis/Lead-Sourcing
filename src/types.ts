@@ -80,6 +80,16 @@ export interface LeadProspect {
   zipCode?: string;
   phone: string;
   email?: string;
+  /** False when the site does not answer; undefined when there is no site. */
+  websiteOk?: boolean | null;
+  /** 'fuente' if a provider gave it, 'inferido' if derived from the name and checked. */
+  websiteSource?: string | null;
+  /** False for a trade with no shopfront: what placed it here was its coordinates. */
+  hasStreetAddress?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  /** True for a placeholder no source vouched for. Never a real business. */
+  simulated?: boolean;
   /** Absent when the source has no ratings (OpenStreetMap does not). */
   rating?: number;
   reviewCount?: number;
@@ -88,42 +98,11 @@ export interface LeadProspect {
   decisionMaker: string;
   decisionMakerTitle: string;
   avgTicketEstimated: number;
-  bilingualHooks: {
-    en: string;
-    es: string;
-  };
-  roiPitch: string;
   distanceMiles?: number;
   distance_miles?: number;
   geoTier?: number;
   status: 'NEW' | 'CONTACTED' | 'REJECTED' | 'WON';
   assignedSlot?: number;
-}
-
-export interface Household {
-  id: string;
-  residentName: string;
-  streetAddress: string;
-  city: string;
-  state: 'CA';
-  zip5: string;
-  zip4: string;
-  carrierRoute: string; // e.g., C001, C014, R002
-  walkSequence: number;
-  // Demographic vector attributes (normalized 0.0 - 1.0 or natural units)
-  incomeScore: number; // estimated household income scale
-  homeOwnershipScore: number; // 1 = homeowner, 0 = renter
-  homeAgeYears: number; // years since build
-  homeAgeScore: number; // normalized home age need
-  childrenPresentScore: number; // 1 = kids present, 0 = no kids
-  vehiclesCount: number; // 1 to 4+
-  vehiclesScore: number;
-  petOwnerScore: number; // 1 = pets, 0 = no pets
-  homeValueScore: number; // relative home value
-  // Calculated Propensity
-  matchScores: Record<number, number>; // categoryId -> individual score
-  compositeScore: number; // sum of 14 matches
-  selectedForDrop: boolean;
 }
 
 export interface Campaign {
@@ -137,7 +116,7 @@ export interface Campaign {
   targetGrossRevenue: number; // $7,264
   operatingCostEst: number; // $3,000
   netMarginEst: number; // $4,264
-  status: 'PROSPECTING' | 'LOCKED_READY' | 'CURATING' | 'CURATED' | 'IN_PRODUCTION' | 'MAILED';
+  status: 'PROSPECTING' | 'LOCKED_READY' | 'CURATED' | 'IN_PRODUCTION' | 'MAILED';
   slots: SlotState[];
   paidCount: number;
   totalCollectedUsd: number;
@@ -151,25 +130,20 @@ export interface Campaign {
   archivedAt?: string;
   /** Households covered by the selected carrier routes; 0 before the engine runs. */
   coveredHouseholds?: number;
+  /** True when every selected route was scored on all six variables. */
+  modelComplete?: boolean;
+  /** The variables that did not reach every route, if any. */
+  modelMissing?: string[];
+  /** How many of the six actually scored. */
+  modelVariables?: number;
+  /** Set when the operator knowingly continued on an incomplete model. */
+  modelAck?: string | null;
   selectedRoutes?: number;
   /** DEMO carries seeded practice data; LIVE is real business. */
   mode: 'DEMO' | 'LIVE';
-  /** Households persisted by the propensity engine for this campaign. */
-  curatedCount?: number;
   productionAt?: string;
   mailedAt?: string;
   curationCompletedAt?: string;
-}
-
-export interface CurationSummary {
-  totalAnalyzed: number;
-  totalSelected: number;
-  minScore: number;
-  maxScore: number;
-  avgScore: number;
-  carrierRouteDistribution: { route: string; count: number; zip: string }[];
-  categorySynergyBreakdown: { categoryId: number; name: string; avgAffinity: number }[];
-  scoreHistogram: { binRange: string; count: number }[];
 }
 
 export interface AnalyticsEvent {

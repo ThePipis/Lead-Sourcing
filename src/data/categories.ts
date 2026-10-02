@@ -113,8 +113,8 @@ export const CLOSED_CATEGORIES: CategoryDefinition[] = [
   },
   {
     id: 6,
-    name: 'Pizzería Artesanal',
-    nicheEs: 'Pizzería Artesanal & Trattoria',
+    name: 'Pizzería',
+    nicheEs: 'Pizzería & Trattoria',
     side: 'FRONT',
     slotType: 'STANDARD_FRONT',
     widthInches: 4.3,
@@ -135,7 +135,7 @@ export const CLOSED_CATEGORIES: CategoryDefinition[] = [
   },
   {
     id: 7,
-    name: 'Gimnasio Boutique / Fitness',
+    name: 'Gimnasio / Fitness',
     nicheEs: 'Centro Fitness & Entrenamiento Personal',
     side: 'FRONT',
     slotType: 'STANDARD_FRONT',
@@ -521,7 +521,7 @@ export const CLOSED_CATEGORIES: CategoryDefinition[] = [
   },
   {
     id: 30,
-    name: 'Taquería y Mariscos Tradicional',
+    name: 'Taquería y Mariscos',
     nicheEs: 'Tacos al Pastor & Mariscos Estilo Sinaloa',
     side: 'BACK',
     slotType: 'SMALL',
@@ -549,7 +549,7 @@ export const CLOSED_CATEGORIES: CategoryDefinition[] = [
   },
   {
     id: 32,
-    name: 'Panadería y Repostería Fina',
+    name: 'Panadería y Repostería',
     nicheEs: 'Pan Dulce Artesanal & Pasteles de Eventos',
     side: 'BACK',
     slotType: 'SMALL',
@@ -577,7 +577,7 @@ export const CLOSED_CATEGORIES: CategoryDefinition[] = [
   },
   {
     id: 34,
-    name: 'Cerrajero Express 24/7',
+    name: 'Cerrajería',
     nicheEs: 'Cerrajería Residencial & Llaves Auto',
     side: 'BACK',
     slotType: 'SMALL',

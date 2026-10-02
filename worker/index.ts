@@ -26,8 +26,8 @@ const INITIAL_SLOT_DEFS: SlotDef[] = [
   { slot_number: 3, name: "Hospital Veterinario", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 450.0, default_headline: "Cuidado Médico Compasivo 7 Días | 50% de Descuento en Primera Consulta Preventiva" },
   { slot_number: 4, name: "Plomería Residencial", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 780.0, default_headline: "Plomeros de Confianza 24/7 | $50 Off Desazolve de Drenaje o Inspección con Cámara Gratis" },
   { slot_number: 5, name: "Taller Mecánico / Frenos", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 550.0, default_headline: "Viaje Seguro por la Autopista | $99 Frenos Completos Por Eje + Diagnóstico Computarizado" },
-  { slot_number: 6, name: "Pizzería Artesanal", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 55.0, default_headline: "Masa Madre al Horno de Piedra | Compra 1 Pizza Grande y Lleva la Segunda al 50%" },
-  { slot_number: 7, name: "Gimnasio Boutique / Fitness", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 140.0, default_headline: "Transforme su Salud Este Mes | 14 Días VIP Pass Ilimitado + Sesión de Coaching Gratis" },
+  { slot_number: 6, name: "Pizzería", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 55.0, default_headline: "Masa Madre al Horno de Piedra | Compra 1 Pizza Grande y Lleva la Segunda al 50%" },
+  { slot_number: 7, name: "Gimnasio / Fitness", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 140.0, default_headline: "Transforme su Salud Este Mes | 14 Días VIP Pass Ilimitado + Sesión de Coaching Gratis" },
   { slot_number: 8, name: "Techado y Paneles Solares", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 14500.0, default_headline: "Ahorre Hasta 80% en Electricidad SCE | Reemplazo de Techo con $0 de Pago Inicial" },
   { slot_number: 9, name: "Quiropráctico / Fisioterapia", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 480.0, default_headline: "Alivio Inmediato del Dolor de Espalda | $29 Consulta + Ajuste Vertebral + Terapia Térmica" },
   { slot_number: 10, name: "Limpieza de Alfombras y Pisos", face: "FRONT", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 320.0, default_headline: "Hogar Impecable y Libre de Alérgenos | 3 Habitaciones Limpieza a Vapor Profunda por $99" },
@@ -52,7 +52,7 @@ const INITIAL_SLOT_DEFS: SlotDef[] = [
   { slot_number: 27, name: "Preparación de Impuestos y Tax", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 380.0, default_headline: "Maximiza tu Reembolso Fiscal | $50 de Descuento en tu Declaración de Impuestos" },
   { slot_number: 28, name: "Centro Óptico y Oftalmología", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 320.0, default_headline: "Claridad para tu Vista | Examen Completo + Armazón de Diseñador con 30% Off" },
   { slot_number: 29, name: "Tintorería y Dry Cleaning", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 85.0, default_headline: "Prendas Impecables Sin Salir de Casa | 20% Off en tu Primera Orden con Entrega Gratis" },
-  { slot_number: 30, name: "Taquería y Mariscos Tradicional", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 48.0, default_headline: "Martes de Tacos 2x1 y Ceviche Familiar | Bebida Grande de Cortesía en Orden de $25+" },
+  { slot_number: 30, name: "Taquería y Mariscos", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 48.0, default_headline: "Martes de Tacos 2x1 y Ceviche Familiar | Bebida Grande de Cortesía en Orden de $25+" },
   { slot_number: 31, name: "Salón de Belleza y Uñas (Nails)", face: "BACK", format: "SMALL", width_in: 2.8, height_in: 1.8, base_price: 350.0, default_ticket: 120.0, default_headline: "Luce Espectacular | Manicure + Pedicure Spa con $15 Off en Primera Cita" },
   { slot_number: 32, name: "USPS EDDM Technical Zone", face: "BACK", format: "USPS", width_in: 2.8, height_in: 1.8, base_price: 0.0, default_ticket: 0.0, default_headline: "Espacio técnico reservado por ley federal USPS. No se vende." }
 ];
@@ -163,74 +163,74 @@ function seedDefaultCampaign() {
 // Seed catalog of qualified businesses for all 14 categories
 const SEED_PROSPECTS: Record<number, any[]> = {
   1: [
-    { business_name: "Eastvale Premier Dental Care", phone: "(951) 842-1200", address: "12712 Limonite Ave #100", rating: 4.9, review_count: 128, avg_ticket: 1250, dm: "Dr. Roberto Chen", hook_es: "50% en implantes y blanqueamiento", hook_en: "50% off new patient exam & whitening" },
-    { business_name: "Dr. Rodriguez Family Dentistry", phone: "(951) 371-5500", address: "7056 Archibald Ave", rating: 4.8, review_count: 94, avg_ticket: 1100, dm: "Dra. Elena Rodriguez", hook_es: "Chequeo dental infantil y de adultos $49", hook_en: "$49 exam + cleaning" },
-    { business_name: "Heritage Valley Smiles Orthodontics", phone: "(951) 902-8811", address: "12610 Limonite Ave", rating: 4.7, review_count: 82, avg_ticket: 2400, dm: "Dr. Mark Vance", hook_es: "Frenos transparentes $500 de descuento", hook_en: "Clear aligners $500 off" }
+    { business_name: "Eastvale Premier Dental Care", phone: "(951) 842-1200", address: "12712 Limonite Ave #100", rating: 4.9, review_count: 128, avg_ticket: 1250, dm: "Dr. Roberto Chen" },
+    { business_name: "Dr. Rodriguez Family Dentistry", phone: "(951) 371-5500", address: "7056 Archibald Ave", rating: 4.8, review_count: 94, avg_ticket: 1100, dm: "Dra. Elena Rodriguez" },
+    { business_name: "Heritage Valley Smiles Orthodontics", phone: "(951) 902-8811", address: "12610 Limonite Ave", rating: 4.7, review_count: 82, avg_ticket: 2400, dm: "Dr. Mark Vance" }
   ],
   2: [
-    { business_name: "Air Pro Solutions IE", phone: "(951) 734-8890", address: "7056 Archibald Ave", rating: 4.9, review_count: 145, avg_ticket: 4500, dm: "Carlos Mendoza", hook_es: "$49 super tune-up A/C de temporada", hook_en: "$49 seasonal A/C super tune-up" },
-    { business_name: "All Seasons HVAC Masters", phone: "(951) 493-1122", address: "12363 Limonite Ave", rating: 4.7, review_count: 76, avg_ticket: 3800, dm: "Michael Ortiz", hook_es: "Reemplazo de condensador con financiamiento 0%", hook_en: "0% APR condenser replacement" },
-    { business_name: "Eastvale Climate Control", phone: "(951) 582-7700", address: "14120 Schleisman Rd", rating: 4.8, review_count: 63, avg_ticket: 4200, dm: "David Kim", hook_es: "Inspección gratuita de conductos y filtros", hook_en: "Free duct and airflow diagnostic" }
+    { business_name: "Air Pro Solutions IE", phone: "(951) 734-8890", address: "7056 Archibald Ave", rating: 4.9, review_count: 145, avg_ticket: 4500, dm: "Carlos Mendoza" },
+    { business_name: "All Seasons HVAC Masters", phone: "(951) 493-1122", address: "12363 Limonite Ave", rating: 4.7, review_count: 76, avg_ticket: 3800, dm: "Michael Ortiz" },
+    { business_name: "Eastvale Climate Control", phone: "(951) 582-7700", address: "14120 Schleisman Rd", rating: 4.8, review_count: 63, avg_ticket: 4200, dm: "David Kim" }
   ],
   3: [
-    { business_name: "Eastvale Pet Hospital & Urgent Care", phone: "(951) 479-5600", address: "12363 Limonite Ave", rating: 4.9, review_count: 110, avg_ticket: 450, dm: "Dra. Sandra Miller", hook_es: "50% de descuento en primera consulta", hook_en: "50% off first exam & vaccination check" },
-    { business_name: "Valley Veterinary Clinic", phone: "(951) 371-9988", address: "12712 Limonite Ave", rating: 4.7, review_count: 85, avg_ticket: 380, dm: "Dr. Hector Garcia", hook_es: "Plan dental canino con 20% de descuento", hook_en: "20% off pet dental cleanings" },
-    { business_name: "Inland Pet Wellness Center", phone: "(951) 842-3344", address: "7125 Hamner Ave", rating: 4.8, review_count: 59, avg_ticket: 420, dm: "Dra. Lisa Cooper", hook_es: "Vacunación preventiva completa $59", hook_en: "Complete core vaccine bundle $59" }
+    { business_name: "Eastvale Pet Hospital & Urgent Care", phone: "(951) 479-5600", address: "12363 Limonite Ave", rating: 4.9, review_count: 110, avg_ticket: 450, dm: "Dra. Sandra Miller" },
+    { business_name: "Valley Veterinary Clinic", phone: "(951) 371-9988", address: "12712 Limonite Ave", rating: 4.7, review_count: 85, avg_ticket: 380, dm: "Dr. Hector Garcia" },
+    { business_name: "Inland Pet Wellness Center", phone: "(951) 842-3344", address: "7125 Hamner Ave", rating: 4.8, review_count: 59, avg_ticket: 420, dm: "Dra. Lisa Cooper" }
   ],
   4: [
-    { business_name: "Precision Plumbing IE 24/7", phone: "(951) 682-3344", address: "14120 Schleisman Rd", rating: 4.8, review_count: 115, avg_ticket: 780, dm: "Jorge Martinez", hook_es: "$50 off desazolve con cámara gratuita", hook_en: "$50 off drain clearing with free camera inspection" },
-    { business_name: "Rooter & Drain Masters", phone: "(951) 734-6622", address: "12523 Limonite Ave", rating: 4.7, review_count: 88, avg_ticket: 650, dm: "Anthony Russo", hook_es: "Inspección de calentador de agua sin costo", hook_en: "Free water heater assessment" },
-    { business_name: "AquaFlow Plumbers Eastvale", phone: "(951) 493-7711", address: "7010 Archibald Ave", rating: 4.9, review_count: 72, avg_ticket: 920, dm: "Frank Jimenez", hook_es: "Instalación de calentador Tankless con $150 bono", hook_en: "Tankless water heater $150 rebate" }
+    { business_name: "Precision Plumbing IE 24/7", phone: "(951) 682-3344", address: "14120 Schleisman Rd", rating: 4.8, review_count: 115, avg_ticket: 780, dm: "Jorge Martinez" },
+    { business_name: "Rooter & Drain Masters", phone: "(951) 734-6622", address: "12523 Limonite Ave", rating: 4.7, review_count: 88, avg_ticket: 650, dm: "Anthony Russo" },
+    { business_name: "AquaFlow Plumbers Eastvale", phone: "(951) 493-7711", address: "7010 Archibald Ave", rating: 4.9, review_count: 72, avg_ticket: 920, dm: "Frank Jimenez" }
   ],
   5: [
-    { business_name: "Corona Complete Auto & Brakes", phone: "(951) 371-2211", address: "13394 Limonite Ave", rating: 4.8, review_count: 132, avg_ticket: 550, dm: "Ricardo Silva", hook_es: "Pastillas de freno cerámicas $99 por eje", hook_en: "$99 ceramic brake pads per axle" },
-    { business_name: "Apex Precision Auto Repair", phone: "(951) 842-9900", address: "12610 Limonite Ave", rating: 4.9, review_count: 98, avg_ticket: 680, dm: "Manuel Vega", hook_es: "Diagnóstico check engine y batería gratis", hook_en: "Free check engine light scan" },
-    { business_name: "Eastvale Complete Car Care", phone: "(951) 582-4411", address: "7125 Hamner Ave", rating: 4.7, review_count: 75, avg_ticket: 490, dm: "Sam Patterson", hook_es: "Cambio de aceite sintético + rotación $39.99", hook_en: "$39.99 synthetic oil change + tire rotation" }
+    { business_name: "Corona Complete Auto & Brakes", phone: "(951) 371-2211", address: "13394 Limonite Ave", rating: 4.8, review_count: 132, avg_ticket: 550, dm: "Ricardo Silva" },
+    { business_name: "Apex Precision Auto Repair", phone: "(951) 842-9900", address: "12610 Limonite Ave", rating: 4.9, review_count: 98, avg_ticket: 680, dm: "Manuel Vega" },
+    { business_name: "Eastvale Complete Car Care", phone: "(951) 582-4411", address: "7125 Hamner Ave", rating: 4.7, review_count: 75, avg_ticket: 490, dm: "Sam Patterson" }
   ],
   6: [
-    { business_name: "Bella Napoli Pizza Artesanal", phone: "(951) 898-4455", address: "12610 Limonite Ave", rating: 4.9, review_count: 190, avg_ticket: 55, dm: "Marco Rossi", hook_es: "Compra 1 pizza familiar y lleva la 2da al 50%", hook_en: "BOGO 50% off large wood-fired pizzas" },
-    { business_name: "Eastvale Wood Fired Pizza & Pasta", phone: "(951) 371-8800", address: "12712 Limonite Ave", rating: 4.7, review_count: 112, avg_ticket: 48, dm: "Giuseppe Ferrara", hook_es: "Combo familiar: 2 pizzas + alitas + bebida $34.99", hook_en: "Family combo 2 pizzas + wings $34.99" },
-    { business_name: "Rustica Crust Co.", phone: "(951) 734-5511", address: "7056 Archibald Ave", rating: 4.8, review_count: 85, avg_ticket: 52, dm: "Dante Valenti", hook_es: "Entrada de pan de ajo gratis con orden de $30+", hook_en: "Free garlic knots with $30 order" }
+    { business_name: "Bella Napoli Pizza Artesanal", phone: "(951) 898-4455", address: "12610 Limonite Ave", rating: 4.9, review_count: 190, avg_ticket: 55, dm: "Marco Rossi" },
+    { business_name: "Eastvale Wood Fired Pizza & Pasta", phone: "(951) 371-8800", address: "12712 Limonite Ave", rating: 4.7, review_count: 112, avg_ticket: 48, dm: "Giuseppe Ferrara" },
+    { business_name: "Rustica Crust Co.", phone: "(951) 734-5511", address: "7056 Archibald Ave", rating: 4.8, review_count: 85, avg_ticket: 52, dm: "Dante Valenti" }
   ],
   7: [
-    { business_name: "Apex Performance Studio", phone: "(951) 582-9011", address: "7125 Hamner Ave", rating: 4.9, review_count: 95, avg_ticket: 140, dm: "Brandon Scott", hook_es: "14 días VIP ilimitado por solo $19", hook_en: "14-day VIP pass for just $19" },
-    { business_name: "Core & Pulse Boutique Fitness", phone: "(951) 842-7722", address: "12363 Limonite Ave", rating: 4.8, review_count: 67, avg_ticket: 160, dm: "Valeria Gomez", hook_es: "Clase de prueba gratis + evaluación corporal", hook_en: "Free intro class + body composition scan" },
-    { business_name: "Eastvale Iron & Cardio Zone", phone: "(951) 493-6600", address: "14120 Schleisman Rd", rating: 4.7, review_count: 81, avg_ticket: 120, dm: "Jason Wright", hook_es: "$0 inscripción en membresías de 1 año", hook_en: "$0 initiation on annual memberships" }
+    { business_name: "Apex Performance Studio", phone: "(951) 582-9011", address: "7125 Hamner Ave", rating: 4.9, review_count: 95, avg_ticket: 140, dm: "Brandon Scott" },
+    { business_name: "Core & Pulse Boutique Fitness", phone: "(951) 842-7722", address: "12363 Limonite Ave", rating: 4.8, review_count: 67, avg_ticket: 160, dm: "Valeria Gomez" },
+    { business_name: "Eastvale Iron & Cardio Zone", phone: "(951) 493-6600", address: "14120 Schleisman Rd", rating: 4.7, review_count: 81, avg_ticket: 120, dm: "Jason Wright" }
   ],
   8: [
-    { business_name: "California Sun & Solar IE", phone: "(951) 900-3412", address: "12523 Limonite Ave", rating: 4.9, review_count: 88, avg_ticket: 14500, dm: "Gabriel Torres", hook_es: "Cero pago inicial en paneles + inspección techo gratis", hook_en: "$0 down solar install + free roof health report" },
-    { business_name: "Premier Roofing Solutions CA", phone: "(951) 734-2200", address: "12712 Limonite Ave", rating: 4.8, review_count: 64, avg_ticket: 12000, dm: "Luis Herrera", hook_es: "Garantía de 25 años en re-techado completo", hook_en: "25-year warranty on full reroofing" },
-    { business_name: "Apex Roof & Solar Works", phone: "(951) 371-1199", address: "7010 Archibald Ave", rating: 4.7, review_count: 53, avg_ticket: 13500, dm: "Brian Larson", hook_es: "Batería de respaldo con $1,000 crédito federal", hook_en: "Battery backup system with $1,000 local incentive" }
+    { business_name: "California Sun & Solar IE", phone: "(951) 900-3412", address: "12523 Limonite Ave", rating: 4.9, review_count: 88, avg_ticket: 14500, dm: "Gabriel Torres" },
+    { business_name: "Premier Roofing Solutions CA", phone: "(951) 734-2200", address: "12712 Limonite Ave", rating: 4.8, review_count: 64, avg_ticket: 12000, dm: "Luis Herrera" },
+    { business_name: "Apex Roof & Solar Works", phone: "(951) 371-1199", address: "7010 Archibald Ave", rating: 4.7, review_count: 53, avg_ticket: 13500, dm: "Brian Larson" }
   ],
   9: [
-    { business_name: "Spine & Joint Wellness Center", phone: "(951) 817-9922", address: "12614 Limonite Ave", rating: 4.9, review_count: 104, avg_ticket: 480, dm: "Dr. Kevin Ramirez", hook_es: "Consulta quiropráctica + primer ajuste $39", hook_en: "Exam + adjustment introductory offer $39" },
-    { business_name: "Active Life Physical Therapy", phone: "(951) 493-8833", address: "12363 Limonite Ave", rating: 4.8, review_count: 73, avg_ticket: 520, dm: "Dra. Monica Reyes", hook_es: "Terapia de descompresión y movilidad 30% off", hook_en: "30% off decompression spinal therapy" },
-    { business_name: "Peak Motion Chiropractic", phone: "(951) 582-1144", address: "7125 Hamner Ave", rating: 4.7, review_count: 61, avg_ticket: 450, dm: "Dr. Alan Morales", hook_es: "Alivio ciática y postura: sesión de prueba $45", hook_en: "Sciatica & postural relief trial session $45" }
+    { business_name: "Spine & Joint Wellness Center", phone: "(951) 817-9922", address: "12614 Limonite Ave", rating: 4.9, review_count: 104, avg_ticket: 480, dm: "Dr. Kevin Ramirez" },
+    { business_name: "Active Life Physical Therapy", phone: "(951) 493-8833", address: "12363 Limonite Ave", rating: 4.8, review_count: 73, avg_ticket: 520, dm: "Dra. Monica Reyes" },
+    { business_name: "Peak Motion Chiropractic", phone: "(951) 582-1144", address: "7125 Hamner Ave", rating: 4.7, review_count: 61, avg_ticket: 450, dm: "Dr. Alan Morales" }
   ],
   10: [
-    { business_name: "EcoClean Steam Masters IE", phone: "(951) 427-8100", address: "7010 Archibald Ave", rating: 4.9, review_count: 119, avg_ticket: 320, dm: "Fernando Castro", hook_es: "3 habitaciones con vapor caliente por $119", hook_en: "3 rooms hot steam clean for $119" },
-    { business_name: "ProShine Carpet & Tile Care", phone: "(951) 734-9911", address: "12712 Limonite Ave", rating: 4.8, review_count: 84, avg_ticket: 340, dm: "Oscar Delgado", hook_es: "Limpieza profunda de baldosas y lechada $99", hook_en: "Tile & grout deep scrub $99 special" },
-    { business_name: "Fresh & Clean Inland Empire", phone: "(951) 842-5500", address: "14120 Schleisman Rd", rating: 4.7, review_count: 68, avg_ticket: 290, dm: "Steven Ortiz", hook_es: "Desodorización y tratamiento antimanchas gratis", hook_en: "Free pet stain and odor neutralizer" }
+    { business_name: "EcoClean Steam Masters IE", phone: "(951) 427-8100", address: "7010 Archibald Ave", rating: 4.9, review_count: 119, avg_ticket: 320, dm: "Fernando Castro" },
+    { business_name: "ProShine Carpet & Tile Care", phone: "(951) 734-9911", address: "12712 Limonite Ave", rating: 4.8, review_count: 84, avg_ticket: 340, dm: "Oscar Delgado" },
+    { business_name: "Fresh & Clean Inland Empire", phone: "(951) 842-5500", address: "14120 Schleisman Rd", rating: 4.7, review_count: 68, avg_ticket: 290, dm: "Steven Ortiz" }
   ],
   11: [
-    { business_name: "Mirror Finish Mobile Spa", phone: "(951) 314-7788", address: "12410 Schleisman Rd", rating: 4.9, review_count: 140, avg_ticket: 220, dm: "Adrian Ramos", hook_es: "Detailing interior y exterior a domicilio 25% off", hook_en: "Mobile full interior & exterior detail 25% off" },
-    { business_name: "Apex Auto Spa on Wheels", phone: "(951) 582-3377", address: "12610 Limonite Ave", rating: 4.8, review_count: 92, avg_ticket: 250, dm: "Hector Navas", hook_es: "Protección cerámica líquida + lavado $129", hook_en: "Liquid ceramic sealant package $129" },
-    { business_name: "SoCal Mobile Ceramic & Detail", phone: "(951) 493-2211", address: "7056 Archibald Ave", rating: 4.7, review_count: 77, avg_ticket: 300, dm: "Danny Gomez", hook_es: "Desinfección de cabina con ozono gratis", hook_en: "Free ozone interior sanitization" }
+    { business_name: "Mirror Finish Mobile Spa", phone: "(951) 314-7788", address: "12410 Schleisman Rd", rating: 4.9, review_count: 140, avg_ticket: 220, dm: "Adrian Ramos" },
+    { business_name: "Apex Auto Spa on Wheels", phone: "(951) 582-3377", address: "12610 Limonite Ave", rating: 4.8, review_count: 92, avg_ticket: 250, dm: "Hector Navas" },
+    { business_name: "SoCal Mobile Ceramic & Detail", phone: "(951) 493-2211", address: "7056 Archibald Ave", rating: 4.7, review_count: 77, avg_ticket: 300, dm: "Danny Gomez" }
   ],
   12: [
-    { business_name: "Paws & Bubbles Grooming", phone: "(951) 736-5544", address: "12750 Limonite Ave", rating: 4.9, review_count: 125, avg_ticket: 85, dm: "Carolina Mejia", hook_es: "Baño, corte y limado de uñas $10 de descuento", hook_en: "Full bath, haircut & nail grind $10 off" },
-    { business_name: "The Pampered Pooch Boutique", phone: "(951) 842-6633", address: "12363 Limonite Ave", rating: 4.8, review_count: 89, avg_ticket: 95, dm: "Rachel Adams", hook_es: "Tratamiento deslanado para razas medianas y grandes", hook_en: "Deshedding spa treatment package" },
-    { business_name: "Bark & Bath Mobile Eastvale", phone: "(951) 371-7744", address: "7125 Hamner Ave", rating: 4.7, review_count: 64, avg_ticket: 110, dm: "Teresa Ruiz", hook_es: "Van móvil a tu puerta: 15% en primer servicio", hook_en: "Mobile grooming van to your door 15% off" }
+    { business_name: "Paws & Bubbles Grooming", phone: "(951) 736-5544", address: "12750 Limonite Ave", rating: 4.9, review_count: 125, avg_ticket: 85, dm: "Carolina Mejia" },
+    { business_name: "The Pampered Pooch Boutique", phone: "(951) 842-6633", address: "12363 Limonite Ave", rating: 4.8, review_count: 89, avg_ticket: 95, dm: "Rachel Adams" },
+    { business_name: "Bark & Bath Mobile Eastvale", phone: "(951) 371-7744", address: "7125 Hamner Ave", rating: 4.7, review_count: 64, avg_ticket: 110, dm: "Teresa Ruiz" }
   ],
   13: [
-    { business_name: "Taquería & Cantina El Rancho", phone: "(951) 493-2288", address: "12569 Limonite Ave", rating: 4.9, review_count: 215, avg_ticket: 68, dm: "Gustavo Morales", hook_es: "Guacamole y totopos gratis con 2 platillos fuertes", hook_en: "Free fresh guacamole with purchase of 2 entrees" },
-    { business_name: "Sabor Michoacano Authentic Grill", phone: "(951) 734-1188", address: "12712 Limonite Ave", rating: 4.8, review_count: 140, avg_ticket: 62, dm: "Javier Vargas", hook_es: "Carnitas estilo Michoacán: 2x1 en margaritas", hook_en: "Carnitas fiesta platter: 2-for-1 house margaritas" },
-    { business_name: "La Hacienda Mexican Bistro", phone: "(951) 582-8855", address: "7010 Archibald Ave", rating: 4.7, review_count: 98, avg_ticket: 75, dm: "Claudia Nunez", hook_es: "Postre tradicional de cortesía en tu visita", hook_en: "Complimentary churros or flan with dinner" }
+    { business_name: "Taquería & Cantina El Rancho", phone: "(951) 493-2288", address: "12569 Limonite Ave", rating: 4.9, review_count: 215, avg_ticket: 68, dm: "Gustavo Morales" },
+    { business_name: "Sabor Michoacano Authentic Grill", phone: "(951) 734-1188", address: "12712 Limonite Ave", rating: 4.8, review_count: 140, avg_ticket: 62, dm: "Javier Vargas" },
+    { business_name: "La Hacienda Mexican Bistro", phone: "(951) 582-8855", address: "7010 Archibald Ave", rating: 4.7, review_count: 98, avg_ticket: 75, dm: "Claudia Nunez" }
   ],
   14: [
-    { business_name: "Empire Shield Insurance Agency", phone: "(951) 898-1122", address: "12716 Limonite Ave", rating: 4.9, review_count: 86, avg_ticket: 1400, dm: "Patricio Alarcon", hook_es: "Ahorra hasta $650 combinando auto y hogar", hook_en: "Bundle home & auto to save up to $650/yr" },
-    { business_name: "Stateline Auto & Home Coverage", phone: "(951) 371-3322", address: "12363 Limonite Ave", rating: 4.8, review_count: 65, avg_ticket: 1350, dm: "Patricia Campbell", hook_es: "Revisión gratuita de póliza y cotización en 10 min", hook_en: "10-minute free policy comparison" },
-    { business_name: "Pacific Choice Financial & Insurance", phone: "(951) 842-4488", address: "14120 Schleisman Rd", rating: 4.7, review_count: 52, avg_ticket: 1500, dm: "Esteban Vega", hook_es: "Cobertura comercial y personal al mejor precio del IE", hook_en: "Personal & commercial umbrella discounts" }
+    { business_name: "Empire Shield Insurance Agency", phone: "(951) 898-1122", address: "12716 Limonite Ave", rating: 4.9, review_count: 86, avg_ticket: 1400, dm: "Patricio Alarcon" },
+    { business_name: "Stateline Auto & Home Coverage", phone: "(951) 371-3322", address: "12363 Limonite Ave", rating: 4.8, review_count: 65, avg_ticket: 1350, dm: "Patricia Campbell" },
+    { business_name: "Pacific Choice Financial & Insurance", phone: "(951) 842-4488", address: "14120 Schleisman Rd", rating: 4.7, review_count: 52, avg_ticket: 1500, dm: "Esteban Vega" }
   ]
 };
 
@@ -568,6 +568,9 @@ export default {
         }
         let filledCount = 0;
         for (const s of c.slots) {
+          if (s.slot_number === 32 || s.format === 'USPS' || s.slot_type === 'USPS' || s.notes?.includes('Covered by')) {
+            continue;
+          }
           if (s.status === "VACANT" || !s.business_name) {
             const candidates = SEED_PROSPECTS[s.slot_number] || [];
             if (candidates.length > 0) {
@@ -593,6 +596,9 @@ export default {
         if (!c) return json({ detail: "Campaign not found" }, 404);
         const s = c.slots.find((x: any) => x.slot_number === slotNum);
         if (!s) return json({ detail: "Slot not found" }, 404);
+        if (s.slot_number === 32 || s.notes?.includes('Covered by')) {
+          return json({ candidate: null, slot: s });
+        }
         const candidates = SEED_PROSPECTS[slotNum] || [];
         const currentName = (s.business_name || "").toLowerCase();
         const next = candidates.find(cand => cand.business_name.toLowerCase() !== currentName) || candidates[0];
@@ -655,6 +661,21 @@ export default {
           if (s.slot_number === 32 || s.format === 'USPS' || s.slot_type === 'USPS') {
             s.status = "PAID";
             s.price_usd = 0;
+            s.amount_collected_usd = 0;
+            continue;
+          }
+          if (s.notes?.includes('Covered by')) {
+            s.status = "VACANT";
+            s.price_usd = 0;
+            s.amount_collected_usd = 0;
+            s.business_name = "";
+            s.contact_person = "";
+            s.phone = "";
+            s.email = "";
+            s.website = "";
+            s.offer_headline = "";
+            s.paid_at = null;
+            s.payment_ref = "";
             continue;
           }
           s.status = "PAID";
@@ -664,8 +685,10 @@ export default {
           total += s.amount_collected_usd;
           stamped.push(s.slot_number);
         }
-        c.paid_count = c.slots.filter((s: any) => s.status === 'PAID' && s.slot_number !== 32).length;
+        const commSlots = c.slots.filter((s: any) => s.slot_number !== 32 && (s.slot_type || s.format) !== 'USPS' && !s.notes?.includes('Covered by'));
+        c.paid_count = commSlots.filter((s: any) => s.status === 'PAID').length;
         c.total_collected_usd = total;
+        c.target_gross_revenue = commSlots.reduce((sum: number, s: any) => sum + (s.price_usd || 0), 0);
         c.status = "LOCKED_READY";
         return json({ stamped, collected: total });
       }
@@ -696,7 +719,19 @@ export default {
           }
         }
         Object.assign(s, body);
-        if (s.status !== "PAID") {
+        if (s.notes?.includes('Covered by')) {
+          s.price_usd = 0;
+          s.amount_collected_usd = 0;
+          s.status = "VACANT";
+          s.business_name = "";
+          s.contact_person = "";
+          s.phone = "";
+          s.email = "";
+          s.website = "";
+          s.offer_headline = "";
+          s.paid_at = null;
+          s.payment_ref = "";
+        } else if (s.status !== "PAID") {
           s.paid_at = null;
           s.payment_ref = "";
           s.amount_collected_usd = 0;
@@ -710,9 +745,11 @@ export default {
           if (!body.business_address && !body.businessAddress) s.business_address = "";
           if (!body.offer_headline && !body.offerHeadline) s.offer_headline = "";
         }
-        c.paid_count = c.slots.filter((x: any) => x.status === 'PAID' && x.slot_number !== 32).length;
-        c.total_collected_usd = c.slots.reduce((sum: number, x: any) => x.status === 'PAID' ? sum + (x.amount_collected_usd || x.price_usd || 0) : sum, 0);
-        const advCount = c.slots.filter((x: any) => x.slot_number !== 32).length;
+        const commSlots = c.slots.filter((x: any) => x.slot_number !== 32 && (x.slot_type || x.format) !== 'USPS' && !x.notes?.includes('Covered by'));
+        c.paid_count = commSlots.filter((x: any) => x.status === 'PAID').length;
+        c.total_collected_usd = commSlots.reduce((sum: number, x: any) => x.status === 'PAID' ? sum + (x.amount_collected_usd || x.price_usd || 0) : sum, 0);
+        c.target_gross_revenue = commSlots.reduce((sum: number, x: any) => sum + (x.price_usd || 0), 0);
+        const advCount = commSlots.length;
         if (advCount > 0 && c.paid_count >= advCount) {
           c.status = "LOCKED_READY";
         } else if (c.status === "LOCKED_READY") {
@@ -733,7 +770,19 @@ export default {
           const s = c.slots.find((x: any) => x.slot_number === (update.slot_number ?? update.slotNumber));
           if (s) {
             Object.assign(s, update);
-            if (s.status !== "PAID") {
+            if (s.notes?.includes('Covered by')) {
+              s.price_usd = 0;
+              s.amount_collected_usd = 0;
+              s.status = "VACANT";
+              s.business_name = "";
+              s.contact_person = "";
+              s.phone = "";
+              s.email = "";
+              s.website = "";
+              s.offer_headline = "";
+              s.paid_at = null;
+              s.payment_ref = "";
+            } else if (s.status !== "PAID") {
               s.paid_at = null;
               s.payment_ref = "";
               s.amount_collected_usd = 0;
@@ -754,9 +803,11 @@ export default {
             });
           }
         }
-        c.paid_count = c.slots.filter((x: any) => x.status === 'PAID' && x.slot_number !== 32).length;
-        c.total_collected_usd = c.slots.reduce((sum: number, x: any) => x.status === 'PAID' ? sum + (x.amount_collected_usd || x.price_usd || 0) : sum, 0);
-        const advCount = c.slots.filter((x: any) => x.slot_number !== 32).length;
+        const commSlots = c.slots.filter((x: any) => x.slot_number !== 32 && (x.slot_type || x.format) !== 'USPS' && !x.notes?.includes('Covered by'));
+        c.paid_count = commSlots.filter((x: any) => x.status === 'PAID').length;
+        c.total_collected_usd = commSlots.reduce((sum: number, x: any) => x.status === 'PAID' ? sum + (x.amount_collected_usd || x.price_usd || 0) : sum, 0);
+        c.target_gross_revenue = commSlots.reduce((sum: number, x: any) => sum + (x.price_usd || 0), 0);
+        const advCount = commSlots.length;
         if (advCount > 0 && c.paid_count >= advCount) {
           c.status = "LOCKED_READY";
         } else if (c.status === "LOCKED_READY") {
@@ -794,7 +845,15 @@ export default {
         const c = campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
         const body: any = await request.json();
-        Object.assign(c, body, { updated_at: new Date().toISOString() });
+        const now = new Date().toISOString();
+        if (body.status === "IN_PRODUCTION" && !c.production_at) {
+          c.production_at = now;
+        }
+        if (body.status === "MAILED") {
+          if (!c.production_at) c.production_at = now;
+          if (!c.mailed_at) c.mailed_at = now;
+        }
+        Object.assign(c, body, { updated_at: now });
         return json(c);
       }
 
@@ -841,9 +900,6 @@ export default {
             decision_maker: item.dm || "Owner / Decision Maker",
             decision_maker_title: "Owner / Decision Maker",
             avg_ticket_estimated: item.avg_ticket || 500,
-            hook_en: item.hook_en,
-            hook_es: item.hook_es,
-            roi_pitch: `Con solo 1 o 2 clientes nuevos este espacio se amortiza al 100%. Ticket estimado $${item.avg_ticket || 500}.`,
             status: "NEW"
           };
         });
@@ -881,9 +937,7 @@ export default {
             rating: 4.8,
             review_count: 52,
             avg_ticket: 650,
-            dm: "Gerente General",
-            hook_es: "Promoción especial para residentes locales",
-            hook_en: "Exclusive neighborhood resident promotion"
+            dm: "Gerente General"
           };
         }
         const norm = computeProspectDistance(candidate, 0, targetCity, targetZip);
@@ -908,45 +962,7 @@ export default {
           decision_maker: candidate.dm,
           decision_maker_title: "Owner / Decision Maker",
           avg_ticket_estimated: candidate.avg_ticket || 500,
-          hook_en: candidate.hook_en,
-          hook_es: candidate.hook_es,
           status: "NEW"
-        });
-      }
-
-      // Prospecting: POST /api/prospecting/generate-pitch
-      if (cleanPath === "/api/prospecting/generate-pitch" && request.method === "POST") {
-        let body: any = {};
-        try { body = await request.json(); } catch {}
-        const bName = (body.business_name || body.businessName || "Comercio Local").trim();
-        const niche = body.niche || body.category_name || "Comercio";
-        const ticket = Number(body.avg_ticket || body.avgTicket || 500);
-        const variant = Number(body.variant || 0);
-
-        const pitchesEs = [
-          `Doctor/Dueño de ${bName}, 5,000 familias propietarias en Eastvale recibirán la postal gigante 12x9 este mes. Con su ticket promedio de $${ticket.toLocaleString()} USD, un solo cliente nuevo amortiza completamente su participación y le deja ganancia neta.`,
-          `${bName}, en Google Ads su negocio compite pagando más de $15 por clic frente a cadenas corporativas. Con nuestra postal cooperativa obtiene exclusividad territorial blindada: ningún otro competidor de su categoría podrá anunciarse frente a estos 5,000 hogares.`,
-          `Estimado director de ${bName}, estamos cerrando la edición estacional para los vecindarios más exclusivos de Eastvale. Su anuncio llegará directamente a las barras de cocina de familias verificadas de alto poder adquisitivo con una inversión de menos de 10¢ por hogar.`,
-          `${bName}, seleccionamos comercios con excelente reputación local para ofrecer una promoción de alto impacto a 5,000 residentes. Un flujo de 10 a 25 nuevos prospectos calificados le garantizará un retorno masivo en los próximos 60 días.`
-        ];
-
-        const pitchesEn = [
-          `Owner of ${bName}, 5,000 verified homeowners in Eastvale are receiving our 12x9 jumbo co-op mailer this month. With an average ticket of $${ticket.toLocaleString()}, just one new customer pays off your campaign multiple times over.`,
-          `${bName}, stop wasting money bidding $15+ per click on Google Ads against corporate competitors. Our co-op mailer locks out all other businesses in your niche and guarantees territorial exclusivity.`,
-          `Director of ${bName}, we are finalizing the seasonal residential drop in Eastvale's top master-planned neighborhoods. Deliver your exclusive offer straight to 5,000 kitchen counters for under 10 cents per household.`,
-          `${bName}, partner with us to deliver an exclusive neighborhood incentive to 5,000 high-income households. A steady stream of 10 to 25 new premium clients will drive significant ROI over the next 60 days.`
-        ];
-
-        const selectedIndex = Math.abs(variant) % pitchesEs.length;
-        return json({
-          business_name: bName,
-          niche: niche,
-          avg_ticket: ticket,
-          en: pitchesEn[selectedIndex],
-          es: pitchesEs[selectedIndex],
-          decision_maker: "Owner / Decision Maker",
-          source: "Edge Generator",
-          variant: selectedIndex
         });
       }
 
@@ -1088,11 +1104,32 @@ export default {
         const fixed = Number(((current.setup_fee || 0) + (current.delivery_fee || 0)).toFixed(2));
         const total = Number((unit * hh + fixed).toFixed(2));
 
-        const prices: Record<number, number> = {};
-        for (let i = 1; i <= 31; i++) {
-          prices[i] = 350.0;
+        const margin = Math.min(Math.max(current.target_margin || 0.58, 0), 0.95);
+        const requiredRevenue = margin < 1 ? total / (1 - margin) : total;
+        const campId = url.searchParams.get("campaign_id");
+        const c = campId ? campaignsStore.find(x => String(x.id) === campId) : null;
+        const FORMAT_WEIGHTS: Record<string, number> = { SMALL: 350, MEDIUM: 650, LARGE: 1200, USPS: 0 };
+        const effectiveWeights: Record<number, number> = {};
+        for (let i = 1; i <= 32; i++) {
+          if (i === 32) {
+            effectiveWeights[i] = 0;
+          } else if (c) {
+            const s = c.slots?.find((x: any) => x.slot_number === i);
+            if (!s || (s.slot_type || s.format) === 'USPS' || s.notes?.includes('Covered by')) {
+              effectiveWeights[i] = 0;
+            } else {
+              effectiveWeights[i] = FORMAT_WEIGHTS[s.format || s.slot_type || 'SMALL'] ?? 350;
+            }
+          } else {
+            effectiveWeights[i] = 350;
+          }
         }
-        prices[32] = 0.0; // USPS
+        const weightSum = Object.values(effectiveWeights).reduce((a, b) => a + b, 0);
+        const prices: Record<number, number> = {};
+        for (let i = 1; i <= 32; i++) {
+          const w = effectiveWeights[i];
+          prices[i] = (weightSum > 0 && w > 0) ? Math.round(requiredRevenue * w / weightSum) : 0;
+        }
 
         return json({
           ...current,

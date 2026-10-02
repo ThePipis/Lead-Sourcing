@@ -107,8 +107,10 @@ function fromBackend(raw: any): CostSettings {
   };
 }
 
-export async function getCosts(mode: AppMode, households: number): Promise<CostSettings> {
-  const res = await fetch(`${API_BASE}/costs/${mode}?households=${households}`);
+export async function getCosts(mode: AppMode, households: number, campaignId?: string): Promise<CostSettings> {
+  const params = new URLSearchParams({ households: String(households) });
+  if (campaignId) params.set('campaign_id', campaignId);
+  const res = await fetch(`${API_BASE}/costs/${mode}?${params}`);
   if (!res.ok) throw new Error(`GET /costs/${mode} -> ${res.status}`);
   return fromBackend(await res.json());
 }
@@ -117,12 +119,15 @@ export async function updateCosts(
   mode: AppMode,
   households: number,
   patch: Partial<CostSettingsDraft>,
+  campaignId?: string,
 ): Promise<CostSettings> {
   const body: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(patch)) {
     body[FIELD_MAP[key as keyof CostSettingsDraft]] = value;
   }
-  const res = await fetch(`${API_BASE}/costs/${mode}?households=${households}`, {
+  const params = new URLSearchParams({ households: String(households) });
+  if (campaignId) params.set('campaign_id', campaignId);
+  const res = await fetch(`${API_BASE}/costs/${mode}?${params}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

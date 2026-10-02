@@ -42,7 +42,7 @@ const money = (n: number) =>
  */
 const SectionStrip: React.FC<{ campaign: Campaign }> = ({ campaign }) => {
   const { t } = useTranslation(['common']);
-  const progress = useMemo(() => computeProgress(campaign, campaign.curatedCount ?? 0), [campaign]);
+  const progress = useMemo(() => computeProgress(campaign), [campaign]);
 
   return (
     <div
@@ -133,7 +133,7 @@ export const CampaignFile: React.FC<CampaignFileProps> = ({
   const ordered = useMemo(() => {
     const scored = active.map((c) => ({
       c,
-      progress: computeProgress(c, c.curatedCount ?? 0),
+      progress: computeProgress(c),
     }));
     const open = scored.filter((s) => s.c.status !== 'MAILED');
     open.sort((a, b) => b.progress.completedCount - a.progress.completedCount);
@@ -476,7 +476,7 @@ export const CampaignFile: React.FC<CampaignFileProps> = ({
 /** The campaign that owes work, opened flat with its single imperative. */
 const LeadRow: React.FC<{ campaign: Campaign; onOpen: () => void }> = ({ campaign, onOpen }) => {
   const { t } = useTranslation(['common']);
-  const progress = computeProgress(campaign, campaign.curatedCount ?? 0);
+  const progress = computeProgress(campaign);
   const collected = collectedUsd(campaign);
   const owedSlots = campaign.slots.filter((s) => s.status !== 'PAID').length;
 
@@ -502,7 +502,7 @@ const LeadRow: React.FC<{ campaign: Campaign; onOpen: () => void }> = ({ campaig
         />
         <Cell
           label={t('common:file.households')}
-          value={(campaign.curatedCount ?? 0).toLocaleString('en-US')}
+          value={(campaign.coveredHouseholds ?? 0).toLocaleString('en-US')}
         />
         <Cell label={t('common:file.zip')} value={campaign.targetZip} />
       </dl>

@@ -1,7 +1,7 @@
 {
   "nav": {
     "tablero": "1. 12\"×9\" Board & Slots",
-    "leadSourcing": "2. Lead Sourcing (Yelp + LLM)",
+    "leadSourcing": "2. Lead Sourcing (Yelp + OSM)",
     "propensityEngine": "3. Propensity Engine (5k Homes)",
     "postalExport": "4. QR & Postal Export",
     "architectureFastApi": "FastAPI & DB Architecture"
@@ -84,13 +84,13 @@
       "defaultHeadline": "Highway Safety Package | $99 Complete Brake Job Per Axle + Computer Diagnostic"
     },
     "6": {
-      "name": "Artisanal Pizzeria",
-      "niche": "Wood-Fired Artisanal Pizzeria",
+      "name": "Pizzeria",
+      "niche": "Wood-Fired Pizzeria",
       "description": "Standard front position. High-redemption coupons and fridge magnets for weekend family dinners.",
       "defaultHeadline": "Stone-Oven Sourdough Pizza | Buy 1 Large Pizza, Get the 2nd at 50% Off"
     },
     "7": {
-      "name": "Boutique Gym / CrossFit",
+      "name": "Gym / Fitness",
       "niche": "Community CrossFit & Functional Fitness",
       "description": "Standard front position. Driving wellness goals for young families across Eastvale and Corona.",
       "defaultHeadline": "Transform Your Health This Month | 14-Day VIP All-Access Pass + Free Coaching Session"
@@ -223,18 +223,20 @@
     },
     "summary": {
       "slots": "{{paid}} of {{total}} slots paid",
-      "curationDone": "{{count}} households curated and persisted",
-      "curationPending": "Propensity engine not run",
+      "curationDone": "{{routes}} carrier routes · {{count}} boxes",
+      "curationPending": "Route engine not run yet",
       "manifestDone": "Manifest delivered to the printer",
-      "manifestPending": "5,000-row CSV not cut",
+      "manifestPending": "Route manifest not downloaded",
       "productionMailed": "Drop deposited with USPS",
-      "productionPending": "At the printer, not deposited"
+      "productionPending": "At the printer, not deposited",
+      "curationShort": "{{routes}} routes, but the score used {{used}} of 6 variables"
     },
     "blocked": {
       "curation": "Needs the operating floor of {{floor}} paid slots. {{missing}} to go.",
-      "manifest": "Needs section 2 stamped: no curated households means no manifest to cut.",
+      "manifest": "Needs section 2 sealed: with no routes selected there is no manifest to hand over.",
       "production": "Needs section 3 stamped: nothing is mailed before it is printed.",
-      "curationCost": "Needs the drop's cost covered. ${{missing}} still to collect."
+      "curationCost": "Needs the drop's cost covered. ${{missing}} still to collect.",
+      "manifestModel": "The routes are picked, but the score used {{used}} of 6 variables. Go back to section 2: re-run the plan, or record that you are continuing anyway."
     },
     "imperative": {
       "fillSlot": "Find a business for slot {{slot}}",
@@ -299,9 +301,9 @@
     "targetMargin": "Target Margin",
     "targetMarginSub": "Synced with slots",
     "proportionalTariffs": "Proportional rates:",
-    "smallSize": "Small (1×1)",
-    "mediumSize": "Medium (1×2)",
-    "largeSize": "Large (2×2)",
+    "smallSize": "Small (1×1 · 2.8\" × 1.8\")",
+    "mediumSize": "Medium (1×2 · 2.8\" × 3.6\")",
+    "largeSize": "Large (2×2 · 5.6\" × 3.6\")",
     "compactView": "Compact view",
     "fullBreakdown": "Settings & Rates",
     "collapse": "Collapse",

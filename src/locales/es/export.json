@@ -71,5 +71,28 @@
     "action": "Sellar entrega a imprenta",
     "done": "Entregado",
     "needDownload": "Ejecuta la curación y descarga el manifiesto antes de sellar."
+  },
+  "routeManifest": {
+    "title": "Manifiesto de Rutas (EDDM)",
+    "badge": "VA A LA IMPRENTA",
+    "description": "Este es el archivo operativo. Lleva las rutas de cartero compradas, su código y cuántas piezas van a cada una. Es lo único que la imprenta y el correo necesitan: el cartero ya sabe qué buzones tiene en su ruta.",
+    "summary": "{{routes}} rutas · {{households}} buzones residenciales",
+    "noRoutes": "Todavía no hay rutas seleccionadas. Ejecuta el motor de rutas en la sección anterior.",
+    "loading": "Leyendo las rutas de la campaña…",
+    "download": "Descargar manifiesto de rutas"
+  },
+  "profile": {
+    "title": "Perfil del barrio",
+    "badge": "USO INTERNO · NO ES LISTA DE REPARTO",
+    "description": "Esto es tu prueba de venta, no un archivo postal. Sale del padrón de parcelas del Condado de Riverside — información pública — y describe cómo son las viviendas de las rutas que compraste. Enséñaselo al anunciante: puede verificarlo parcela por parcela.",
+    "loading": "Consultando el padrón de parcelas del condado…",
+    "noRoutes": "Selecciona rutas primero: sin rutas no hay barrio que describir.",
+    "unavailable": "El condado no respondió. Prefiero no mostrarte una cifra a inventarla: vuelve a intentarlo más tarde.",
+    "singleFamily": "Vivienda unifamiliar",
+    "medianValue": "Valor mediano",
+    "medianAge": "Antigüedad mediana",
+    "sampled": "Parcelas medidas",
+    "years": "{{count}} años",
+    "footnote": "El reparto son {{households}} buzones en {{routes}} rutas, según el USPS: ese es el número que se imprime y se factura. Los porcentajes de arriba se midieron sobre {{sampled}} parcelas del padrón (año de construcción disponible en el {{coverage}} de ellas). Fuente: {{source}}."
   }
 }

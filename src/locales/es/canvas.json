@@ -78,8 +78,8 @@
     "resetLayout": "Restablecer orden",
     "resetLayoutTitle": "Devuelve cada giro a su casilla original (odontología al hero, etc.). Los comercios viajan con su giro: no se pierde nada.",
     "resetWipe": "Vaciar tarjeta",
-    "resetWipeTitle": "Devuelve la tarjeta al día uno: cada giro a su casilla original y todos los espacios vacíos, sin comercios ni cobros. Solo en simulación.",
-    "resetWipeConfirm": "¿Vaciar todos los espacios?",
+    "resetWipeTitle": "Devuelve la tarjeta al día uno: cada giro a su casilla original y todos los espacios vacíos, sin comercios ni cobros. Borra además el historial de llamadas, las cuarentenas y la caché de prospectos de esta campaña. Solo en simulación.",
+    "resetWipeConfirm": "¿Vaciar la tarjeta y borrar llamadas, cuarentenas y caché?",
     "resetWipeYes": "SÍ, VACIAR",
     "resetWipeNo": "NO",
     "autofill": "Llenar todos los espacios",
@@ -161,7 +161,7 @@
     "unlock": "Desbloquear",
     "unlockTitle": "Desbloquear cobro y regresar a Reservado",
     "hook": "Gancho",
-    "assign": "Asignar al {{id}}"
+    "assign": "Asignar"
   },
   "status": {
     "vacant": "Vacante",
@@ -173,4 +173,3 @@
     "changeStatusTooltip": "Cambiar estado"
   }
 }
-

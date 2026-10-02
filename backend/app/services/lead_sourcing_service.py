@@ -3,11 +3,13 @@ import os
 import json
 import re
 import math
+import time
+import unicodedata
 import urllib.parse
 import httpx
 from typing import List, Dict, Any, Optional, Tuple
 
-# Normalización estricta de los 14 giros cerrados del modelo Co-Op Direct Mail
+# Normalización estricta de los 35 giros cerrados del modelo Co-Op Direct Mail
 # OpenStreetMap tag filters for the fourteen niches, used through the public
 # Overpass API. OSM needs no account and no key and costs nothing, which makes it
 # the right source for practising the workflow and a genuine safety net when a
@@ -33,6 +35,25 @@ OSM_FILTERS = {
     12: [{"shop": "pet_grooming"}, {"shop": "pet"}],
     13: [{"cuisine": "mexican", "amenity": "restaurant"}],
     14: [{"office": "insurance"}],
+    15: [{"craft": "pest_control"}, {"shop": "pest_control"}],
+    16: [{"craft": "gardener"}, {"craft": "landscaper"}],
+    17: [{"craft": "cleaning"}],
+    18: [{"shop": "doors"}],
+    19: [{"craft": "painter"}],
+    20: [{"shop": "window_blind"}, {"craft": "window_construction"}],
+    21: [{"shop": "kitchen"}, {"shop": "bathroom_furnishing"}],
+    22: [{"craft": "arborist"}],
+    24: [{"shop": "swimming_pool"}],
+    25: [{"office": "lawyer"}],
+    26: [{"office": "estate_agent"}],
+    27: [{"office": "tax_advisor"}, {"office": "accountant"}],
+    28: [{"shop": "optician"}, {"healthcare": "optometrist"}],
+    29: [{"shop": "dry_cleaning"}],
+    30: [{"cuisine": "mexican", "amenity": "fast_food"}],
+    31: [{"shop": "beauty"}, {"shop": "hairdresser"}],
+    32: [{"shop": "bakery"}, {"shop": "pastry"}],
+    33: [{"sport": "martial_arts"}, {"sport": "karate"}, {"sport": "taekwondo"}],
+    34: [{"shop": "locksmith"}, {"craft": "locksmith"}],
 }
 
 
@@ -79,7 +100,72 @@ YELP_EXPECTED_STEMS = {
     12: ("groom", "pet"),
     13: ("mexican", "taco", "latin"),
     14: ("insurance", "financial"),
+    15: ("pest", "termite", "exterminat", "wildlife"),
+    16: ("landscap", "gardener", "irrigation", "lawn", "sprinkler"),
+    17: ("homeclean", "maid", "cleaning", "janitor"),
+    18: ("garage", "door", "gate"),
+    19: ("painter", "painting"),
+    20: ("window", "blind", "shade", "shutter", "glass"),
+    21: ("kitchen", "bath", "remodel", "cabinet", "contractor"),
+    22: ("tree", "arborist"),
+    23: ("homeappliancerepair", "appliance"),
+    24: ("pool", "hottub"),
+    25: ("injury", "lawyer", "attorney", "lawfirm"),
+    26: ("realestate", "realtor", "homes"),
+    27: ("tax", "accountant", "bookkeep"),
+    28: ("optometr", "eyewear", "optician", "ophthalm"),
+    29: ("dryclean", "laundry", "tailor"),
+    30: ("taco", "mexican"),
+    31: ("othersalons", "nail", "beauty", "hair", "salon"),
+    32: ("baker", "pastry", "dessert", "cupcake", "cake"),
+    33: ("martial", "karate", "taekwondo", "jiujitsu", "kickbox"),
+    34: ("locksmith", "keys"),
+    35: ("fence", "gate", "railing"),
 }
+
+
+# National chains and fuel stations are not prospects for a local co-op mailer:
+# the branch manager answering the phone cannot buy a neighbourhood ad, the
+# marketing is decided at head office. OpenStreetMap marks chains itself
+# (`brand:wikidata`) and fuel with `amenity=fuel`; Yelp and Geoapify carry no
+# such flag, so known chains are also matched by name. Names are compared
+# normalised (lowercase, no punctuation) and only at the start, so a local agent
+# like "Vanessa Rendon - Goosehead Insurance" is not caught by a brand inside it.
+NATIONAL_CHAINS = (
+    # food
+    "chipotle", "del taco", "el pollo loco", "taco bell", "mcdonalds", "burger king",
+    "wendys", "jack in the box", "carls jr", "subway", "starbucks", "pizza hut",
+    "dominos", "little caesars", "papa johns", "mod pizza", "blaze pizza",
+    "round table pizza", "rubios", "qdoba", "panda express", "wingstop", "chick fil a",
+    # auto, car wash, fuel
+    "jiffy lube", "valvoline", "midas", "firestone", "pep boys", "goodyear", "big o tires",
+    "discount tire", "americas tire", "les schwab", "meineke", "take 5", "christian brothers automotive",
+    "quick quack", "mister car wash", "autozone", "oreilly auto parts", "rivian", "tesla",
+    "shell", "chevron", "arco", "76", "mobil", "valero", "exxon", "circle k", "7 eleven", "speedway",
+    # fitness
+    "orangetheory", "planet fitness", "la fitness", "24 hour fitness", "anytime fitness",
+    "crunch fitness", "hotworx", "f45 training", "eos fitness", "chuze fitness",
+    # big box and retail services
+    "walmart", "target", "costco", "the home depot", "home depot", "lowes", "floor decor",
+    "best buy", "sams club", "petsmart", "petco", "banfield", "vca", "sears",
+    "pearle vision", "americas best", "lenscrafters", "visionworks",
+    "h r block", "jackson hewitt", "liberty tax",
+    "great clips", "supercuts", "sport clips", "fantastic sams",
+    "terminix", "orkin", "roto rooter", "mr rooter", "molly maid", "merry maids",
+    "stanley steemer", "chem dry",
+)
+
+
+def _normalise_name(name: str) -> str:
+    text = (name or "").lower().replace("&", " ").replace("'", "").replace("\u2019", "")
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", text).split())
+
+
+def _is_national_chain(candidate: Dict[str, Any]) -> bool:
+    if candidate.get("chain"):
+        return True
+    name = _normalise_name(candidate.get("business_name") or candidate.get("name") or "")
+    return any(name == brand or name.startswith(brand + " ") for brand in NATIONAL_CHAINS)
 
 
 def _belongs_to_niche(category_id: int, aliases: List[str]) -> bool:
@@ -89,10 +175,17 @@ def _belongs_to_niche(category_id: int, aliases: List[str]) -> bool:
     joined = " ".join(aliases).lower()
     return any(stem in joined for stem in stems)
 
+# Measured 2026-10-01: overpass.kumi.systems never answered (read timeout every
+# time) and cost 90 s per failed search; overpass-api.de answers in 4-13 s but
+# returns 504 under load, and its lz4 instance often answers when the main one
+# does not. The area query asks both at once and keeps the first answer.
 OVERPASS_ENDPOINTS = (
     "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter",
 )
+# After Overpass fails, don't ask again for a while: every niche on the card
+# would otherwise wait out the same outage in turn.
+OVERPASS_RETRY_AFTER_S = 300
 OVERPASS_USER_AGENT = "CoopDirectMail/1.0 (Inland Empire cooperative mailer)"
 
 # Overpass is free and shared, and its usage policy asks for a light touch. Two
@@ -115,21 +208,21 @@ CATEGORY_TAXONOMY = {
     },
     2: {
         "yelp_category": "hvac",
-        "geoapify_category": "service.heating_and_air_conditioning",
+        "geoapify_category": "",  # Geoapify no indexa oficios sin local; los cubre Yelp
         "name_es": "HVAC / Aire Acondicionado",
         "name_en": "HVAC & Heating",
         "default_ticket": 4500.0,
     },
     3: {
         "yelp_category": "vet",
-        "geoapify_category": "healthcare.veterinary",
+        "geoapify_category": "pet.veterinary",
         "name_es": "Hospital Veterinario",
         "name_en": "Veterinary Hospital & Urgent Pet Care",
         "default_ticket": 450.0,
     },
     4: {
         "yelp_category": "plumbing",
-        "geoapify_category": "service.plumbing",
+        "geoapify_category": "",  # sin equivalente: oficio sin local, lo cubre Yelp
         "name_es": "Plomería Residencial",
         "name_en": "Residential Plumbing & Rooter",
         "default_ticket": 780.0,
@@ -144,27 +237,27 @@ CATEGORY_TAXONOMY = {
     6: {
         "yelp_category": "pizza",
         "geoapify_category": "catering.restaurant.pizza",
-        "name_es": "Pizzería Artesanal",
-        "name_en": "Artisanal Wood-Fired Pizza",
+        "name_es": "Pizzería",
+        "name_en": "Pizzeria",
         "default_ticket": 55.0,
     },
     7: {
         "yelp_category": "gyms",
         "geoapify_category": "sport.fitness",
-        "name_es": "Gimnasio Boutique / Fitness",
-        "name_en": "Boutique Fitness & CrossFit",
+        "name_es": "Gimnasio / Fitness",
+        "name_en": "Gym & Fitness",
         "default_ticket": 140.0,
     },
     8: {
         "yelp_category": "roofing",
-        "geoapify_category": "service.construction.roofing",
+        "geoapify_category": "",  # sin equivalente: oficio sin local, lo cubre Yelp
         "name_es": "Techado y Paneles Solares",
         "name_en": "Roofing & Solar Dynamics",
         "default_ticket": 14500.0,
     },
     9: {
         "yelp_category": "chiropractors",
-        "geoapify_category": "healthcare.chiropractor",
+        "geoapify_category": "healthcare.clinic_or_praxis",
         "name_es": "Quiropráctico / Fisioterapia",
         "name_en": "Spine, Chiropractic & Physical Therapy",
         "default_ticket": 480.0,
@@ -185,7 +278,7 @@ CATEGORY_TAXONOMY = {
     },
     12: {
         "yelp_category": "groomer",
-        "geoapify_category": "pet.grooming",
+        "geoapify_category": "commercial.pet",
         "name_es": "Peluquería Canina",
         "name_en": "Pet Grooming & Mobile Dog Spa",
         "default_ticket": 85.0,
@@ -199,14 +292,161 @@ CATEGORY_TAXONOMY = {
     },
     14: {
         "yelp_category": "insurance",
-        "geoapify_category": "service.insurance",
+        "geoapify_category": "office.insurance",
         "name_es": "Agencia de Seguros",
         "name_en": "Insurance Agency (Home, Auto, Life)",
         "default_ticket": 1400.0,
     },
+    15: {
+        "yelp_category": "pest_control",
+        "geoapify_category": "",
+        "name_es": "Control de Plagas y Fumigación",
+        "name_en": "Pest Control & Termite",
+        "default_ticket": 420.0,
+    },
+    16: {
+        "yelp_category": "landscaping,irrigation",
+        "geoapify_category": "",
+        "name_es": "Paisajismo y Sistemas de Riego",
+        "name_en": "Landscaping & Irrigation",
+        "default_ticket": 550.0,
+    },
+    17: {
+        "yelp_category": "homecleaning",
+        "geoapify_category": "",
+        "name_es": "Limpieza Residencial de Casas",
+        "name_en": "Residential House Cleaning",
+        "default_ticket": 260.0,
+    },
+    18: {
+        "yelp_category": "garage_door_services",
+        "geoapify_category": "",
+        "name_es": "Puertas de Garaje y Portones",
+        "name_en": "Garage Doors & Gates",
+        "default_ticket": 850.0,
+    },
+    19: {
+        "yelp_category": "painters",
+        "geoapify_category": "",
+        "name_es": "Pintura Residencial Int/Ext",
+        "name_en": "Interior & Exterior House Painting",
+        "default_ticket": 3200.0,
+    },
+    20: {
+        "yelp_category": "windowsinstallation",
+        "geoapify_category": "",
+        "name_es": "Ventanas y Persianas a Medida",
+        "name_en": "Custom Windows & Blinds",
+        "default_ticket": 2800.0,
+    },
+    21: {
+        "yelp_category": "kitchenandbath",
+        "geoapify_category": "",
+        "name_es": "Remodelación Cocinas y Baños",
+        "name_en": "Kitchen & Bath Remodeling",
+        "default_ticket": 8500.0,
+    },
+    22: {
+        "yelp_category": "treeservices",
+        "geoapify_category": "",
+        "name_es": "Poda y Cuidado de Árboles",
+        "name_en": "Tree Trimming & Care",
+        "default_ticket": 950.0,
+    },
+    23: {
+        "yelp_category": "homeappliancerepair",
+        "geoapify_category": "",
+        "name_es": "Reparación de Electrodomésticos",
+        "name_en": "Appliance Repair",
+        "default_ticket": 320.0,
+    },
+    24: {
+        "yelp_category": "poolcleaners",
+        "geoapify_category": "",
+        "name_es": "Mantenimiento de Piscinas",
+        "name_en": "Pool Cleaning & Service",
+        "default_ticket": 240.0,
+    },
+    25: {
+        "yelp_category": "personal_injury",
+        "geoapify_category": "office.lawyer",
+        "name_es": "Abogados de Lesiones Personales",
+        "name_en": "Personal Injury Attorneys",
+        "default_ticket": 4500.0,
+    },
+    26: {
+        "yelp_category": "realestateagents",
+        "geoapify_category": "office.estate_agent",
+        "name_es": "Agente Inmobiliario (Realtor)",
+        "name_en": "Real Estate Agent (Realtor)",
+        "default_ticket": 12000.0,
+    },
+    27: {
+        "yelp_category": "taxservices,accountants",
+        "geoapify_category": "office.tax_advisor,office.accountant",
+        "name_es": "Preparación de Impuestos y Tax",
+        "name_en": "Tax Preparation",
+        "default_ticket": 380.0,
+    },
+    28: {
+        "yelp_category": "optometrists,eyewear",
+        "geoapify_category": "commercial.health_and_beauty.optician",
+        "name_es": "Centro Óptico y Oftalmología",
+        "name_en": "Optometry & Eyewear",
+        "default_ticket": 320.0,
+    },
+    29: {
+        "yelp_category": "dryclean,laundryservices",
+        "geoapify_category": "service.cleaning.dry_cleaning",
+        "name_es": "Tintorería y Dry Cleaning",
+        "name_en": "Dry Cleaning & Laundry",
+        "default_ticket": 85.0,
+    },
+    30: {
+        "yelp_category": "tacos,mexican",
+        "geoapify_category": "catering.restaurant.mexican",
+        "name_es": "Taquería y Mariscos",
+        "name_en": "Tacos & Mexican Seafood",
+        "default_ticket": 48.0,
+    },
+    31: {
+        "yelp_category": "othersalons,beautysvc",
+        "geoapify_category": "service.beauty",
+        "name_es": "Salón de Belleza y Uñas (Nails)",
+        "name_en": "Beauty & Nail Salon",
+        "default_ticket": 120.0,
+    },
+    32: {
+        "yelp_category": "bakeries",
+        "geoapify_category": "commercial.food_and_drink.bakery",
+        "name_es": "Panadería y Repostería",
+        "name_en": "Bakery & Pastry",
+        "default_ticket": 35.0,
+    },
+    33: {
+        "yelp_category": "martialarts",
+        "geoapify_category": "",
+        "name_es": "Artes Marciales y Karate Niños",
+        "name_en": "Kids Martial Arts & Karate",
+        "default_ticket": 160.0,
+    },
+    34: {
+        "yelp_category": "locksmiths",
+        "geoapify_category": "",
+        "name_es": "Cerrajería",
+        "name_en": "24/7 Locksmith",
+        "default_ticket": 220.0,
+    },
+    35: {
+        "yelp_category": "fencesgates",
+        "geoapify_category": "",
+        "name_es": "Cercas, Rejas y Barandales",
+        "name_en": "Fences, Gates & Railings",
+        "default_ticket": 3400.0,
+    },
 }
 
-# Mapa de nombres/alias para normalización estricta de las 14 categorías
+# Mapa de nombres/alias para normalización estricta de las 35 categorías
 CATEGORY_NAME_MAP: Dict[str, int] = {
     # 1. dentists
     "dentists": 1, "dentist": 1, "dental": 1, "odontologia": 1, "odontología": 1, "dentista": 1, "dentistas": 1,
@@ -236,6 +476,27 @@ CATEGORY_NAME_MAP: Dict[str, int] = {
     "mexican": 13, "mexicano": 13, "restaurante mexicano": 13, "taqueria": 13, "taquería": 13,
     # 14. insurance
     "insurance": 14, "seguro": 14, "seguros": 14, "agencia de seguros": 14, "insurance agency": 14,
+    "pest_control": 15, "control de plagas": 15, "fumigacion": 15, "fumigación": 15, "plagas": 15,
+    "landscaping": 16, "paisajismo": 16, "jardineria": 16, "jardinería": 16, "riego": 16,
+    "homecleaning": 17, "house cleaning": 17, "limpieza residencial": 17, "limpieza de casas": 17,
+    "garage_door_services": 18, "garage door": 18, "puertas de garaje": 18, "portones": 18,
+    "painters": 19, "house painting": 19, "pintura residencial": 19, "pintores": 19, "pintor": 19,
+    "windowsinstallation": 20, "ventanas": 20, "persianas": 20, "blinds": 20,
+    "kitchenandbath": 21, "remodelacion": 21, "remodelación": 21, "cocinas y baños": 21, "kitchen remodel": 21,
+    "treeservices": 22, "tree service": 22, "poda": 22, "arboles": 22, "árboles": 22,
+    "homeappliancerepair": 23, "appliance repair": 23, "electrodomesticos": 23, "electrodomésticos": 23,
+    "poolcleaners": 24, "pool service": 24, "piscinas": 24, "piscina": 24, "albercas": 24,
+    "personal_injury": 25, "personal injury": 25, "abogados": 25, "abogado": 25, "lesiones personales": 25,
+    "realestateagents": 26, "realtor": 26, "inmobiliaria": 26, "agente inmobiliario": 26, "bienes raices": 26, "bienes raíces": 26,
+    "taxservices": 27, "tax preparation": 27, "impuestos": 27, "contador": 27, "contadores": 27,
+    "optometrists": 28, "optometrist": 28, "optica": 28, "óptica": 28, "oftalmologia": 28, "oftalmología": 28,
+    "dryclean": 29, "dry cleaning": 29, "tintoreria": 29, "tintorería": 29,
+    "tacos": 30, "mariscos": 30,
+    "othersalons": 31, "nail salon": 31, "salon de belleza": 31, "salón de belleza": 31, "uñas": 31, "nails": 31,
+    "bakeries": 32, "bakery": 32, "panaderia": 32, "panadería": 32, "reposteria": 32, "repostería": 32,
+    "martialarts": 33, "martial arts": 33, "artes marciales": 33, "karate": 33,
+    "locksmiths": 34, "locksmith": 34, "cerrajero": 34, "cerrajeria": 34, "cerrajería": 34,
+    "fencesgates": 35, "fences": 35, "cercas": 35, "rejas": 35, "barandales": 35,
 }
 
 def normalize_category(category_input: Any) -> Dict[str, Any]:
@@ -419,6 +680,17 @@ def normalize_candidate_record(
     # Guardar ciudad base antes de normalizar
     c["base_city"] = cand_city_raw or target_city
 
+    # Whether there is a street address at all.
+    #
+    # A trade worked out of a van has no shopfront, and Yelp returns
+    # `address1: ""` for it — Acosta-AC is exactly this. What placed it in the
+    # microzone was its coordinates, not an address, and the card has to be able
+    # to say so instead of gluing city fragments into "Corona, CA 92880,
+    # Eastvale (92880)", which reads like a real address and geocodes to the
+    # middle of the desert.
+    street = (c.get("address") or "").strip()
+    c["has_street_address"] = bool(street)
+
     # 2. Normalización de etiqueta para ZIP 92880
     t_city = target_city.strip().lower()
     t_zip = target_zip.strip()
@@ -447,10 +719,33 @@ def normalize_candidate_record(
 
     return c
 
+# backend/.env, two levels up from app/services/.
+ENV_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+
+# Why a connector returned nothing. Each one sends the operator somewhere else.
+SOURCE_OK = "OK"
+SOURCE_NO_KEY = "NO_KEY"
+SOURCE_KEY_REJECTED = "KEY_REJECTED"
+SOURCE_QUOTA = "QUOTA"
+SOURCE_UNREACHABLE = "UNREACHABLE"
+# The request we sent was wrong. Not the operator's key, not an outage: a bug
+# here. Saying "retry in a few minutes" about it wastes their afternoon.
+SOURCE_BAD_REQUEST = "BAD_REQUEST"
+# The source genuinely has nothing for this trade, by design. Not a failure.
+SOURCE_NOT_COVERED = "NOT_COVERED"
+
+
 class LeadSourcingService:
     def __init__(self):
         # Why the last Overpass call came back empty, when it did.
         self.osm_last_error: Optional[str] = None
+        # Why each connector came back empty, when it did.
+        #
+        # An empty answer has two very different meanings — "this microzone has
+        # no roofers" and "your Yelp key expired" — and the operator acts on
+        # each one differently. Reporting both as "sin candidatos" is how an
+        # empty box gets blamed on the neighbourhood.
+        self.source_status: Dict[str, Dict[str, str]] = {}
         # One Yelp answer per microzone and niche. The daily allowance is 300
         # calls on this plan, and filling the card can ask for fourteen niches.
         self._yelp_cache: Dict[str, List[Dict[str, Any]]] = {}
@@ -464,16 +759,34 @@ class LeadSourcingService:
         # and fire fourteen identical queries, which is precisely the stampede
         # the shared cache existed to prevent — and what earns a rate limit.
         self._area_locks: Dict[str, asyncio.Lock] = {}
+        # When the last area query failed, per microzone (monotonic seconds).
+        self._area_failed_at: Dict[str, float] = {}
         self.yelp_api_key = os.getenv("YELP_API_KEY") or os.getenv("YELP_FUSION_API_KEY", "")
         self.geoapify_api_key = os.getenv("GEOAPIFY_API_KEY", "")
-        # Set once llama-server proves unreachable; see generate_pitch.
-        self._llama_offline = False
-        self.llama_url = os.getenv("LLAMA_CPP_BASE_URL", "http://192.168.1.28:11434/v1").rstrip("/")
-        self.llama_model = os.getenv("LLAMA_CPP_MODEL", "llama-server").strip('"\'') or "llama-server"
+
+    def reload_keys(self) -> None:
+        """
+        Re-read `.env` so a key pasted in while the server runs is seen.
+
+        Same reason as the census: without this, "paste the key and press retry"
+        cannot work, because the only key that exists is the one loaded when
+        uvicorn started.
+        """
+        try:
+            from dotenv import load_dotenv
+
+            load_dotenv(ENV_PATH, override=True)
+        except Exception:
+            pass
+        self.yelp_api_key = os.getenv("YELP_API_KEY") or os.getenv("YELP_FUSION_API_KEY", "")
+        self.geoapify_api_key = os.getenv("GEOAPIFY_API_KEY", "")
+
+    def _note(self, source: str, status: str, detail: str) -> None:
+        self.source_status[source] = {"status": status, "detail": detail}
 
     @property
     def is_mock_mode_default(self) -> bool:
-        return os.getenv("MOCK_MODE", "true").lower() == "true"
+        return False
 
     def _get_mock_candidates(self, category_id: int, city: str, zip_code: str) -> List[Dict[str, Any]]:
         """
@@ -507,27 +820,34 @@ class LeadSourcingService:
         for i in range(len(name_prefixes)):
             coord = coords_pool[i % len(coords_pool)]
             biz_name = f"{name_prefixes[i]} {taxonomy['name_es']}"
-            biz_slug = biz_name.lower().replace(" ", "").replace("/", "").replace("&", "")
             address = f"{12000 + (category_id * 100) + (i * 25)} {coord['st']} Ste {100 + i * 4}"
-            phone_num = f"(951) {370 + category_id}-10{i:02d}"
 
             candidates.append({
                 "name": biz_name,
                 "business_name": biz_name,
-                "phone": phone_num,
-                "email": f"contact@{biz_slug}.com",
+                # No phone and no email, on purpose. Earlier versions handed out
+                # sequential numbers that looked real enough to dial — (951)
+                # 374-1000, -1001, -1002 — and an address to match. A blank is
+                # honest; a plausible invention is a trap.
+                "phone": "",
+                "email": "",
+                # Never a real business. Anything downstream that would put this
+                # in front of a buyer has to be able to tell.
+                "simulated": True,
                 "address": address,
                 "city": norm_city,
                 "zip_code": norm_zip,
                 "zip": norm_zip,
                 "rating": round(4.6 + ((i * 3) % 4) * 0.1, 1),
                 "review_count": 75 + (category_id * 8) + (i * 19),
-                "website_url": f"https://www.{biz_slug}.com",
+                # An invented domain resolves to nothing and looks like a real
+                # lead until somebody clicks it.
+                "website_url": "",
                 "category": taxonomy["yelp_category"],
                 "category_name": taxonomy["name_es"],
                 "category_id": category_id,
                 "coordinates": {"latitude": coord["lat"], "longitude": coord["lng"]},
-                "source": "Simulación Local (Mock Mode)",
+                "source": "Respaldo Local (Sandbox)",
             })
 
         return candidates
@@ -562,7 +882,14 @@ class LeadSourcingService:
         a slightly better-rated one forty minutes away, whose customers are not
         on these carrier routes.
         """
-        if not self.yelp_api_key or self.yelp_api_key.startswith("mock_") or not self.yelp_api_key:
+
+        if not self.yelp_api_key or self.yelp_api_key.startswith("mock_"):
+            self._note(
+                "yelp",
+                SOURCE_NO_KEY,
+                "Falta YELP_API_KEY en backend/.env. Es la fuente de los oficios "
+                "sin local (plomería, techado), que OpenStreetMap casi no indexa.",
+            )
             return []
 
         cache_key = f"{zip_code}:{yelp_category}"
@@ -574,6 +901,110 @@ class LeadSourcingService:
             if cache_key in self._yelp_cache:
                 return self._yelp_cache[cache_key]
             return await self._fetch_yelp_uncached(cache_key, yelp_category, city, zip_code, category_id)
+
+    async def probe_website(self, client: httpx.AsyncClient, url: str) -> Optional[bool]:
+        """
+        Does this site answer? True, False, or None when there is nothing to ask.
+
+        A dead domain on a prospect card is worse than no domain: the partner
+        clicks it in front of the business owner. `piccoaircontrol.com` was on
+        a card and does not resolve at all.
+
+        Anything the server answers counts as alive, 404 included — a broken
+        page is still a business with a site. Only DNS failures, refused
+        connections and timeouts count as down, because those are what "this
+        company has no website any more" looks like from here.
+        """
+        url = (url or "").strip()
+        if not url or "yelp.com" in url:
+            return None
+        if not url.startswith("http"):
+            url = f"https://{url}"
+        try:
+            resp = await client.get(url, follow_redirects=True, timeout=6.0)
+            return resp.status_code < 500
+        except Exception:
+            return False
+
+    async def confirm_website(self, client: httpx.AsyncClient, name: str, domain: str) -> bool:
+        """
+        Does an independent search agree this domain belongs to this business?
+
+        Confirmation only. Tavily is never allowed to *supply* a domain: asked
+        for "Acosta-AC Eastvale" it offers `acostahvac.com` and `acostainc.com`,
+        two other companies, and for "Riverline Plumbing" it offers a
+        competitor. Putting either on a card would be worse than showing
+        nothing. But when it independently surfaces the domain that was already
+        worked out from the name, two unrelated paths agree, and the card can
+        stop hedging.
+        """
+        key = (os.getenv("TAVILY_API_KEY", "") or "").strip()
+        if not key or not domain:
+            return False
+        try:
+            resp = await client.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": key,
+                    "query": f"{name} official website",
+                    "max_results": 5,
+                },
+                timeout=12.0,
+            )
+            if resp.status_code != 200:
+                return False
+            target = domain.lower().removeprefix("www.")
+            for row in (resp.json().get("results") or []):
+                host = re.sub(r"^https?://(www\.)?", "", row.get("url", "")).split("/")[0].lower()
+                if host == target:
+                    return True
+        except Exception:
+            return False
+        return False
+
+    async def infer_website(self, client: httpx.AsyncClient, name: str) -> str:
+        """
+        The business's own domain, worked out from its name and then checked.
+
+        Yelp never returns a website — not in `search`, not in the detail
+        endpoint — and scraping the listing to find one gets a 403. So for a
+        Yelp-sourced lead the site has to come from somewhere else or not at
+        all, and three real dentists were arriving with a phone, an address and
+        a blank where their domain should be.
+
+        Guessing alone is what put `piccoaircontrol.com` on a card: a domain
+        that does not resolve. Guessing and then *asking the domain* is a
+        different thing — the name gives the hypothesis, the network settles it.
+        Anything that comes back here answered. What it cannot prove is
+        ownership, so the caller marks it as inferred and the card says so.
+        """
+        name = (name or "").strip()
+        if not name:
+            return ""
+
+        plain = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+        words = [w for w in re.split(r"[^A-Za-z0-9]+", plain.lower()) if w]
+        if not words:
+            return ""
+
+        stop = {"of", "the", "and", "a", "de", "la", "el", "y", "inc", "llc"}
+        trimmed = [w for w in words if w not in stop] or words
+
+        candidates: List[str] = []
+        for slug in ("".join(words), "".join(trimmed)):
+            for host in (f"https://{slug}.com", f"https://www.{slug}.com"):
+                if slug and host not in candidates:
+                    candidates.append(host)
+
+        # Four requests at worst, and only for a lead that has no site at all.
+        for host in candidates[:4]:
+            try:
+                resp = await client.get(host, follow_redirects=True, timeout=6.0)
+                if resp.status_code < 500:
+                    return str(resp.url) if resp.url else host
+            except Exception:
+                continue
+        return ""
 
     async def _resolve_yelp_website(self, client: httpx.AsyncClient, yelp_url: str) -> str:
         r"""
@@ -641,10 +1072,44 @@ class LeadSourcingService:
                     resp = await client.get(YELP_SEARCH_URL, headers=headers, params=params)
         except Exception as e:
             print(f"[LeadSourcing] Yelp request error: {e}")
+            self._note(
+                "yelp",
+                SOURCE_UNREACHABLE,
+                f"No es tu clave: Yelp no contesta ({type(e).__name__}). Puede ser tu "
+                "conexión o una caída del servicio. Reintenta en unos minutos.",
+            )
             return []
 
         if resp.status_code != 200:
             print(f"[LeadSourcing] Yelp HTTP {resp.status_code}: {resp.text[:200]}")
+            # A malformed key is a 400 VALIDATION_ERROR on the Authorization
+            # field, not a 401 — measured against the real API. Classifying by
+            # status code alone would tell the operator "the service is having
+            # problems" about a key that is simply wrong.
+            body = (resp.text or "")[:400]
+            bad_auth = resp.status_code == 400 and '"field": "Authorization"' in body
+            if resp.status_code in (401, 403) or bad_auth:
+                self._note(
+                    "yelp",
+                    SOURCE_KEY_REJECTED,
+                    f"Yelp rechazó la clave (HTTP {resp.status_code}). Suele ser una clave "
+                    "caducada o revocada. Genera una nueva en "
+                    "https://www.yelp.com/developers/v3/manage_app y actualiza backend/.env.",
+                )
+            elif resp.status_code == 429:
+                self._note(
+                    "yelp",
+                    SOURCE_QUOTA,
+                    "Se agotó la cuota diaria de Yelp (300 llamadas en este plan). No es un "
+                    "error: vuelve mañana, o rellena esas casillas a mano.",
+                )
+            else:
+                self._note(
+                    "yelp",
+                    SOURCE_UNREACHABLE,
+                    f"Yelp respondió HTTP {resp.status_code}. No es tu clave; el servicio "
+                    "está con problemas. Reintenta en unos minutos.",
+                )
             return []
 
         # The quota is small enough to be worth watching from the logs.
@@ -663,16 +1128,20 @@ class LeadSourcingService:
                 continue
 
             aliases = [c.get("alias", "") for c in (b.get("categories") or [])]
+            if "servicestations" in aliases:
+                continue  # a gas station, not a local advertiser
             if category_id is not None and not _belongs_to_niche(category_id, aliases):
                 # Yelp ignored the filter. Discard rather than put a restaurant
                 # in the plumbing box.
                 continue
 
             loc = b.get("location", {}) or {}
-            address = loc.get("address1") or ""
-            if not address:
-                display = loc.get("display_address", []) or []
-                address = display[0] if display else ""
+            # Only the street. When Yelp has none — a trade working out of a
+            # van — `display_address` falls back to "Corona, CA 92880", which is
+            # a city, not an address. Copying that into the street field is how
+            # a card ends up reading "Corona, CA 92880, Eastvale (92880)" and
+            # linking to a map pin in the desert.
+            address = (loc.get("address1") or "").strip()
             coords = b.get("coordinates", {}) or {}
 
             candidates.append(
@@ -706,7 +1175,15 @@ class LeadSourcingService:
                     if isinstance(r_url, str) and r_url:
                         c["website_url"] = r_url
 
+                probes = await asyncio.gather(
+                    *(self.probe_website(redir_client, c.get("website_url", "")) for c in candidates),
+                    return_exceptions=True,
+                )
+                for c, alive in zip(candidates, probes):
+                    c["website_ok"] = alive if isinstance(alive, bool) else None
+
         candidates.sort(key=lambda c: c["distance_m"] or float("inf"))
+        self._note("yelp", SOURCE_OK, "")
         self._yelp_cache[cache_key] = candidates
         return candidates
 
@@ -722,7 +1199,24 @@ class LeadSourcingService:
         Filtra con circle y proximity en la microzona de Eastvale (92880) o Corona (92882).
         Retorna la categoría normalizada en inglés para uniformidad del modelo.
         """
+
+        if not geoapify_category:
+            self._note(
+                "geoapify",
+                SOURCE_NOT_COVERED,
+                "Geoapify no tiene categoría para este giro: indexa lugares, y la "
+                "plomería, el techado y el aire acondicionado se trabajan desde una "
+                "furgoneta. Ese hueco lo cubre Yelp.",
+            )
+            return []
+
         if not self.geoapify_api_key or self.geoapify_api_key in ["mock_geoapify_key", ""]:
+            self._note(
+                "geoapify",
+                SOURCE_NO_KEY,
+                "Falta GEOAPIFY_API_KEY en backend/.env. Es la fuente de cola, la que "
+                "entra cuando OpenStreetMap y Yelp se quedan cortos.",
+            )
             return []
 
         is_corona = "corona" in city.lower() or zip_code == "92882"
@@ -763,8 +1257,8 @@ class LeadSourcingService:
                             "city": props.get("city", city),
                             "zip_code": props.get("postcode", zip_code),
                             "zip": props.get("postcode", zip_code),
-                            "rating": 4.5,
-                            "review_count": 28,
+                            "rating": None,
+                            "review_count": None,
                             "website_url": website,
                             "category": yelp_category,
                             "coordinates": {
@@ -773,11 +1267,46 @@ class LeadSourcingService:
                             },
                             "source": "Geoapify Places"
                         })
+                    self._note("geoapify", SOURCE_OK, "")
                     return candidates
                 else:
                     print(f"[LeadSourcing] Geoapify HTTP {resp.status_code}: {resp.text}")
+                    if resp.status_code in (401, 403):
+                        self._note(
+                            "geoapify",
+                            SOURCE_KEY_REJECTED,
+                            f"Geoapify rechazó la clave (HTTP {resp.status_code}). Genera una "
+                            "nueva en https://myprojects.geoapify.com/ y actualiza backend/.env.",
+                        )
+                    elif resp.status_code == 429:
+                        self._note(
+                            "geoapify",
+                            SOURCE_QUOTA,
+                            "Se agotó la cuota de Geoapify (3.000 al día en el plan gratuito). "
+                            "No es un error: vuelve mañana.",
+                        )
+                    elif resp.status_code == 400:
+                        self._note(
+                            "geoapify",
+                            SOURCE_BAD_REQUEST,
+                            f"Geoapify rechazó la consulta: {resp.text[:160]}. No es tu clave "
+                            "ni una caída: es un fallo de configuración del sistema. "
+                            "Repórtalo; no se arregla reintentando.",
+                        )
+                    else:
+                        self._note(
+                            "geoapify",
+                            SOURCE_UNREACHABLE,
+                            f"Geoapify respondió HTTP {resp.status_code}. No es tu clave; el "
+                            "servicio está con problemas.",
+                        )
         except Exception as e:
             print(f"[LeadSourcing] Geoapify API request error: {e}")
+            self._note(
+                "geoapify",
+                SOURCE_UNREACHABLE,
+                f"No es tu clave: Geoapify no contesta ({type(e).__name__}).",
+            )
 
         return []
 
@@ -803,6 +1332,9 @@ class LeadSourcingService:
             # Somebody may have filled it while this call waited its turn.
             if cache_key in self._area_cache:
                 return self._area_cache[cache_key]
+            failed_at = self._area_failed_at.get(cache_key)
+            if failed_at is not None and time.monotonic() - failed_at < OVERPASS_RETRY_AFTER_S:
+                return {}
             return await self._fetch_area_uncached(cache_key, city, zip_code)
 
     async def _fetch_area_uncached(
@@ -823,28 +1355,36 @@ class LeadSourcingService:
                 seen.add(fragment)
                 parts.append(f"node{fragment}(around:{radius},{lat},{lon});")
                 parts.append(f"way{fragment}(around:{radius},{lat},{lon});")
-        query = f"[out:json][timeout:60];({''.join(parts)});out center 300;"
+        query = f"[out:json][timeout:25];({''.join(parts)});out center 300;"
+
+        async def ask(endpoint: str) -> List[Dict[str, Any]]:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    endpoint,
+                    data={"data": query},
+                    headers={"User-Agent": OVERPASS_USER_AGENT},
+                )
+            if resp.status_code != 200:
+                raise RuntimeError(f"HTTP {resp.status_code} en {endpoint}")
+            return resp.json().get("elements", [])
 
         elements = None
         self.osm_last_error = None
-        for endpoint in OVERPASS_ENDPOINTS:
-            try:
-                async with httpx.AsyncClient(timeout=90.0) as client:
-                    resp = await client.post(
-                        endpoint,
-                        data={"data": query},
-                        headers={"User-Agent": OVERPASS_USER_AGENT},
-                    )
-                if resp.status_code == 200:
-                    elements = resp.json().get("elements", [])
+        tasks = [asyncio.create_task(ask(ep)) for ep in OVERPASS_ENDPOINTS]
+        try:
+            for done in asyncio.as_completed(tasks):
+                try:
+                    elements = await done
                     break
-                self.osm_last_error = f"HTTP {resp.status_code} en {endpoint}"
-                print(f"[LeadSourcing] Overpass {self.osm_last_error}")
-            except Exception as e:
-                self.osm_last_error = f"{type(e).__name__} en {endpoint}"
-                print(f"[LeadSourcing] Overpass area request error: {e}")
+                except Exception as e:
+                    self.osm_last_error = str(e) or type(e).__name__
+                    print(f"[LeadSourcing] Overpass area request error: {self.osm_last_error}")
+        finally:
+            for t in tasks:
+                t.cancel()
 
         if elements is None:
+            self._area_failed_at[cache_key] = time.monotonic()
             return {}
 
         by_niche: Dict[int, List[Dict[str, Any]]] = {}
@@ -861,6 +1401,7 @@ class LeadSourcingService:
                 "name": name,
                 "business_name": name,
                 "phone": tags.get("phone") or tags.get("contact:phone") or "",
+                "chain": bool(tags.get("brand:wikidata")) or tags.get("amenity") == "fuel",
                 "address": street,
                 "city": tags.get("addr:city", city),
                 "zip_code": tags.get("addr:postcode", zip_code),
@@ -903,6 +1444,7 @@ class LeadSourcingService:
         carries no ratings and often no phone number, which the operator sees:
         the contact fields come back empty rather than invented.
         """
+
         by_niche = await self.fetch_area_businesses(city, zip_code)
         return by_niche.get(category_id, [])
 
@@ -971,6 +1513,7 @@ class LeadSourcingService:
                 "name": name,
                 "business_name": name,
                 "phone": tags.get("phone") or tags.get("contact:phone") or "",
+                "chain": bool(tags.get("brand:wikidata")) or tags.get("amenity") == "fuel",
                 "address": street,
                 "city": tags.get("addr:city", city),
                 "zip_code": tags.get("addr:postcode", zip_code),
@@ -1038,21 +1581,57 @@ class LeadSourcingService:
             if not html:
                 return contacts
 
-            # 1. Extracción de correos electrónicos en la home
-            emails_encontrados = set()
-            mailtos = re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', html, re.IGNORECASE)
-            for m in mailtos:
-                emails_encontrados.add(m.lower())
+            # 1. Correos, por orden de confianza y no por orden alfabético.
+            #
+            # A contact page is full of strings shaped like an address that are
+            # not one. Trident's carries `placeholder="email@address.com"` on
+            # the form input and `mailto:info@tridentorthodontics.com` in the
+            # footer — and `sorted()[0]` picked the placeholder every time,
+            # deterministically, because "e" sorts before "i". The partner was
+            # then shown a working-looking address that nobody reads.
+            #
+            # A `mailto:` is a human's deliberate act. A loose match is a guess,
+            # and is only trusted when it sits on the site's own domain.
+            mailto_hits: List[str] = []
+            loose_hits: List[str] = []
 
-            regex_emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', html)
+            for m in re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', html, re.IGNORECASE):
+                el = m.lower()
+                if el not in mailto_hits:
+                    mailto_hits.append(el)
+
+            site_domain = ""
+            try:
+                site_domain = urllib.parse.urlparse(url).netloc.lower().removeprefix("www.")
+            except Exception:
+                site_domain = ""
+
             bad_exts = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".js", ".css", ".ico", ".woff", ".woff2")
-            bad_domains = {"wix", "sentry", "wordpress", "example", "domain", "bootstrap", "google", "schema", "gravatar", "cloudflare", "yoursite"}
+            bad_domains = {"wix", "sentry", "wordpress", "example", "domain", "bootstrap", "google", "schema", "gravatar", "cloudflare", "yoursite", "address.com", "yourdomain", "email.com", "mail.com", "test.com"}
 
-            for e in regex_emails:
+            # Anything sitting in a placeholder is sample text by definition.
+            placeholders = {
+                p.lower()
+                for p in re.findall(r'placeholder=[\'"]([^\'"]*@[^\'"]*)[\'"]', html, re.IGNORECASE)
+            }
+
+            for e in re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', html):
                 el = e.lower()
-                if not any(el.endswith(ext) for ext in bad_exts):
-                    if not any(bad in el for bad in bad_domains):
-                        emails_encontrados.add(el)
+                if any(el.endswith(ext) for ext in bad_exts):
+                    continue
+                if any(bad in el for bad in bad_domains):
+                    continue
+                if el in placeholders:
+                    continue
+                # Only the site's own domain. An address from somewhere else on
+                # the page belongs to the web designer, the booking platform or
+                # a stock template, not to the business being called.
+                if site_domain and not el.endswith("@" + site_domain):
+                    continue
+                if el not in loose_hits:
+                    loose_hits.append(el)
+
+            emails_encontrados = mailto_hits + [e for e in loose_hits if e not in mailto_hits]
 
             # 2. Extracción de teléfono de respaldo en la web (tel: links o regex US)
             phone_found = ""
@@ -1090,16 +1669,29 @@ class LeadSourcingService:
                         c_resp = await client.get(sub_url, timeout=5.0)
                         if c_resp.status_code == 200:
                             c_html = c_resp.text
+                            # Same order of trust on the contact page.
                             c_mailtos = re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', c_html, re.IGNORECASE)
                             for m in c_mailtos:
-                                emails_encontrados.add(m.lower())
+                                el = m.lower()
+                                if el not in emails_encontrados:
+                                    emails_encontrados.append(el)
                             if not emails_encontrados:
-                                c_regex = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', c_html)
-                                for e in c_regex:
+                                c_placeholders = {
+                                    p.lower()
+                                    for p in re.findall(r'placeholder=[\'"]([^\'"]*@[^\'"]*)[\'"]', c_html, re.IGNORECASE)
+                                }
+                                for e in re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', c_html):
                                     el = e.lower()
-                                    if not any(el.endswith(ext) for ext in bad_exts):
-                                        if not any(bad in el for bad in bad_domains):
-                                            emails_encontrados.add(el)
+                                    if any(el.endswith(ext) for ext in bad_exts):
+                                        continue
+                                    if any(bad in el for bad in bad_domains):
+                                        continue
+                                    if el in c_placeholders:
+                                        continue
+                                    if site_domain and not el.endswith("@" + site_domain):
+                                        continue
+                                    if el not in emails_encontrados:
+                                        emails_encontrados.append(el)
                             if not phone_found:
                                 c_tel = re.findall(r'href=[\'"]tel:([^\'"]+)[\'"]', c_html, re.IGNORECASE)
                                 if c_tel:
@@ -1115,7 +1707,7 @@ class LeadSourcingService:
                         pass
 
             if emails_encontrados:
-                contacts["email"] = sorted(list(emails_encontrados))[0]
+                contacts["email"] = emails_encontrados[0]
             if phone_found:
                 contacts["phone"] = phone_found
 
@@ -1132,20 +1724,29 @@ class LeadSourcingService:
         zip_code: str = "92880",
         mock_mode: Optional[bool] = None,
         exclude_names: Optional[List[str]] = None,
-        limit: int = 3
+        limit: int = 3,
+        disabled_sources: Optional[set] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Búsqueda orquestada de candidatos respetando MOCK_MODE:
-        - MOCK_MODE=true: Entrega candidatos simulados dentro de Eastvale / Corona sin costo.
-        - MOCK_MODE=false: OpenStreetMap primero (gratis), Yelp Fusion donde OSM
+        Búsqueda orquestada de candidatos homologada para modo EN VIVO y SIMULACIÓN:
+        - Siempre consulta fuentes reales: OpenStreetMap primero (gratis), Yelp Fusion donde OSM
           no alcanza (oficios sin local: plomería, techado) y Geoapify de cola.
         - Excluye nombres en exclude_names (lista negra o descartados).
         - Enriquecimiento asíncrono OSINT de correos y teléfonos de respaldo.
+        - disabled_sources: set of source IDs (e.g. {"YELP", "OSM_OVERPASS", "GEOAPIFY"}) to skip.
         """
-        use_mock = self.is_mock_mode_default if mock_mode is None else mock_mode
+        # Keys are read from disk on every search, so a key pasted in a minute
+        # ago is in play without restarting anything.
+        self.reload_keys()
+        # normalize_category falls back to dentistry for an unknown id. A niche with no
+        # search taxonomy here must come back empty, not filled with dentists.
+        if isinstance(category_id, int) and category_id not in CATEGORY_TAXONOMY:
+            return []
         taxonomy = normalize_category(category_id)
         exclude_set = {n.strip().lower() for n in (exclude_names or []) if n.strip()}
         center_lat, center_lon = get_campaign_center(city, zip_code)
+        # The caller decides, per campaign mode, which sources are switched off.
+        _disabled = set(disabled_sources or ())
 
         def _candidate_rank(c: Dict[str, Any]) -> tuple:
             # 1. Tiene teléfono (0=sí, 1=no)
@@ -1163,47 +1764,41 @@ class LeadSourcingService:
             reviews = int(c.get("review_count") or 0)
             return (has_phone, geo_tier, dist_miles, source_rank, -rating, -reviews)
 
-        if use_mock:
-            simulated = [
-                c for c in self._get_mock_candidates(category_id, city, zip_code)
-                if (c.get("business_name") or c.get("name") or "").strip().lower() not in exclude_set
-            ]
-            for c in simulated:
-                c["simulated"] = True
-                normalize_candidate_record(c, target_city=city, target_zip=zip_code, center_lat=center_lat, center_lon=center_lon)
-            simulated.sort(key=_candidate_rank)
-            return simulated[:limit]
-
         # The order is decided by what each source costs, not by which is best.
         # OpenStreetMap is free and covers all fourteen niches.
-        raw_osm = await self.fetch_from_osm(category_id, taxonomy["yelp_category"], city, zip_code)
+        if "OSM_OVERPASS" not in _disabled:
+            raw_osm = await self.fetch_from_osm(category_id, taxonomy["yelp_category"], city, zip_code)
+        else:
+            raw_osm = []
         candidates = [
             c for c in raw_osm
             if (c.get("business_name") or c.get("name") or "").strip().lower() not in exclude_set
+            and not _is_national_chain(c)
         ]
 
         def callable_count(rows: List[Dict[str, Any]]) -> int:
             return sum(1 for c in rows if (c.get("phone") or "").strip())
 
-        if callable_count(candidates) < limit:
+        if callable_count(candidates) < limit and "YELP" not in _disabled:
             existing = {c["name"].lower() for c in candidates}
             for yc in await self.fetch_from_yelp(
                 taxonomy["yelp_category"], city, zip_code, category_id
             ):
                 yc_name = yc["name"].lower().strip()
-                if yc_name not in existing and yc_name not in exclude_set:
+                if yc_name not in existing and yc_name not in exclude_set and not _is_national_chain(yc):
                     candidates.append(yc)
                     existing.add(yc_name)
 
-        if callable_count(candidates) < limit:
+        if callable_count(candidates) < limit and "GEOAPIFY" not in _disabled:
             existing = {c["name"].lower() for c in candidates}
             for gc in await self.fetch_from_geoapify(
                 taxonomy["geoapify_category"], taxonomy["yelp_category"], city, zip_code
             ):
                 gc_name = gc["name"].lower().strip()
-                if gc_name not in existing and gc_name not in exclude_set:
+                if gc_name not in existing and gc_name not in exclude_set and not _is_national_chain(gc):
                     candidates.append(gc)
                     existing.add(gc_name)
+
 
         # Si tras consultar todas las fuentes hay menos de `limit` candidatos,
         # completar con respaldo local para garantizar estrictamente el cupo
@@ -1213,11 +1808,27 @@ class LeadSourcingService:
             for s in simulated:
                 s_name = s["name"].lower().strip()
                 if s_name not in existing and s_name not in exclude_set:
-                    s["source"] = "Respaldo Local (Sandbox)"
+                    s["source"] = "Marcador de posición (sin fuente real)"
                     s["simulated"] = True
                     candidates.append(s)
                 if len(candidates) >= limit:
                     break
+
+        # A Yelp listing URL is not the business's website. Treat it as absent,
+        # then try to work the real one out from the name and check it.
+        for c in candidates:
+            # Provenance is decided once. The Yelp cache hands back the same
+            # dicts on the next search, by then carrying a URL this code
+            # inferred — and a second pass would relabel it "fuente", which
+            # claims a provider vouched for it when nobody did.
+            if c.get("website_source"):
+                continue
+            url = (c.get("website_url") or "").strip()
+            if not url or "yelp.com" in url or "yellowpages.com" in url:
+                c["website_url"] = ""
+                c["website_source"] = ""
+            else:
+                c["website_source"] = "fuente"
 
         # Normalizar y unificar distancia geodésica para TODOS los candidatos (OSM, Yelp, Geoapify, Mock)
         for c in candidates:
@@ -1226,7 +1837,71 @@ class LeadSourcingService:
         # Ordenamiento jerárquico por relevancia y geografía garantizado sin fallas NoneType:
         candidates.sort(key=_candidate_rank)
 
-        selected = candidates[:limit]
+        # One box per business: a chain's branches (two Chipotles, two Norco Hills
+        # Car Wash nodes in OSM) took two of the three places offered.
+        seen_names: set = set()
+        unique: List[Dict[str, Any]] = []
+        for c in candidates:
+            key = (c.get("name") or c.get("business_name") or "").strip().lower()
+            if key and key in seen_names:
+                continue
+            seen_names.add(key)
+            unique.append(c)
+        selected = unique[:limit]
+
+        # Website checks cost a request each (guess, web-search confirm, probe). The
+        # ranking above does not use the website, so only the candidates actually
+        # returned are checked: checking all ~20 Yelp results cost ~15 s per search.
+        missing = [c for c in selected if not c.get("website_url") and not c.get("simulated")]
+        if missing:
+            async with httpx.AsyncClient(timeout=8.0) as guess_client:
+                guessed = await asyncio.gather(
+                    *(self.infer_website(guess_client, c.get("name", "")) for c in missing),
+                    return_exceptions=True,
+                )
+                for c, url in zip(missing, guessed):
+                    if isinstance(url, str) and url:
+                        c["website_url"] = url
+                        c["website_source"] = "inferido"
+                        # Already answered during the guess; no second request.
+                        c["website_ok"] = True
+
+                # A second, independent opinion on the ones that were guessed.
+                # Free sources of place data — OpenStreetMap, Nominatim,
+                # Geoapify — simply do not carry these businesses: measured on
+                # the three Eastvale dentists, all three are absent from every
+                # one of them, which is why Yelp is the source in the first
+                # place. A web search is the only independent check left.
+                inferred = [c for c in missing if c.get("website_source") == "inferido"]
+                if inferred:
+                    agreed = await asyncio.gather(
+                        *(
+                            self.confirm_website(
+                                guess_client,
+                                c.get("name", ""),
+                                urllib.parse.urlparse(c["website_url"]).netloc,
+                            )
+                            for c in inferred
+                        ),
+                        return_exceptions=True,
+                    )
+                    for c, ok in zip(inferred, agreed):
+                        if ok is True:
+                            c["website_source"] = "confirmado"
+
+        # Does each site answer? Asked once, here, where every source has already
+        # contributed — the Yelp branch alone left OSM and Geoapify candidates
+        # unprobed, and those are the ones that carry a real domain.
+        pending = [c for c in selected if c.get("website_ok") is None]
+        if pending:
+            async with httpx.AsyncClient(timeout=8.0) as probe_client:
+                results = await asyncio.gather(
+                    *(self.probe_website(probe_client, c.get("website_url", "")) for c in pending),
+                    return_exceptions=True,
+                )
+                for c, alive in zip(pending, results):
+                    c["website_ok"] = alive if isinstance(alive, bool) else None
+
 
         # Enriquecimiento web OSINT asíncrono para los candidatos finales seleccionados
         async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as enrich_client:
@@ -1242,288 +1917,3 @@ class LeadSourcingService:
             await asyncio.gather(*[_enrich_candidate(c) for c in selected], return_exceptions=True)
 
         return selected
-
-    def _resolve_ticket(self, niche: str) -> float:
-        niche_lower = niche.lower()
-        if any(k in niche_lower for k in ["hvac", "aire", "clima", "calefacc"]):
-            return 4500.0
-        if any(k in niche_lower for k in ["roof", "solar", "techo"]):
-            return 14500.0
-        if any(k in niche_lower for k in ["odont", "dent", "implante"]):
-            return 1250.0
-        if any(k in niche_lower for k in ["insuran", "seguro"]):
-            return 1400.0
-        if any(k in niche_lower for k in ["plom", "plumb"]):
-            return 780.0
-        if any(k in niche_lower for k in ["auto", "mecanic", "taller", "freno"]):
-            return 550.0
-        if any(k in niche_lower for k in ["chiro", "quiro"]):
-            return 480.0
-        if any(k in niche_lower for k in ["vet", "animal"]):
-            return 450.0
-        if any(k in niche_lower for k in ["carpet", "limpieza", "alfombra"]):
-            return 320.0
-        if any(k in niche_lower for k in ["detail", "lavado"]):
-            return 220.0
-        if any(k in niche_lower for k in ["gym", "fitness", "crossfit"]):
-            return 140.0
-        if any(k in niche_lower for k in ["groom", "peluquer"]):
-            return 85.0
-        if any(k in niche_lower for k in ["pizza", "taquer", "restauran"]):
-            return 68.0
-        return 500.0
-
-    def get_niche_fallback(self, niche: str, business_name: str, avg_ticket: float, variant: int = 0) -> Dict[str, Any]:
-        niche_lower = niche.lower()
-        cost = 850 if "odont" in niche_lower or "dent" in niche_lower else 497
-
-        var_idx = variant % 4 if variant else 0
-        if var_idx == 1:
-            en = (
-                f"Owner of {business_name}, stop wasting ad dollars bidding $15+ per click on Google Ads against corporate chains. "
-                f"Our 12x9 co-op mailer locks out all other competitors in your category and delivers territorial exclusivity right to 5,000 prime homeowners."
-            )
-            es = (
-                f"Estimado Director de {business_name}, en Google Ads su negocio compite pagando más de $15 por clic contra cadenas corporativas. "
-                f"Con nuestra postal 12x9 cooperativa bloquea a toda su competencia con exclusividad territorial garantizada frente a 5,000 hogares propietarios."
-            )
-            dm = "Owner / Decision Maker"
-        elif var_idx == 2:
-            en = (
-                f"Director of {business_name}, we are finalizing the seasonal residential drop in Eastvale's top neighborhoods. "
-                f"Deliver your high-impact promotion straight to 5,000 kitchen counters for under 10 cents per household."
-            )
-            es = (
-                f"Estimado Director de {business_name}, estamos cerrando la edición estacional para los vecindarios más exclusivos de Eastvale. "
-                f"Su anuncio llegará directamente a las barras de cocina de familias verificadas de alto poder adquisitivo por menos de 10¢ por hogar."
-            )
-            dm = "Owner / Decision Maker"
-        elif var_idx == 3:
-            en = (
-                f"Owner of {business_name}, partner with us to deliver an exclusive neighborhood incentive to 5,000 high-income households. "
-                f"A steady stream of 10 to 25 new premium clients will drive significant net revenue over the next 60 days."
-            )
-            es = (
-                f"Propietario de {business_name}, seleccionamos comercios con excelente reputación local para ofrecer una promoción de alto impacto a 5,000 residentes. "
-                f"Un flujo de 10 a 25 nuevos prospectos calificados le garantizará un retorno masivo en los próximos 60 días."
-            )
-            dm = "Owner / Decision Maker"
-        elif any(k in niche_lower for k in ["hvac", "aire", "clima", "calefacc"]):
-            en = (
-                f"Owner, summer in the Inland Empire regularly exceeds 100°F. We are reaching 5,000 verified "
-                f"homeowners with older builder-grade A/C systems. A single system replacement or repair (${avg_ticket:,.0f}+) "
-                f"pays off your ${cost} co-op spot nearly 10 times over. That is under 10 cents per exclusive home."
-            )
-            es = (
-                f"Estimado Propietario de {business_name}, en el calor extremo de más de 40°C del Inland Empire, "
-                f"5,000 residencias recibirán nuestra postal gigante 12x9. Una sola venta o reparación (${avg_ticket:,.0f} USD) "
-                f"le genera un retorno multiplicado sobre su espacio exclusivo de ${cost} USD. Exclusividad total 1-a-1."
-            )
-            dm = "Owner / Service Director"
-        elif any(k in niche_lower for k in ["odont", "dent", "implante"]):
-            en = (
-                f"Doctor, 5,000 prime homeowners in Eastvale are receiving our 12x9 jumbo mailer this month. "
-                f"With your exclusive Hero Banner position, just one single dental implant or Invisalign case "
-                f"(${avg_ticket:,.0f}+) pays for your entire ${cost} campaign multiple times over."
-            )
-            es = (
-                f"Doctor de {business_name}, 5,000 familias propietarias recibirán la postal gigante 12x9 este mes. "
-                f"Con la posición Hero frontal, un solo tratamiento de ortodoncia o implante (${avg_ticket:,.0f} USD) "
-                f"cubre varias veces su inversión de ${cost} USD. Equivale a apenas 17 centavos por hogar de alto valor."
-            )
-            dm = "Doctor / Lead Clinician"
-        elif any(k in niche_lower for k in ["plom", "plumb"]):
-            en = (
-                f"Owner, with 5,000 homes in your local territory receiving our mailer, just one water heater "
-                f"replacement or repiping job (${avg_ticket:,.0f}+) covers your entire ${cost} spot with instant net profit."
-            )
-            es = (
-                f"Estimado Propietario de {business_name}, frente a 5,000 residencias locales, un solo recambio "
-                f"de calentador o reparación mayor (${avg_ticket:,.0f} USD) cubre completamente su espacio de ${cost} USD."
-            )
-            dm = "Owner / Master Plumber"
-        elif any(k in niche_lower for k in ["roof", "solar", "techo"]):
-            en = (
-                f"Owner, Inland Empire high winds cause major roof deterioration. Reaching 5,000 targeted homeowners "
-                f"means just ONE reroof or solar job (${avg_ticket:,.0f}+) yields a 25x cash return on your ${cost} sponsorship."
-            )
-            es = (
-                f"Estimado Propietario de {business_name}, 5,000 residencias con techos de más de 12 años verán su oferta. "
-                f"Un solo contrato (${avg_ticket:,.0f} USD) le genera un retorno masivo sobre su inversión de ${cost} USD."
-            )
-            dm = "Owner / Project Director"
-        elif any(k in niche_lower for k in ["auto", "mecanic", "freno", "taller"]):
-            en = (
-                f"Owner, 5,000 local homeowners will see {business_name} exclusively on their mailers. Just one major "
-                f"brake or transmission job (${avg_ticket:,.0f}+) covers your ${cost} co-op slot."
-            )
-            es = (
-                f"Estimado Propietario de {business_name}, 5,000 familias con vehículos verán su taller de forma exclusiva. "
-                f"Un solo servicio mayor (${avg_ticket:,.0f} USD) cubre el 100% de su espacio de ${cost} USD."
-            )
-            dm = "Owner / Lead Technician"
-        else:
-            en = (
-                f"Owner, 5,000 verified homeowners in Eastvale / Inland Empire are receiving our 12x9 jumbo co-op mailer. "
-                f"At ${cost} flat, that is under 10 cents per household. Just ONE customer at your average ticket of "
-                f"${avg_ticket:,.0f} USD pays off your sponsorship with instant net profit."
-            )
-            es = (
-                f"Estimado Propietario de {business_name}, 5,000 hogares propietarios en su zona recibirán la postal gigante 12x9. "
-                f"Con su espacio exclusivo de ${cost} USD, cuesta menos de 10 centavos por casa. Un solo cliente promedio "
-                f"(${avg_ticket:,.0f} USD) cubre el 100% de su espacio publicitario sin competencia."
-            )
-            dm = "Owner / Managing Partner"
-
-        return {
-            "business_name": business_name,
-            "niche": niche,
-            "avg_ticket": avg_ticket,
-            "pitch": f"{en}\n\n{es}",
-            "en": en,
-            "es": es,
-            "decision_maker": dm,
-            "roi_pitch": f"Inversión: ${cost} USD | Ticket promedio: ${avg_ticket:,.0f} USD | Breakeven: 1 cliente."
-        }
-
-    def _format_pitch_output(self, content: str, niche: str, business_name: str, avg_ticket: float) -> Dict[str, Any]:
-        try:
-            if "{" in content and "}" in content:
-                json_str = content[content.find("{"):content.rfind("}")+1]
-                data = json.loads(json_str)
-                if "en" in data or "es" in data:
-                    return {
-                        "business_name": business_name,
-                        "niche": niche,
-                        "avg_ticket": avg_ticket,
-                        "pitch": content,
-                        "en": data.get("en", content),
-                        "es": data.get("es", content),
-                        "decision_maker": data.get("decision_maker", "Owner / Decision Maker"),
-                        "roi_pitch": f"Inversión: $497 USD | Ticket promedio: ${avg_ticket:,.0f} USD | Breakeven: 1 cliente."
-                    }
-        except Exception:
-            pass
-
-        lines = content.splitlines()
-        current_lang = "es"
-        en_lines = []
-        es_lines = []
-
-        for line in lines:
-            lower = line.lower()
-            if "english" in lower or "inglés" in lower or lower.startswith("en:") or "pitch en" in lower:
-                current_lang = "en"
-                continue
-            elif "spanish" in lower or "español" in lower or lower.startswith("es:") or "pitch es" in lower:
-                current_lang = "es"
-                continue
-
-            if current_lang == "en":
-                en_lines.append(line)
-            else:
-                es_lines.append(line)
-
-        en_part = "\n".join(en_lines).strip() or content
-        es_part = "\n".join(es_lines).strip() or content
-
-        return {
-            "business_name": business_name,
-            "niche": niche,
-            "avg_ticket": avg_ticket,
-            "pitch": content,
-            "en": en_part,
-            "es": es_part,
-            "decision_maker": "Owner / Decision Maker",
-            "roi_pitch": f"Inversión: $497 USD | Ticket promedio: ${avg_ticket:,.0f} USD | Breakeven: 1 cliente."
-        }
-
-    async def generate_pitch(
-        self,
-        business_name: str,
-        niche: str,
-        avg_ticket: Optional[float] = None,
-        variant: int = 0
-    ) -> Dict[str, Any]:
-        """
-        Conecta la generación de pitches con el endpoint local de llama-server.
-        REGLAS DE INTEGRACIÓN ESTRICTAS:
-        1. Cero Parámetros de Inferencia.
-        2. Cero Especificación de Modelo.
-        3. Payload Puro: Solo la estructura 'messages'.
-        4. Resiliencia & Fallback: Retorno limpio del script predefinido del nicho ante error.
-        """
-        if not avg_ticket or avg_ticket <= 0:
-            avg_ticket = self._resolve_ticket(niche)
-
-        angles = [
-            "contundente de retorno de inversión y ticket promedio",
-            "enfocado en exclusividad territorial y bloqueo total a competidores de Google Ads",
-            "enfocado en urgencia estacional y alcance garantizado a 5,000 hogares",
-            "enfocado en oferta gancho irresistible para captar 15 a 25 clientes nuevos",
-        ]
-        chosen_angle = angles[variant % len(angles)]
-
-        system_prompt = (
-            "Eres un estratega de ventas para correo directo cooperativo 9x12 en el Inland Empire. "
-            f"Genera un guion de venta telefónica bilingüe (EN/ES) {chosen_angle} "
-            f"basado en el ticket promedio (${avg_ticket:,.0f} USD) del cliente frente al espacio en la postal."
-        )
-        user_prompt = f"Genera el pitch (variante {variant + 1}) para el negocio: {business_name} del giro: {niche}."
-
-        payload = {
-            "model": self.llama_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
-        }
-
-        endpoint = f"{self.llama_url}/chat/completions"
-
-        # A bulk search generates one pitch per candidate. When llama-server is
-        # unreachable, paying the full timeout on every candidate turns a search
-        # into minutes of dead air, so the first failure disables it for the
-        # rest of the process and the niche fallback answers immediately.
-        if getattr(self, "_llama_offline", False):
-            fallback = self.get_niche_fallback(niche, business_name, avg_ticket, variant=variant)
-            fallback["source"] = "fallback_niche"
-            return fallback
-
-        try:
-            # A pitch the operator waits on inside a list has to answer fast or
-            # not at all; the niche fallback is a complete script, not a stub.
-            timeout = httpx.Timeout(15.0, connect=2.0)
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post(endpoint, json=payload)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    choices = data.get("choices", [])
-                    if choices and "message" in choices[0]:
-                        content = choices[0]["message"].get("content", "")
-                        if content:
-                            result = self._format_pitch_output(content, niche, business_name, avg_ticket)
-                            result["source"] = "llama_server"
-                            return result
-                else:
-                    print(f"[LeadSourcing] llama-server respondió HTTP {resp.status_code}: {resp.text}")
-        except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPError, Exception) as e:
-            # A host that accepts the socket and never answers raises
-            # ReadTimeout, not ConnectError. Either way it is unusable, and
-            # paying the timeout again on every candidate is the real cost.
-            if isinstance(e, (httpx.ConnectError, httpx.TimeoutException)):
-                self._llama_offline = True
-            print(f"[LeadSourcing] Fallback activo tras fallo de conexión a llama-server ({self.llama_url}): {e}")
-
-        fallback = self.get_niche_fallback(niche, business_name, avg_ticket)
-        fallback["source"] = "fallback_niche"
-        return fallback
-
-    async def generate_llm_pitch(self, business_name: str, category_name: str, avg_ticket: float) -> Dict[str, str]:
-        """Wrapper compatible para búsqueda masiva de leads."""
-        res = await self.generate_pitch(business_name, category_name, avg_ticket)
-        return {
-            "en": res.get("en", ""),
-            "es": res.get("es", ""),
-            "decision_maker": res.get("decision_maker", "Owner / Decision Maker")
-        }

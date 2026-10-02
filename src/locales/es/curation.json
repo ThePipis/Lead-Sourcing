@@ -31,15 +31,15 @@
     "histogramBarTitle": "{{range}}: {{count}} hogares"
   },
   "comparison": {
-    "eddmTitle": "EDDM tradicional",
-    "eddm1": "Reparto por ruta postal completa, sin selección.",
-    "eddm2": "Filtros booleanos rígidos sobre SQL.",
-    "eddm3": "Desperdicio alto en hogares fuera de perfil.",
-    "curationTitle": "Curación algorítmica",
-    "curation1": "Ponderación demográfica multivariable por giro.",
-    "curation2": "Afinidad conjunta acumulada con los 14 comercios.",
-    "curation3": "Corte exacto a los 5,000 hogares de mayor propensión.",
-    "continueExport": "Exportar Manifiesto Postal →"
+    "eddmTitle": "EDDM a ciegas",
+    "eddm1": "Se compran rutas por cercanía o por presupuesto, sin mirar quién vive ahí.",
+    "eddm2": "No hay forma de decirle al anunciante en qué barrios cayó su anuncio.",
+    "eddm3": "La misma tarifa postal, peor barrio.",
+    "curationTitle": "EDDM puntuado",
+    "curation1": "Cada ruta del ZIP se puntúa con datos del USPS y del Censo: ingreso, propiedad, tipo de vivienda, autos, valor y tamaño del hogar.",
+    "curation2": "Se compran las rutas mejor puntuadas hasta cubrir la meta, siempre enteras.",
+    "curation3": "El anunciante recibe el listado de rutas y el perfil del barrio, y puede verificarlo.",
+    "continueExport": "Continuar al manifiesto →"
   },
   "matrix": {
     "title": "Matriz de Pesos Demográficos por Giro",
@@ -77,7 +77,7 @@
   },
   "routeEngine": {
     "title": "Motor de rutas · a quién llega la tirada",
-    "intro": "Una tirada cooperativa se entrega por saturación: el cartero la deja en todos los buzones de la ruta, dirigida a «Postal Customer». Por eso aquí se elige por RUTAS, no por hogares, y no hace falta comprar ninguna lista. El USPS publica cada ruta con su conteo oficial e ingreso medio; el Census añade propietarios, vivienda unifamiliar, vehículos y valor.",
+    "intro": "Una tirada cooperativa se entrega por saturación: el cartero la deja en todos los buzones de la ruta, dirigida a «Postal Customer». Por eso aquí se elige por RUTAS, no por hogares, y no hace falta comprar ninguna lista. El USPS aporta el conteo oficial de buzones de cada ruta; el Censo aporta el perfil de los hogares que esa ruta atraviesa. Con eso se puntúan las 24 rutas del ZIP y se compran las mejores.",
     "zip": "ZIP objetivo",
     "target": "Hogares objetivo",
     "plan": "Calcular rutas",
@@ -89,7 +89,7 @@
     "enrichment": "Datos del score",
     "hybrid": "USPS + Census",
     "uspsOnly": "Solo USPS",
-    "hybridNote": "Score híbrido: ingreso, edad y tamaño de hogar del USPS por ruta, más propietarios, vivienda unifamiliar, vehículos y valor de vivienda del ACS, cruzados por los block groups que atraviesa cada ruta y ponderados por hogares.",
+    "hybridNote": "Cada ruta se cruza con los block groups del Censo que atraviesa y se pondera por hogares. El ingreso y el tamaño del hogar los publica el USPS por ruta, pero los deja vacíos en algunos ZIP; cuando eso pasa entra el dato del Censo y la cifra se marca con «ACS» para que se sepa de dónde salió.",
     "uspsOnlyNote": "Score con lo que publica el USPS por ruta. El enriquecimiento del Census no respondió esta vez; los pesos se renormalizan solos para que las rutas sigan siendo comparables.",
     "inDrop": "En la tirada",
     "route": "Ruta",
@@ -98,11 +98,49 @@
     "size": "Tam. hogar",
     "score": "Score",
     "in": "Sí",
-    "out": "No"
+    "out": "No",
+    "modelTitle": "Qué se evaluó de cada ruta",
+    "modelCount": "{{used}} de {{total}} variables con dato en todas las rutas",
+    "modelChipTitle": "Con dato en {{routes}} de {{total}} rutas",
+    "fromCensus": "Dato del Censo ACS: el USPS lo dejó vacío en este ZIP",
+    "var": {
+      "income": "Ingreso del hogar",
+      "owner_occupied": "Casa propia",
+      "single_family": "Vivienda unifamiliar",
+      "vehicles": "2+ autos",
+      "home_value": "Valor de la vivienda",
+      "household_size": "Tamaño del hogar"
+    },
+    "shortTitle": "Atención: el score corrió con {{used}} de 6 variables",
+    "shortRoutes": "sin dato en {{missing}} de {{total}} rutas de la tirada",
+    "shortBody": "Todo lo que sale de aquí —el discurso de venta, el manifiesto y el perfil del barrio— se presenta como seis variables. Con una faltando, las rutas se ordenaron con un criterio distinto del que le vas a contar al anunciante. Vuelve a calcular: casi siempre es el Censo que no respondió y a la segunda entra. Si aun así necesitas continuar, déjalo por escrito.",
+    "shortRetry": "Volver a calcular rutas",
+    "shortAck": "Continuar con {{used}} de 6 y dejarlo registrado",
+    "ackNote": "Registrado el {{stamp}}: esta tirada se planificó con el modelo incompleto. No la presentes como seis variables."
   },
   "routes": {
     "title": "Distribución por ruta de cartero",
     "total": "{{count}} hogares en total",
     "households": "hogares"
+  },
+  "census": {
+    "title": {
+      "NO_KEY": "Alto: falta la clave del Censo",
+      "KEY_REJECTED": "Alto: el Censo rechazó tu clave",
+      "UNREACHABLE": "Alto: el Censo no responde",
+      "OK": "Alto: el Censo no devolvió datos",
+      "DISABLED": "Alto: el Censo está desactivado"
+    },
+    "why": "No se planificó nada y no se guardó nada. Cuatro de las seis variables del score salen del Censo —incluido el ingreso, que pesa 35%— así que sin él no sale un plan peor, sale otro producto con el mismo nombre. Arréglalo y reintenta.",
+    "steps": [
+      "Abre backend/.env",
+      "Pega la clave en CENSUS_API_KEY=",
+      "Guarda el archivo",
+      "Pulsa Reintentar aquí mismo (no hace falta reiniciar nada)"
+    ],
+    "retry": "Reintentar",
+    "getKey": "Conseguir clave gratis",
+    "degraded": "Planificar igual, con menos variables",
+    "degradedTitle": "Solo para una caída del Censo con la tirada ya vendida. Quedará marcado y no podrás presentarla como seis variables."
   }
 }

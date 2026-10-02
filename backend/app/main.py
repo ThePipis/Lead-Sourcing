@@ -8,7 +8,6 @@ from .database import engine, Base
 from .routers import (
     campaigns,
     prospecting,
-    curation,
     export,
     tracking,
     costs,
@@ -38,6 +37,7 @@ def _add_missing_columns() -> None:
             "mode": "VARCHAR(8) DEFAULT 'DEMO'",
             "unit_cost_usd": "FLOAT DEFAULT 0.6",
             "archived_at": "DATETIME",
+            "model_ack": "TEXT",
         },
         "slots": {
             "paid_at": "DATETIME",
@@ -47,11 +47,31 @@ def _add_missing_columns() -> None:
             "format": "VARCHAR(16) DEFAULT 'SMALL'",
             "row_span": "INTEGER DEFAULT 1",
             "col_span": "INTEGER DEFAULT 1",
+            "reserved_at": "DATETIME",
+            "reservation_expires_at": "DATETIME",
         },
         "leads": {
             "email": "VARCHAR(128)",
             "website_url": "VARCHAR(512)",
             "distance_miles": "REAL",
+            "website_ok": "BOOLEAN",
+            "website_source": "VARCHAR(16)",
+            "has_street_address": "BOOLEAN DEFAULT 1",
+            "latitude": "REAL",
+            "longitude": "REAL",
+            "geo_tier": "INTEGER",
+        },
+        "lead_contacts": {
+            "follow_up_at": "DATETIME",
+        },
+        "lead_regenerations": {
+            "cooldown_until": "DATETIME",
+            "business_address": "VARCHAR(255)",
+        },
+        "campaign_routes": {
+            "scored_on": "VARCHAR(160) DEFAULT ''",
+            "income_source": "VARCHAR(16) DEFAULT ''",
+            "size_source": "VARCHAR(16) DEFAULT ''",
         },
     }
 
@@ -68,6 +88,33 @@ def _add_missing_columns() -> None:
 
 
 _add_missing_columns()
+
+
+def _rename_niches() -> None:
+    """
+    Niche names are stored on every slot and lead, so renaming one in code leaves
+    the existing rows on the old name. Rewrite them in place; once done, no row
+    matches and this is a no-op.
+    """
+    from sqlalchemy import text
+
+    renames = {
+        "Cerrajero Express 24/7": "Cerrajería",
+        "Pizzería Artesanal": "Pizzería",
+        "Taquería y Mariscos Tradicional": "Taquería y Mariscos",
+        "Panadería y Repostería Fina": "Panadería y Repostería",
+        "Gimnasio Boutique / Fitness": "Gimnasio / Fitness",
+    }
+    with engine.begin() as conn:
+        for table in ("slots", "leads"):
+            for old, new in renames.items():
+                conn.execute(
+                    text(f"UPDATE {table} SET category_name = :new WHERE category_name = :old"),
+                    {"old": old, "new": new},
+                )
+
+
+_rename_niches()
 
 # The assistant answers from the shipped documentation, so it is indexed at
 # startup and re-indexed whenever one of those files changes on disk.
@@ -93,8 +140,6 @@ app.include_router(campaigns.router, prefix="/api")
 app.include_router(campaigns.router, prefix="/api/v1")
 app.include_router(prospecting.router, prefix="/api")
 app.include_router(prospecting.router, prefix="/api/v1")
-app.include_router(curation.router, prefix="/api")
-app.include_router(curation.router, prefix="/api/v1")
 app.include_router(export.router, prefix="/api")
 app.include_router(export.router, prefix="/api/v1")
 app.include_router(assistant.router, prefix="/api")

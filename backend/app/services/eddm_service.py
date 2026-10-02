@@ -228,8 +228,11 @@ ROUTE_MANIFEST_COLUMNS = [
     "BUSINESS_COUNT",
     "ENDORSEMENT",
     "MEDIAN_INCOME",
+    "INCOME_SOURCE",
     "AVG_HOUSEHOLD_SIZE",
+    "SIZE_SOURCE",
     "PROPENSITY_SCORE",
+    "SCORED_ON",
     "DROP_FACILITY",
 ]
 
@@ -250,8 +253,11 @@ def build_route_manifest_csv(selection: dict) -> str:
                 r["business"],
                 "ECRWSS / POSTAL CUSTOMER",
                 int(r["median_income"]) if r["median_income"] else "",
-                r["avg_household_size"] or "",
+                r.get("income_source") or "",
+                round(r["avg_household_size"], 2) if r["avg_household_size"] else "",
+                r.get("size_source") or "",
                 r["score"],
+                " ".join(r.get("scored_on") or []),
                 r["facility"],
             ]
         )

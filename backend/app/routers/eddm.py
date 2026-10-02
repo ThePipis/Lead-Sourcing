@@ -31,8 +31,11 @@ async def scored_routes(
     # The census pass is optional by design: it needs a key, a network and a
     # survey that covers the ZIP. Any of those missing leaves the routes scored
     # on what USPS publishes, which the response reports rather than hiding.
+    enriched = 0
     try:
-        enriched = await census_service.enrich_routes(routes)
+        from .datasources import is_source_enabled
+        if is_source_enabled(None, "CENSUS_ACS"):
+            enriched = await census_service.enrich_routes(routes)
     except Exception as e:  # never let the enrichment take the engine down
         print(f"[EDDM] census enrichment skipped: {e}")
         enriched = 0

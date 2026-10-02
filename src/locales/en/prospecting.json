@@ -1,8 +1,8 @@
 {
   "source": {
     "title": "Prospecting source",
-    "mockDescription": "Simulated prospects geolocated in Eastvale / Corona (92880 / 92882) at $0 cost.",
-    "liveDescription": "Live queries to Yelp Fusion API and Geoapify Places filtering rating ≥ 4.0 in microzone.",
+    "mockDescription": "Live homologated prospecting: Real businesses via Yelp Fusion, OpenStreetMap and Geoapify.",
+    "liveDescription": "Live homologated prospecting: Real businesses via Yelp Fusion, OpenStreetMap and Geoapify.",
     "mockModeBtn": "🧪 Simulation Mode",
     "liveModeBtn": "🌐 Live Search"
   },
@@ -18,23 +18,6 @@
     "oneClient": "client",
     "multiClients": "clients",
     "currentStatus": "Current status of Slot #{{id}}:"
-  },
-  "llama": {
-    "title": "Llama.cpp local LLM",
-    "subtitle": "One-Shot scripts adapted to Ticket ${{ticket}} and Breakeven of {{deals}} {{clientText}}",
-    "spanishBtn": "Español (ES)",
-    "englishBtn": "English (EN)",
-    "hookHeader": "One-Shot Phone Closing Hook ({{lang}}):",
-    "copyPitch": "Copy Script",
-    "copied": "Copied",
-    "regenerateHook": "Regenerate Hook",
-    "generating": "Generating...",
-    "breakevenRoi": "Commercial Breakeven ROI:",
-    "investment": "Investment:",
-    "ticket": "Average Ticket: {{ticket}} USD",
-    "equilibrium": "Breakeven Point: {{deals}} {{clientText}} ({{ratio}} deals cover 100% of ad cost)",
-    "oneNewClient": "new client",
-    "multiNewClients": "new clients"
   },
   "crm": {
     "loading": "Fetching prospects from Yelp Fusion and Geoapify Places in {{city}}…",
@@ -52,15 +35,73 @@
     "contactedBadge": "Contacted",
     "negotiatingBadge": "In Negotiation",
     "rejected": "Rejected",
-    "blocked": "Declined / Blocked",
+    "blocked": "Declined",
     "blockedNotice": "Merchant was released from this slot. Added to exclusion blacklist.",
     "searchReplacement": "Find another merchant / vacancy",
     "searchingReplacement": "Searching for replacement merchant...",
     "assignSlot": "Sold / Assign to Slot #{{id}}",
-    "assigned": "Assigned to Slot"
+    "assigned": "Assigned to Slot",
+    "noEmail": "no published email",
+    "noEmailTitle": "This business publishes no email on its site. Not a search failure.",
+    "noEmailOpportunity": "Direct call",
+    "noEmailOpportunityTitle": "Business with no published email: priority phone outreach or direct mail.",
+    "noWebsite": "no website",
+    "noWebsiteOpportunity": "Direct target",
+    "noWebsiteOpportunityTitle": "Business with no website: high-priority lead with top receptivity to direct mail (EDDM).",
+    "nameLocked": "The name comes from the source and is not editable: it is the key that counts this business’s attempts, passes and quarantine."
   },
   "focus": {
     "banner": "Sourcing a business for the {{category}} niche.",
     "dismiss": "Show all niches"
+  },
+  "regen": {
+    "button": "Other",
+    "historyTitle": "Why did they pass?",
+    "buttonTitle": "Pass on this business and bring another. Not deleted: it returns when its quarantine expires, with its history.",
+    "countTitle": "See why it was passed on last time",
+    "dialogTitle": "Why are you passing on it?",
+    "reasonLabel": "Reason",
+    "noteLabel": "What happened on the call (optional)",
+    "noteLabelRequired": "Explain the reason",
+    "notePlaceholder": "e.g. Spoke to reception; the owner is travelling until the 15th. Call back that week.",
+    "cancel": "Cancel",
+    "confirm": "Pass and bring another",
+    "noReplacement": "No more businesses of this trade in the microzone. The current one stays.",
+    "failed": "Could not pass. Try again.",
+    "restingUntil": "Resting · returns {{when}}",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "permanent": "permanent",
+    "customDaysLabel": "How long in quarantine?"
+  },
+  "contact": {
+    "dialogTitle": "How did the call go?",
+    "outcomeLabel": "What happened",
+    "followUpLabel": "Remind me to call back in",
+    "callInPresetPlaceholder": "Call back in... (select)",
+    "customTimeLabel": "Custom (DD:HH:MM)",
+    "customExactLabel": "Exact time:",
+    "noteLabel": "Call notes",
+    "notePlaceholder": "e.g. Marta answered. The owner is in at 3. Asked about the price of the large box.",
+    "confirm": "Save call",
+    "failed": "Could not save the call. Try again.",
+    "lastCall": "{{outcome}} · {{when}}",
+    "dueNow": "Time to call back · {{outcome}}",
+    "nextCall": "Call back {{when}}",
+    "overdue": "No contact {{since}}",
+    "overdueTitle": "You have not tried again in {{since}}. Open to record the new attempt.",
+    "countTitle_one": "{{count}} contact attempt · see the last one",
+    "countTitle_other": "{{count}} contact attempts · see the last one",
+    "attempts_one": "{{count}} attempt on record",
+    "attempts_other": "{{count}} attempts on record"
+  },
+  "quarantine": {
+    "open": "See businesses in quarantine",
+    "title": "Businesses in quarantine",
+    "placeholder": "Search by name or street… (a fragment is enough)",
+    "empty": "No business is in quarantine right now.",
+    "noMatches": "None match what you typed.",
+    "release": "Release",
+    "failed": "Could not release. Try again."
   }
 }

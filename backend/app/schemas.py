@@ -25,6 +25,8 @@ class SlotBase(BaseModel):
     short_url: Optional[str] = None
     payment_ref: Optional[str] = None
     paid_at: Optional[datetime.datetime] = None
+    reserved_at: Optional[datetime.datetime] = Field(None, alias="reservedAt")
+    reservation_expires_at: Optional[datetime.datetime] = Field(None, alias="reservationExpiresAt")
     amount_collected_usd: Optional[float] = None
     scan_count: int = 0
     notes: Optional[str] = None
@@ -48,6 +50,8 @@ class SlotUpdate(BaseModel):
     offer_headline: Optional[str] = Field(None, alias="offerHeadline")
     payment_ref: Optional[str] = Field(None, alias="paymentRef")
     paid_at: Optional[datetime.datetime] = Field(None, alias="paidAt")
+    reserved_at: Optional[datetime.datetime] = Field(None, alias="reservedAt")
+    reservation_expires_at: Optional[datetime.datetime] = Field(None, alias="reservationExpiresAt")
     amount_collected_usd: Optional[float] = Field(None, alias="amountCollectedUsd")
     scan_count: Optional[int] = Field(None, alias="scanCount")
     slot_type: Optional[str] = Field(None, alias="slotType")
@@ -93,7 +97,6 @@ class CampaignResponse(CampaignBase):
     target_margin: float = 0.58
     paid_count: int = 0
     total_collected_usd: float = 0.0
-    curated_count: int = 0
     production_at: Optional[datetime.datetime] = None
     mailed_at: Optional[datetime.datetime] = None
     archived_at: Optional[datetime.datetime] = None
@@ -101,9 +104,22 @@ class CampaignResponse(CampaignBase):
     # route engine has run; when set, this is the real size of the drop.
     covered_households: int = 0
     selected_routes: int = 0
+    # Whether every selected route was scored on all six variables, and which
+    # ones came up short. A score built on four variables is not the same
+    # product as one built on six, and the difference has to reach the screen.
+    model_complete: bool = False
+    model_missing: List[str] = []
+    model_variables: int = 0
+    model_ack: Optional[str] = None
     slots: List[SlotResponse] = []
     created_at: datetime.datetime
     model_config = ConfigDict(from_attributes=True)
+
+class ModelAck(BaseModel):
+    """The operator states they are continuing with an incomplete model."""
+
+    acknowledged: bool = True
+
 
 class CampaignStatusUpdate(BaseModel):
     """
@@ -136,14 +152,24 @@ class LeadResponse(BaseModel):
     rating: Optional[float] = None
     review_count: Optional[int] = None
     website_url: Optional[str] = None
+    # False when the site does not answer at all; None when there is no site to
+    # ask. A dead domain on a card gets clicked in front of the business owner.
+    website_ok: Optional[bool] = None
+    # "fuente" when a provider gave the URL, "inferido" when it was worked out
+    # from the name and confirmed to answer. The card says which.
+    website_source: Optional[str] = None
+    # False for a trade with no shopfront: Yelp returns an empty street for
+    # those, and what put it in the microzone was its coordinates.
+    has_street_address: bool = True
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    # True for a placeholder that no source vouched for. Never a real business.
+    simulated: bool = False
     category: Optional[str] = None
     source: str
     decision_maker: Optional[str] = None
     decision_maker_title: Optional[str] = None
     avg_ticket_estimated: float
-    hook_en: Optional[str] = None
-    hook_es: Optional[str] = None
-    roi_pitch: Optional[str] = None
     distance_miles: Optional[float] = None
     distance_m: Optional[float] = None
     geo_tier: Optional[int] = None
@@ -159,48 +185,6 @@ class ProspectingQuery(BaseModel):
     target_zip: str = "92880"
     radius_miles: float = 5.0
     category_id: Optional[int] = None
-
-class HouseholdResponse(BaseModel):
-    id: str
-    resident_name: str
-    street_address: str
-    city: str
-    state: str
-    zip5: str
-    zip4: str
-    carrier_route: str
-    walk_sequence: int
-    income_score: float
-    home_ownership_score: float
-    home_age_years: int
-    children_present_score: float
-    vehicles_count: int
-    pet_owner_score: float
-    home_value_score: float
-    composite_score: float
-    selected_for_drop: bool
-    model_config = ConfigDict(from_attributes=True)
-
-class CurationRequest(BaseModel):
-    campaign_id: str
-    target_count: Optional[int] = None
-    mock_mode: bool = True
-    synthetic_pool_size: Optional[int] = None
-    weights: Optional[List[List[float]]] = None
-
-class CurationSummaryResponse(BaseModel):
-    campaign_id: str
-    total_analyzed: int
-    total_selected: int
-    min_score: float
-    max_score: float
-    avg_score: float
-    carrier_route_breakdown: List[Dict[str, object]]
-    category_synergies: List[Dict[str, object]]
-    histogram: List[Dict[str, object]]
-    summary: Optional[Dict[str, Any]] = None
-    top_5k: Optional[List[Dict[str, Any]]] = None
-
 
 class CostSettingsUpdate(BaseModel):
     """Every field optional: the operator edits one line item at a time."""

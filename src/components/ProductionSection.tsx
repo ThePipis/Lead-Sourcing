@@ -53,7 +53,7 @@ export const ProductionSection: React.FC<ProductionSectionProps> = ({
         />
         <Box
           label={t('common:production.households')}
-          value={(campaign.curatedCount ?? 0).toLocaleString('en-US')}
+          value={(campaign.coveredHouseholds ?? 0).toLocaleString('en-US')}
         />
       </dl>
 

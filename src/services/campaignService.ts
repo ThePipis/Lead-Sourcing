@@ -1,4 +1,4 @@
-import { Campaign, SlotState, SlotStatus, SlotFormat, Household, CurationSummary } from '../types.ts';
+import { Campaign, SlotState, SlotStatus, SlotFormat } from '../types.ts';
 import { CLOSED_CATEGORIES } from '../data/categories.ts';
 import { normalizeModularSlots } from '../utils/modularGrid.ts';
 
@@ -7,6 +7,11 @@ const API_BASE = '/api';
 /**
  * Maps a backend SlotResponse (snake_case) to frontend SlotState (camelCase)
  */
+function asUtcIso(iso?: string | null): string | undefined {
+  if (!iso) return undefined;
+  return /Z$|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z';
+}
+
 export function mapBackendSlotToFrontend(raw: any): SlotState {
   const slotNum = raw.slot_number ?? raw.slotNumber;
   const catDef = CLOSED_CATEGORIES.find((c) => c.id === slotNum);
@@ -69,8 +74,9 @@ export function mapBackendSlotToFrontend(raw: any): SlotState {
     gridCol: raw.grid_col ?? raw.gridCol ?? undefined,
     rowSpan,
     colSpan,
-    reservedAt: raw.reserved_at ?? raw.reservedAt ?? undefined,
-    reservationExpiresAt: raw.reservation_expires_at ?? raw.reservationExpiresAt ?? undefined,
+    // Backend stores naive UTC; without the 'Z' the browser would read it as local time.
+    reservedAt: asUtcIso(raw.reserved_at ?? raw.reservedAt),
+    reservationExpiresAt: asUtcIso(raw.reservation_expires_at ?? raw.reservationExpiresAt),
   };
 }
 
@@ -123,13 +129,18 @@ export function mapBackendCampaignToFrontend(raw: any): Campaign {
 
   const slots = normalizeModularSlots(rawSlots);
 
-  const paidSlots = slots.filter(
-    (s) => s.status === 'PAID' && s.format !== 'USPS' && s.slotNumber !== 32,
+  const commercialSlots = slots.filter(
+    (s) => s.format !== 'USPS' && s.slotNumber !== 32 && !s.notes?.includes('Covered by'),
   );
-  const paidCount = raw.paid_count !== undefined && raw.paid_count <= 31 ? raw.paid_count : paidSlots.length;
+  const paidSlots = commercialSlots.filter((s) => s.status === 'PAID');
+  const paidCount =
+    raw.paid_count !== undefined && raw.paid_count <= commercialSlots.length
+      ? raw.paid_count
+      : paidSlots.length;
   const totalCollectedUsd =
-    raw.total_collected_usd ?? paidSlots.reduce((acc, s) => acc + s.priceUsd, 0);
-  const calculatedGrossRevenue = slots.reduce((acc, s) => acc + s.priceUsd, 0);
+    raw.total_collected_usd ??
+    paidSlots.reduce((acc, s) => acc + (s.amountCollectedUsd ?? s.priceUsd ?? 0), 0);
+  const calculatedGrossRevenue = commercialSlots.reduce((acc, s) => acc + (s.priceUsd || 0), 0);
   const targetGrossRevenue = raw.target_gross_revenue ?? calculatedGrossRevenue;
   const unitCostUsd = raw.unit_cost_usd ?? raw.unitCostUsd ?? 0.6;
   const fixedCostUsd = raw.fixed_cost_usd ?? raw.fixedCostUsd ?? 0;
@@ -159,11 +170,14 @@ export function mapBackendCampaignToFrontend(raw: any): Campaign {
     paidCount,
     totalCollectedUsd,
     mode: (raw.mode ?? 'DEMO') as Campaign['mode'],
-    curatedCount: raw.curated_count ?? raw.curatedCount ?? 0,
     productionAt: raw.production_at ?? raw.productionAt ?? undefined,
     mailedAt: raw.mailed_at ?? raw.mailedAt ?? undefined,
     archivedAt: raw.archived_at ?? raw.archivedAt ?? undefined,
     coveredHouseholds: raw.covered_households ?? raw.coveredHouseholds ?? 0,
+    modelComplete: Boolean(raw.model_complete),
+    modelMissing: raw.model_missing ?? [],
+    modelVariables: raw.model_variables ?? 0,
+    modelAck: raw.model_ack ?? null,
     selectedRoutes: raw.selected_routes ?? raw.selectedRoutes ?? 0,
   };
 }
@@ -411,36 +425,17 @@ export async function batchUpdateCampaignSlots(
 }
 
 /**
- * POST /api/curation/execute
- * Invokes the backend algorithmic propensity curation engine atomically,
- * persists the top 5,000 households into SQLite and returns the summary and records.
+ * Record that the operator is continuing on a model that scored short.
+ *
+ * The gate can be passed — a census outage should not strand a drop that is
+ * already sold — but never silently: what was missing is written down and
+ * travels with the campaign.
  */
-export async function executeBackendCuration(
-  campaignId: string,
-  weights?: number[][],
-  targetCount = 5000,
-  mockMode = true,
-): Promise<{ summary: CurationSummary; top_5k: Household[] }> {
-  const response = await fetch(`${API_BASE}/curation/execute`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({
-      campaign_id: campaignId,
-      target_count: targetCount,
-      mock_mode: mockMode,
-      synthetic_pool_size: 15000,
-      weights: weights,
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Curation execution failed: HTTP ${response.status} - ${errText}`);
-  }
-
-  const data = await response.json();
-  return data;
+export async function acknowledgeIncompleteModel(campaignId: string): Promise<Campaign> {
+  const response = await fetch(
+    `${API_BASE}/campaigns/${encodeURIComponent(campaignId)}/model-ack`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+  );
+  if (!response.ok) throw new Error(`Failed to acknowledge model: HTTP ${response.status}`);
+  return mapBackendCampaignToFrontend(await response.json());
 }

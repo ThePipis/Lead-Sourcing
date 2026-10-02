@@ -31,15 +31,15 @@
     "histogramBarTitle": "{{range}}: {{count}} households"
   },
   "comparison": {
-    "eddmTitle": "Traditional EDDM",
-    "eddm1": "Delivery to whole postal routes, no selection.",
-    "eddm2": "Rigid boolean filters over SQL.",
-    "eddm3": "High waste on off-profile households.",
-    "curationTitle": "Algorithmic curation",
-    "curation1": "Multivariate demographic weighting per niche.",
-    "curation2": "Cumulative joint affinity across the 14 businesses.",
-    "curation3": "Exact cut to the 5,000 highest-propensity households.",
-    "continueExport": "Export Postal Manifest →"
+    "eddmTitle": "EDDM blind",
+    "eddm1": "Routes bought by proximity or budget, without looking at who lives there.",
+    "eddm2": "No way to tell the advertiser which neighbourhoods their ad landed in.",
+    "eddm3": "Same postage, worse neighbourhood.",
+    "curationTitle": "EDDM scored",
+    "curation1": "Every route in the ZIP is scored on USPS and Census data: income, ownership, housing type, vehicles, value and household size.",
+    "curation2": "The best-scoring routes are bought until the target is covered, always whole.",
+    "curation3": "The advertiser gets the route list and the neighbourhood profile, and can check it.",
+    "continueExport": "Continue to the manifest →"
   },
   "matrix": {
     "title": "Demographic weight matrix per niche",
@@ -77,7 +77,7 @@
   },
   "routeEngine": {
     "title": "Route engine · who the drop reaches",
-    "intro": "A cooperative drop is delivered by saturation: the carrier leaves it in every box on the route, addressed to 'Postal Customer'. So the choice here is made in ROUTES, not households, and no list needs buying. USPS publishes each route with its official count and median income; the Census adds owner occupancy, single-family share, vehicles and home value.",
+    "intro": "A co-op drop is delivered by saturation: the carrier leaves it in every box on the route, addressed to \"Postal Customer\". So the choice here is made by ROUTE, not by household, and no list has to be bought. USPS supplies each route's official box count; the Census supplies the profile of the households that route runs through. The ZIP's routes are scored on that, and the best ones are bought.",
     "zip": "Target ZIP",
     "target": "Target households",
     "plan": "Compute routes",
@@ -89,7 +89,7 @@
     "enrichment": "Score inputs",
     "hybrid": "USPS + Census",
     "uspsOnly": "USPS only",
-    "hybridNote": "Hybrid score: income, age and household size from USPS per route, plus owner occupancy, single-family share, vehicles and home value from the ACS, joined through the block groups each route crosses and weighted by households.",
+    "hybridNote": "Each route is crossed with the Census block groups it runs through and weighted by households. Income and household size are published by USPS per route, but it leaves them empty in some ZIPs; when that happens the Census figure stands in and is tagged \"ACS\" so the origin is visible.",
     "uspsOnlyNote": "Scored on what USPS publishes per route. The Census enrichment did not answer this time; the weights renormalise themselves so routes stay comparable.",
     "inDrop": "In the drop",
     "route": "Route",
@@ -98,11 +98,49 @@
     "size": "HH size",
     "score": "Score",
     "in": "Yes",
-    "out": "No"
+    "out": "No",
+    "modelTitle": "What was measured on each route",
+    "modelCount": "{{used}} of {{total}} variables with data on every route",
+    "modelChipTitle": "Data on {{routes}} of {{total}} routes",
+    "fromCensus": "Census ACS figure: USPS left this empty in this ZIP",
+    "var": {
+      "income": "Household income",
+      "owner_occupied": "Owner occupied",
+      "single_family": "Single family",
+      "vehicles": "2+ vehicles",
+      "home_value": "Home value",
+      "household_size": "Household size"
+    },
+    "shortTitle": "Careful: the score ran on {{used}} of 6 variables",
+    "shortRoutes": "missing on {{missing}} of {{total}} routes in the drop",
+    "shortBody": "Everything that leaves this screen — the pitch, the manifest, the neighbourhood profile — is presented as six variables. With one missing, the routes were ranked on a different basis than the one you will describe to the advertiser. Re-run the plan: it is nearly always the Census not answering, and it comes back on the second try. If you still need to continue, put it on the record.",
+    "shortRetry": "Re-run the route plan",
+    "shortAck": "Continue on {{used}} of 6 and record it",
+    "ackNote": "Recorded {{stamp}}: this drop was planned on an incomplete model. Do not present it as six variables."
   },
   "routes": {
     "title": "Carrier route breakdown",
     "total": "{{count}} households in total",
     "households": "households"
+  },
+  "census": {
+    "title": {
+      "NO_KEY": "Stop: the Census key is missing",
+      "KEY_REJECTED": "Stop: the Census rejected your key",
+      "UNREACHABLE": "Stop: the Census is not answering",
+      "OK": "Stop: the Census returned no data",
+      "DISABLED": "Stop: the Census is switched off"
+    },
+    "why": "Nothing was planned and nothing was saved. Four of the score's six variables come from the Census — income among them, at 35% — so without it you do not get a worse plan, you get a different product under the same name. Fix it and retry.",
+    "steps": [
+      "Open backend/.env",
+      "Paste the key into CENSUS_API_KEY=",
+      "Save the file",
+      "Press Retry right here (nothing needs restarting)"
+    ],
+    "retry": "Retry",
+    "getKey": "Get a free key",
+    "degraded": "Plan anyway, on fewer variables",
+    "degradedTitle": "Only for a Census outage with the drop already sold. It will be flagged and you cannot present it as six variables."
   }
 }

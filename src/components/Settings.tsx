@@ -33,6 +33,8 @@ interface SettingsProps {
   mode: AppMode;
   /** Reach the costs are computed at. */
   households: number;
+  /** Active campaign ID, used to weight suggested prices by actual slot formats. */
+  campaignId?: string;
   onClose: () => void;
   /** Called after costs change so the open campaign re-reads its costs. */
   onCostsChanged?: () => void;
@@ -57,6 +59,7 @@ export const Settings: React.FC<SettingsProps> = ({
   open,
   mode,
   households,
+  campaignId,
   onClose,
   onCostsChanged,
   onCostsChange,
@@ -82,7 +85,7 @@ export const Settings: React.FC<SettingsProps> = ({
       .then(setSources)
       .catch((e) => setError(String(e)));
 
-    getCosts(mode, households)
+    getCosts(mode, households, campaignId)
       .then((next) => {
         setCosts(next);
         onCostsChange?.(next.unitCost, next.fixedCost);
@@ -97,7 +100,7 @@ export const Settings: React.FC<SettingsProps> = ({
         }
       })
       .catch((e) => setCostsError(String(e)));
-  }, [open, mode, households, onCostsChange]);
+  }, [open, mode, households, campaignId, onCostsChange]);
 
   useEffect(() => {
     if (!open) return;
@@ -133,7 +136,7 @@ export const Settings: React.FC<SettingsProps> = ({
     costsTimer.current = window.setTimeout(async () => {
       setCostsWriting(true);
       try {
-        const next = await updateCosts(mode, households, patch);
+        const next = await updateCosts(mode, households, patch, campaignId);
         setCosts(next);
         onCostsChange?.(next.unitCost, next.fixedCost);
         onCostsChanged?.();

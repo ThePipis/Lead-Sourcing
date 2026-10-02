@@ -78,8 +78,8 @@
     "resetLayout": "Reset layout",
     "resetLayoutTitle": "Sends every niche back to its original box (dentistry to the hero, and so on). Businesses travel with their niche: nothing is lost.",
     "resetWipe": "Blank the card",
-    "resetWipeTitle": "Back to day one: every niche in its home box and every box empty, with no advertisers and no payments. Practice file only.",
-    "resetWipeConfirm": "Empty all boxes?",
+    "resetWipeTitle": "Back to day one: every niche in its home box and every box empty, with no advertisers and no payments. It also deletes this campaign's call history, quarantines and cached prospects. Practice file only.",
+    "resetWipeConfirm": "Empty the card and delete calls, quarantines and cache?",
     "resetWipeYes": "YES, EMPTY",
     "resetWipeNo": "NO",
     "autofill": "Fill all slots",
@@ -161,7 +161,7 @@
     "unlock": "Unlock",
     "unlockTitle": "Unlock payment and return to Reserved",
     "hook": "Hook",
-    "assign": "Assign to {{id}}"
+    "assign": "Assign"
   },
   "status": {
     "vacant": "Vacant",
@@ -173,4 +173,3 @@
     "changeStatusTooltip": "Change status"
   }
 }
-

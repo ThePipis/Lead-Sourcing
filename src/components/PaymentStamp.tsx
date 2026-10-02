@@ -10,6 +10,8 @@ import {
 
 interface PaymentStampProps {
   slot: SlotState;
+  /** Part payment: separates the box without closing it. */
+  deposit?: boolean;
   onConfirm: (record: { paymentRef: string; amountCollectedUsd: number; paidAt: string }) => void;
   onCancel: () => void;
   isSaving: boolean;
@@ -34,6 +36,7 @@ const OTHER = '__other__';
 
 export const PaymentStamp: React.FC<PaymentStampProps> = ({
   slot,
+  deposit = false,
   onConfirm,
   onCancel,
   isSaving,
@@ -46,8 +49,11 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
 
   const [method, setMethod] = useState<string>(PAYMENT_METHODS[0]);
   const [reference, setReference] = useState<string>('Zelle');
+  const fullPrice = slot.priceUsd || (slot.status === 'RESERVED' ? discountedPrice : listPrice);
+  const alreadyPaid = slot.amountCollectedUsd || 0;
+  const halfPrice = Math.round(fullPrice / 2);
   const [amount, setAmount] = useState<string>(
-    String(slot.priceUsd || (slot.status === 'RESERVED' ? discountedPrice : listPrice))
+    String(deposit ? Math.max(0, Math.min(halfPrice, fullPrice - alreadyPaid)) : fullPrice),
   );
   const [date, setDate] = useState<string>(todayIso());
   
@@ -86,7 +92,9 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
   const refValid = reference.trim().length > 0;
   const canSubmit = amountValid && refValid && !isSaving;
   const isDiscounted72h = amountValid && parsedAmount === discountedPrice && discountDiff > 0;
-  const belowList = amountValid && !isDiscounted72h && parsedAmount < listPrice;
+  // Un abono está por debajo del precio a propósito: avisarlo sería una
+  // falsa alarma, y las falsas alarmas enseñan a ignorar las de verdad.
+  const belowList = !deposit && amountValid && !isDiscounted72h && parsedAmount < listPrice;
   const aboveList = amountValid && parsedAmount > listPrice;
 
   const handleMethodChange = (newMethod: string) => {
@@ -117,10 +125,10 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
 
   const format = slot.format || 'SMALL';
   const formatBadge = {
-    SMALL: { label: 'Chico (1×1)', color: 'bg-secondary text-ink-dim border-rule', price: 350 },
-    MEDIUM: { label: 'Mediano (1×2)', color: 'bg-live/15 text-live border-live/30 font-bold', price: 650 },
-    LARGE: { label: 'Grande (2×2)', color: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 font-black', price: 1200 },
-    USPS: { label: 'USPS Postal', color: 'bg-secondary text-muted-foreground border-rule', price: 0 },
+    SMALL: { label: 'Chico (1×1 · 2.8" × 1.8")', color: 'bg-secondary text-ink-dim border-rule', price: 350 },
+    MEDIUM: { label: 'Mediano (1×2 · 2.8" × 3.6")', color: 'bg-live/15 text-live border-live/30 font-bold', price: 650 },
+    LARGE: { label: 'Grande (2×2 · 5.6" × 3.6")', color: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 font-black', price: 1200 },
+    USPS: { label: 'USPS Postal (2.8" × 1.8")', color: 'bg-secondary text-muted-foreground border-rule', price: 0 },
   }[format];
 
   return (
@@ -147,16 +155,20 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 id="payment-modal-title" className="font-mono text-xs font-black uppercase tracking-wider text-live">
-                  {t('common:payment.title', {
-                    slot: String(slot.displayNumber ?? slot.slotNumber).padStart(2, '0'),
-                  })}
+                  {deposit
+                    ? `REGISTRO DE ABONO · ESPACIO ${String(slot.displayNumber ?? slot.slotNumber).padStart(2, '0')}`
+                    : t('common:payment.title', {
+                        slot: String(slot.displayNumber ?? slot.slotNumber).padStart(2, '0'),
+                      })}
                 </h3>
                 <span className={`text-[0.62rem] px-1.5 py-0.5 rounded border ${formatBadge.color}`}>
                   {formatBadge.label}
                 </span>
               </div>
               <p className="text-[0.68rem] text-muted-foreground">
-                Comprobante de transacción y bloqueo de espacio publicitario
+                {deposit
+                  ? `Abono parcial: el espacio sigue reservado${alreadyPaid > 0 ? ` · ya abonado $${alreadyPaid}` : ''}`
+                  : 'Comprobante de transacción y bloqueo de espacio publicitario'}
               </p>
             </div>
           </div>
@@ -273,6 +285,20 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
                 <span>⚡ Oferta 72h: ${discountedPrice}</span>
                 <span className="text-[0.6rem] font-normal opacity-80">(-${discountDiff})</span>
               </button>
+              {deposit && (
+                <button
+                  type="button"
+                  onClick={() => setAmount(String(halfPrice))}
+                  className={`px-2 py-1 text-[0.68rem] font-mono font-bold rounded border transition-colors cursor-pointer flex items-center gap-1 ${
+                    parsedAmount === halfPrice
+                      ? 'border-due bg-due/15 text-due ring-1 ring-due/30'
+                      : 'border-rule bg-secondary/60 text-muted-foreground hover:text-foreground hover:bg-secondary'
+                  }`}
+                  title="Separar el espacio con la mitad del importe"
+                >
+                  <span>50%: ${halfPrice}</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setAmount(String(listPrice))}
@@ -343,7 +369,7 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
         {/* Footer Actions: Fast Enter shortcut and Sellar Button */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-rule bg-secondary/80 px-4 py-3 select-none">
           <div className="flex items-center gap-1.5 font-mono text-[0.65rem] text-muted-foreground">
-            <span>↵ Presiona <span className="font-bold text-foreground">Enter</span> para sellar</span>
+            <span>↵ Presiona <span className="font-bold text-foreground">Enter</span> para {deposit ? 'registrar el abono' : 'sellar'}</span>
             <span className="text-muted-foreground/40">·</span>
             <span><span className="font-bold text-foreground">Esc</span> para cancelar</span>
           </div>
@@ -371,7 +397,7 @@ export const PaymentStamp: React.FC<PaymentStampProps> = ({
               ) : (
                 <>
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>{t('common:payment.confirm')}</span>
+                  <span>{deposit ? 'Registrar abono' : t('common:payment.confirm')}</span>
                 </>
               )}
             </button>

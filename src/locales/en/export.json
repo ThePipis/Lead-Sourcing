@@ -71,5 +71,28 @@
     "action": "Stamp delivery to printer",
     "done": "Delivered",
     "needDownload": "Run the curation and download the manifest before stamping."
+  },
+  "routeManifest": {
+    "title": "Route Manifest (EDDM)",
+    "badge": "GOES TO THE PRINTER",
+    "description": "This is the operative file. It carries the carrier routes bought, their codes and how many pieces go to each. It is all the printer and the post office need: the carrier already knows which boxes are on the route.",
+    "summary": "{{routes}} routes · {{households}} residential boxes",
+    "noRoutes": "No routes selected yet. Run the route engine in the previous section.",
+    "loading": "Reading the campaign's routes…",
+    "download": "Download route manifest"
+  },
+  "profile": {
+    "title": "Neighbourhood profile",
+    "badge": "INTERNAL · NOT A MAILING LIST",
+    "description": "This is your evidence for the sale, not a postal file. It comes from the Riverside County parcel roll — public record — and describes the housing on the routes you bought. Show it to the advertiser: they can check it parcel by parcel.",
+    "loading": "Reading the county parcel roll…",
+    "noRoutes": "Select routes first: with no routes there is no neighbourhood to describe.",
+    "unavailable": "The county did not answer. Better no figure than an invented one: try again later.",
+    "singleFamily": "Single family",
+    "medianValue": "Median value",
+    "medianAge": "Median age",
+    "sampled": "Parcels measured",
+    "years": "{{count}} years",
+    "footnote": "The drop is {{households}} boxes across {{routes}} routes, per USPS: that is the number printed and billed. The ratios above were measured over {{sampled}} parcels from the roll (year built available for {{coverage}} of them). Source: {{source}}."
   }
 }

@@ -11,10 +11,11 @@ export const MODULAR_PRICES: Record<SlotFormat, number> = {
 export const RESERVATION_HOLD_HOURS = 72;
 export const RESERVATION_HOLD_MS = RESERVATION_HOLD_HOURS * 60 * 60 * 1000;
 
+// Flat $50 off every list price while the 72h hold is active.
 export const RESERVATION_72H_DISCOUNTS: Record<SlotFormat, number> = {
   SMALL: 50,
-  MEDIUM: 100,
-  LARGE: 200,
+  MEDIUM: 50,
+  LARGE: 50,
   USPS: 0,
 };
 
@@ -130,13 +131,16 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
         }
       }
 
-      const rowSpan = format === 'LARGE' || format === 'MEDIUM' ? 2 : 1;
-      const colSpan = format === 'LARGE' ? 2 : 1;
+      const isCovered = Boolean(notes?.includes('Covered by'));
+      const rowSpan = isCovered ? 1 : format === 'LARGE' || format === 'MEDIUM' ? 2 : 1;
+      const colSpan = isCovered ? 1 : format === 'LARGE' ? 2 : 1;
 
-      const defaultPrice =
-        MODULAR_PRICES[format] || (format === 'LARGE' ? 1200 : format === 'MEDIUM' ? 650 : 350);
-      const priceUsd =
-        typeof existing.priceUsd === 'number' && !isNaN(existing.priceUsd) && existing.priceUsd > 0
+      const defaultPrice = isCovered
+        ? 0
+        : MODULAR_PRICES[format] || (format === 'LARGE' ? 1200 : format === 'MEDIUM' ? 650 : 350);
+      const priceUsd = isCovered
+        ? 0
+        : typeof existing.priceUsd === 'number' && !isNaN(existing.priceUsd) && existing.priceUsd > 0
           ? existing.priceUsd
           : defaultPrice;
 
@@ -150,8 +154,17 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
         colSpan,
         priceUsd,
         notes,
+        status: isCovered ? ('VACANT' as SlotStatus) : existing.status,
+        businessName: isCovered ? undefined : existing.businessName,
+        contactPerson: isCovered ? undefined : existing.contactPerson,
+        phone: isCovered ? undefined : existing.phone,
+        email: isCovered ? undefined : existing.email,
+        website: isCovered ? undefined : existing.website,
+        amountCollectedUsd: isCovered ? undefined : existing.amountCollectedUsd,
+        paidAt: isCovered ? undefined : existing.paidAt,
+        paymentRef: isCovered ? undefined : existing.paymentRef,
         categoryName: existing.categoryName || cat.name,
-        offerHeadline: existing.offerHeadline || cat.defaultHeadline,
+        offerHeadline: isCovered ? undefined : (existing.offerHeadline || cat.defaultHeadline),
       };
     }
 
@@ -178,10 +191,21 @@ export function normalizeModularSlots(existingSlots: SlotState[]): SlotState[] {
 }
 
 /**
+ * A cell can be swallowed by a slot's merge only if it is free, or already belongs
+ * to the same business. Absorbing another client's cell would erase their sale.
+ */
+function isAbsorbable(cell: SlotState, owner: SlotState): boolean {
+  if (cell.status === 'VACANT') return true;
+  const own = owner.businessName?.trim().toLowerCase();
+  return Boolean(own) && cell.businessName?.trim().toLowerCase() === own;
+}
+
 /**
- * For a bottom slot (row 2 or 4), finds the best available column to the right (col + 1 .. 4)
- * that can host a MEDIUM (1x2) slot by placing the Mediano in that column and swapping
- * that column's top cell into this bottom slot, respecting sequential left-to-right negotiation.
+ * Finds a column that can host this slot as a MEDIUM (1x2) when it cannot grow in place:
+ * the Mediano goes into that column and that column's top cell moves into this slot's cell.
+ * Columns to the right are tried first (left-to-right negotiation order); a bottom slot with
+ * nothing free to its right may still grow upward in its own column if the cell above is free;
+ * columns to the left come last, for a slot at the right edge (e.g. above the USPS zone).
  */
 export function findBottomSlotMediumTarget(
   slot: SlotState,
@@ -196,11 +220,14 @@ export function findBottomSlotMediumTarget(
   const col = slot.gridCol ?? def?.gridCol;
   const side = slot.side ?? def?.side;
   if (!row || !col) return null;
-  if (row !== 2 && row !== 4) return null;
 
-  const rowTop = row - 1;
+  const isBottom = row === 2 || row === 4;
+  const rowTop = isBottom ? row - 1 : row;
+  const candidateCols = [1, 2, 3, 4].filter((c) => c > col);
+  if (isBottom) candidateCols.push(col);
+  for (let c = col - 1; c >= 1; c--) candidateCols.push(c);
 
-  for (let candCol = col + 1; candCol <= 4; candCol++) {
+  for (const candCol of candidateCols) {
     const candTop = slots.find((s) => {
       const d = MODULAR_GRID_DEFS.find((item) => item.slotNumber === s.slotNumber);
       const sr = s.gridRow ?? d?.gridRow;
@@ -214,10 +241,18 @@ export function findBottomSlotMediumTarget(
       const sr = s.gridRow ?? d?.gridRow;
       const sc = s.gridCol ?? d?.gridCol;
       const ss = s.side ?? d?.side;
-      return ss === side && sr === row && sc === candCol;
+      return ss === side && sr === rowTop + 1 && sc === candCol;
     });
 
     if (!candTop || !candBottom) continue;
+
+    // Growing upward in place: the slot itself becomes the covered half and the cell above
+    // takes its data, so that cell is overwritten and must be free.
+    if (candCol === col) {
+      if (candTop.format !== 'SMALL' || candTop.notes?.startsWith('Covered by')) continue;
+      if (!isAbsorbable(candTop, slot)) continue;
+      return { targetCol: candCol, destTop: candTop, destBottom: candBottom };
+    }
 
     // Cannot involve USPS technical zone
     if (candTop.format === 'USPS' || candTop.slotNumber === 32 || candBottom.format === 'USPS' || candBottom.slotNumber === 32) continue;
@@ -239,43 +274,38 @@ export function findBottomSlotMediumTarget(
 }
 
 /**
- * Checks if a slot can be merged vertically into a MEDIUM (1x2) slot.
- * - Top slots (rows 1 & 3): merges in-place downwards with the row below it.
- * - Bottom slots (rows 2 & 4): moves to the next column to the right, swapping with
- *   that column's top cell, respecting sequential left-to-right negotiation order.
+ * True when a top slot (row 1 or 3) can grow downward in place: the cell below is a free chico.
  */
-export function canMergeVertical(slot: SlotState, slots: SlotState[]): boolean {
-  if (slot.format === 'MEDIUM' || slot.format === 'LARGE' || slot.format === 'USPS') return false;
+function canGrowDownInPlace(slot: SlotState, slots: SlotState[]): boolean {
   const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === slot.slotNumber);
   const row = slot.gridRow ?? def?.gridRow;
   const col = slot.gridCol ?? def?.gridCol;
   const side = slot.side ?? def?.side;
-  if (!row || !col) return false;
+  if (row !== 1 && row !== 3) return false;
+  const partner = slots.find((s) => {
+    const d = MODULAR_GRID_DEFS.find((item) => item.slotNumber === s.slotNumber);
+    return (s.side ?? d?.side) === side && (s.gridCol ?? d?.gridCol) === col && (s.gridRow ?? d?.gridRow) === row + 1;
+  });
+  if (!partner) return false;
+  if (partner.format === 'USPS' || partner.format === 'LARGE' || partner.format === 'MEDIUM') return false;
+  if (partner.notes?.startsWith('Covered by')) return false;
+  return isAbsorbable(partner, slot);
+}
+
+/**
+ * Checks if a slot can be merged vertically into a MEDIUM (1x2) slot.
+ * - Top slots (rows 1 & 3): grow downward in place; if the cell below is taken,
+ *   relocate to the next free column to the right.
+ * - Bottom slots (rows 2 & 4): relocate to the next free column to the right,
+ *   or grow upward in place when nothing to the right is free.
+ */
+export function canMergeVertical(slot: SlotState, slots: SlotState[]): boolean {
+  if (slot.format === 'MEDIUM' || slot.format === 'LARGE' || slot.format === 'USPS') return false;
+  if (!(slot.gridRow ?? MODULAR_GRID_DEFS.find((d) => d.slotNumber === slot.slotNumber)?.gridRow)) return false;
   if (slot.notes?.startsWith('Covered by')) return false;
   if (slot.status === 'PAID') return false;
 
-  // Case 1: Top half (row 1 or 3) merges downward with row 2 or 4 in the same column
-  if (row === 1 || row === 3) {
-    const targetRow = row + 1;
-    const partner = slots.find(
-      (s) => {
-        const d = MODULAR_GRID_DEFS.find((item) => item.slotNumber === s.slotNumber);
-        return (s.side ?? d?.side) === side && (s.gridCol ?? d?.gridCol) === col && (s.gridRow ?? d?.gridRow) === targetRow;
-      }
-    );
-
-    if (!partner) return false;
-    if (partner.format === 'USPS' || partner.format === 'LARGE' || partner.format === 'MEDIUM') return false;
-    if (partner.notes?.startsWith('Covered by')) return false;
-    return partner.status === 'VACANT' || partner.businessName === slot.businessName;
-  }
-
-  // Case 2: Bottom half (row 2 or 4) shifts into the next column to the right
-  if (row === 2 || row === 4) {
-    return findBottomSlotMediumTarget(slot, slots) !== null;
-  }
-
-  return false;
+  return canGrowDownInPlace(slot, slots) || findBottomSlotMediumTarget(slot, slots) !== null;
 }
 
 export interface LargeOriginCandidate {
@@ -283,6 +313,12 @@ export interface LargeOriginCandidate {
   originCol: number;
   coveredCoords: { r: number; c: number }[];
   anchorSlot: SlotState;
+  /** True when the 2x2 sits in a free block to the right instead of around the slot itself. */
+  relocated: boolean;
+  /** Unpaid clients inside the block, each moved to a free chico outside it. */
+  moves: { from: SlotState; to: SlotState }[];
+  /** Medianos inside the block, each moved whole onto a column of two free chicos. */
+  mediumMoves: { from: SlotState; top: SlotState; bottom: SlotState }[];
 }
 
 /**
@@ -313,83 +349,147 @@ export function findBestLargeOrigin(
     col === 2 ? [2, 1] :
     col === 3 ? [3, 2] :
     [3];
+  // Same rule as the Mediano: if no block around the slot is free, a chico may move its
+  // Grande into the next free block to the right, or else to the left.
+  if (slot.format === 'SMALL') {
+    for (let c = col + 1; c <= 3; c++) candidateCols.push(c);
+    for (let c = col - 2; c >= 1; c--) candidateCols.push(c);
+  }
 
-  for (const candCol of candidateCols) {
-    const coveredCoords = [
-      { r: originRow, c: candCol },
-      { r: originRow + 1, c: candCol },
-      { r: originRow, c: candCol + 1 },
-      { r: originRow + 1, c: candCol + 1 },
-    ];
+  // First pass: a block with no other client in it. Second pass: a block whose unpaid
+  // clients can each be moved to a free chico elsewhere on the face, so five empty
+  // boxes are not left unusable because one prospect sits in the only 2x2.
+  for (const allowMoves of [false, true]) {
+    for (const candCol of candidateCols) {
+      const coveredCoords = [
+        { r: originRow, c: candCol },
+        { r: originRow + 1, c: candCol },
+        { r: originRow, c: candCol + 1 },
+        { r: originRow + 1, c: candCol + 1 },
+      ];
 
-    const quadrantSlots = slots.filter(
-      (s) =>
-        s.side === slot.side &&
-        coveredCoords.some((coord) => coord.r === s.gridRow && coord.c === s.gridCol)
-    );
-
-    if (quadrantSlots.length < 4) continue;
-
-    // 1. Cannot contain USPS technical zone (slot 32)
-    if (quadrantSlots.some((s) => s.format === 'USPS' || s.slotNumber === 32)) {
-      continue;
-    }
-
-    // 2. Cannot contain any slot already in format LARGE (or large covered slot)
-    if (
-      quadrantSlots.some(
+      const quadrantSlots = slots.filter(
         (s) =>
-          s.format === 'LARGE' ||
-          (s.rowSpan === 2 && s.colSpan === 2) ||
-          s.notes?.includes('Covered by large')
-      )
-    ) {
-      continue;
-    }
+          s.side === slot.side &&
+          coveredCoords.some((coord) => coord.r === s.gridRow && coord.c === s.gridCol)
+      );
 
-    // 3. Cannot contain any PAID slot
-    if (quadrantSlots.some((s) => s.status === 'PAID')) {
-      continue;
-    }
+      if (quadrantSlots.length < 4) continue;
 
-    // 4. Must not alter or destroy any OTHER existing merged slot (e.g. MEDIUM)
-    // Every slot in the quadrant must either:
-    // - Be the slot being expanded
-    // - Be covered by the slot being expanded (if slot was already MEDIUM)
-    // - Be an atomic SMALL slot with no 'Covered by' notes!
-    const destroysOtherMergedSlot = quadrantSlots.some((s) => {
-      if (s.slotNumber === slot.slotNumber) return false;
-      if (s.notes?.includes(`#${slot.slotNumber}`)) return false;
-      if (s.format === 'MEDIUM' || s.notes?.startsWith('Covered by')) {
-        return true;
+      // 1. Cannot contain USPS technical zone (slot 32)
+      if (quadrantSlots.some((s) => s.format === 'USPS' || s.slotNumber === 32)) {
+        continue;
       }
-      return false;
-    });
 
-    if (destroysOtherMergedSlot) {
-      continue;
+      // 2. Cannot contain any slot already in format LARGE (or large covered slot)
+      if (
+        quadrantSlots.some(
+          (s) =>
+            s.format === 'LARGE' ||
+            (s.rowSpan === 2 && s.colSpan === 2) ||
+            s.notes?.includes('Covered by large')
+        )
+      ) {
+        continue;
+      }
+
+      // 3. Cannot contain any PAID slot
+      if (quadrantSlots.some((s) => s.status === 'PAID')) {
+        continue;
+      }
+
+      // 4. Never destroy another merged slot. A Mediano is the operator's decision
+      // (the chico is the minimum unit), so one inside the block is moved whole onto
+      // a column of two free chicos instead of being absorbed. A Mediano always spans
+      // both rows of its block, so if its top is inside, its covered half is too.
+      const ownerOf = (s: SlotState) => Number(s.notes?.match(/#(\d+)/)?.[1]);
+      const otherMediums = quadrantSlots.filter(
+        (s) => s.slotNumber !== slot.slotNumber && s.format === 'MEDIUM' && !s.notes,
+      );
+      const strayCovered = quadrantSlots.some(
+        (s) =>
+          s.notes?.startsWith('Covered by') &&
+          ownerOf(s) !== slot.slotNumber &&
+          !otherMediums.some((m) => m.slotNumber === ownerOf(s)),
+      );
+      if (strayCovered) continue;
+      if (otherMediums.length > 0 && !allowMoves) continue;
+
+      // Anchor slot is the top-left slot of this 2x2
+      const anchorSlot =
+        quadrantSlots.find((s) => s.gridRow === originRow && s.gridCol === candCol) ?? slot;
+      const relocated = !coveredCoords.some((c) => c.r === slot.gridRow && c.c === slot.gridCol);
+      // A relocated Grande gives its anchor's client the clicked cell as a chico; a
+      // Mediano anchor cannot shrink into it.
+      if (relocated && otherMediums.some((m) => m.slotNumber === anchorSlot.slotNumber)) continue;
+
+      const inQuadrant = (s: SlotState) => coveredCoords.some((c) => c.r === s.gridRow && c.c === s.gridCol);
+      const isFreeChico = (s?: SlotState) =>
+        !!s &&
+        s.side === slot.side &&
+        s.slotNumber !== slot.slotNumber &&
+        s.slotNumber !== 32 &&
+        s.format === 'SMALL' &&
+        s.status === 'VACANT' &&
+        !s.businessName?.trim() &&
+        !s.notes?.startsWith('Covered by') &&
+        !inQuadrant(s);
+      const used = new Set<number>();
+      const mediumMoves: LargeOriginCandidate['mediumMoves'] = [];
+      for (const m of otherMediums) {
+        const columns = slots
+          .filter((t) => isFreeChico(t) && !used.has(t.slotNumber) && (t.gridRow === 1 || t.gridRow === 3))
+          .map((top) => ({
+            top,
+            bottom: slots.find(
+              (b) => b.side === slot.side && b.gridRow === (top.gridRow ?? 0) + 1 && b.gridCol === top.gridCol,
+            ),
+          }))
+          .filter((c) => isFreeChico(c.bottom) && !used.has(c.bottom!.slotNumber))
+          .sort(
+            (x, y) =>
+              (x.top.gridRow === originRow ? 0 : 1) - (y.top.gridRow === originRow ? 0 : 1) ||
+              Math.abs((x.top.gridCol ?? 0) - (m.gridCol ?? 0)) - Math.abs((y.top.gridCol ?? 0) - (m.gridCol ?? 0)),
+          );
+        const dest = columns[0];
+        if (!dest) break;
+        used.add(dest.top.slotNumber);
+        used.add(dest.bottom!.slotNumber);
+        mediumMoves.push({ from: m, top: dest.top, bottom: dest.bottom! });
+      }
+      if (mediumMoves.length < otherMediums.length) continue;
+
+      // 5. Every other cell must be free or already this slot's business: the old
+      // "at most one business" rule let a vacant slot swallow a neighbour's client
+      // and take over its name. A relocated Grande hands its anchor's client the
+      // clicked slot's cell, so that one never needs a free box.
+      const displaced = quadrantSlots.filter(
+        (s) =>
+          s.slotNumber !== slot.slotNumber &&
+          !isAbsorbable(s, slot) &&
+          !otherMediums.some((m) => m.slotNumber === s.slotNumber) &&
+          !(relocated && s.slotNumber === anchorSlot.slotNumber),
+      );
+      if (displaced.length > 0 && !allowMoves) continue;
+
+      const freeCells = slots
+        .filter((s) => isFreeChico(s) && !used.has(s.slotNumber))
+        .sort((a, b) => {
+          const inBlock = (s: SlotState) => ((s.gridRow ?? 0) >= originRow && (s.gridRow ?? 0) <= originRow + 1 ? 0 : 1);
+          return inBlock(a) - inBlock(b) || (a.gridRow ?? 0) - (b.gridRow ?? 0) || (a.gridCol ?? 0) - (b.gridCol ?? 0);
+        });
+      if (displaced.length > freeCells.length) continue;
+
+      return {
+        originRow,
+        originCol: candCol,
+        coveredCoords,
+        anchorSlot,
+        relocated,
+        moves: displaced.map((from, i) => ({ from, to: freeCells[i] })),
+        mediumMoves,
+      };
     }
-
-    // 5. At most one distinct active business name across all 4 cells
-    const activeBusinesses = new Set(
-      quadrantSlots
-        .filter((s) => s.businessName && s.status !== 'VACANT')
-        .map((s) => s.businessName?.trim().toLowerCase())
-    );
-    if (activeBusinesses.size > 1) {
-      continue;
-    }
-
-    // Anchor slot is the top-left slot of this 2x2
-    const anchorSlot =
-      quadrantSlots.find((s) => s.gridRow === originRow && s.gridCol === candCol) ?? slot;
-
-    return {
-      originRow,
-      originCol: candCol,
-      coveredCoords,
-      anchorSlot,
-    };
   }
 
   return null;
@@ -424,7 +524,7 @@ export function mergeModularSlot(
     // SUB-CASE 1: TOP SLOT (gridRow === 1 or 3)
     // Merges downward with partner in the same column
     // -------------------------------------------------------------
-    if (row === 1 || row === 3) {
+    if ((row === 1 || row === 3) && canGrowDownInPlace(primary, normalized)) {
       const partnerRow = row + 1;
       const partner = normalized.find(
         (s) => s.side === side && s.gridCol === col && s.gridRow === partnerRow && s.slotNumber !== primarySlotNum
@@ -448,7 +548,20 @@ export function mergeModularSlot(
           return {
             ...s,
             format: 'MEDIUM',
+            rowSpan: 1,
+            colSpan: 1,
             status: 'VACANT',
+            priceUsd: 0,
+            businessName: undefined,
+            contactPerson: undefined,
+            phone: undefined,
+            email: undefined,
+            website: undefined,
+            logoUrl: undefined,
+            offerHeadline: undefined,
+            amountCollectedUsd: undefined,
+            paidAt: undefined,
+            paymentRef: undefined,
             notes: `Covered by slot #${primarySlotNum}`,
           };
         }
@@ -457,11 +570,11 @@ export function mergeModularSlot(
     }
 
     // -------------------------------------------------------------
-    // SUB-CASE 2: BOTTOM SLOT (gridRow === 2 or 4)
+    // SUB-CASE 2: RELOCATION (bottom slot, or top slot whose cell below is taken)
     // Swaps with top slot of the next available column to the right,
     // placing the Mediano in that column and keeping the chico in this row
     // -------------------------------------------------------------
-    if (row === 2 || row === 4) {
+    {
       const target = findBottomSlotMediumTarget(primary, normalized);
       if (!target) return normalized;
 
@@ -489,6 +602,8 @@ export function mergeModularSlot(
         paidAt: primary.paidAt,
         amountCollectedUsd: primary.amountCollectedUsd,
         scanCount: primary.scanCount,
+        reservedAt: primary.reservedAt,
+        reservationExpiresAt: primary.reservationExpiresAt,
       };
 
       // destTop data
@@ -509,6 +624,8 @@ export function mergeModularSlot(
         paidAt: destTop.paidAt,
         amountCollectedUsd: destTop.amountCollectedUsd,
         scanCount: destTop.scanCount,
+        reservedAt: destTop.reservedAt,
+        reservationExpiresAt: destTop.reservationExpiresAt,
       };
 
       const primaryDef = MODULAR_GRID_DEFS.find((d) => d.slotNumber === primary.slotNumber);
@@ -538,6 +655,7 @@ export function mergeModularSlot(
             rowSpan: 1,
             colSpan: 1,
             status: 'VACANT',
+            priceUsd: 0,
             businessName: undefined,
             contactPerson: undefined,
             phone: undefined,
@@ -545,6 +663,9 @@ export function mergeModularSlot(
             website: undefined,
             logoUrl: undefined,
             offerHeadline: undefined,
+            amountCollectedUsd: undefined,
+            paidAt: undefined,
+            paymentRef: undefined,
             notes: `Covered by slot #${destTop.slotNumber}`,
           };
         }
@@ -593,19 +714,9 @@ export function mergeModularSlot(
 
     const { originRow, originCol, coveredCoords, anchorSlot } = origin;
 
-    // Pick advertiser data from whichever slot had active business data
-    const slotWithData =
-      primary.businessName && primary.status !== 'VACANT'
-        ? primary
-        : anchorSlot.businessName && anchorSlot.status !== 'VACANT'
-        ? anchorSlot
-        : normalized.find(
-            (s) =>
-              s.side === side &&
-              coveredCoords.some((c) => c.r === s.gridRow && c.c === s.gridCol) &&
-              s.businessName &&
-              s.status !== 'VACANT'
-          ) ?? primary;
+    // The slot the operator clicked keeps its category and client: findBestLargeOrigin
+    // only takes free cells or this business, and moves any other unpaid client out.
+    const slotWithData = primary;
 
     const mainSlotNumber = anchorSlot.slotNumber;
     const existingLg = normalized.find((s) => s.format === 'LARGE' && s.priceUsd);
@@ -630,6 +741,8 @@ export function mergeModularSlot(
           paidAt: slotWithData.paidAt,
           amountCollectedUsd: slotWithData.amountCollectedUsd,
           scanCount: slotWithData.scanCount,
+          reservedAt: slotWithData.reservedAt,
+          reservationExpiresAt: slotWithData.reservationExpiresAt,
           format: 'LARGE',
           rowSpan: 2,
           colSpan: 2,
@@ -639,15 +752,82 @@ export function mergeModularSlot(
           notes: undefined,
         };
       }
+      // Relocated Grande: the clicked chico stays where it was and takes over the anchor's
+      // category, so no category disappears from the card beyond the three covered cells.
+      if (origin.relocated && s.slotNumber === primary.slotNumber) {
+        return {
+          ...copyAdvertiserFields(anchorSlot, s),
+          format: 'SMALL',
+          rowSpan: 1,
+          colSpan: 1,
+          priceUsd: primary.priceUsd || MODULAR_PRICES.SMALL,
+          notes: undefined,
+        };
+      }
+      // A Mediano inside the block lands whole on a column of two free chicos.
+      const medTop = origin.mediumMoves.find((m) => m.top.slotNumber === s.slotNumber);
+      if (medTop) {
+        return {
+          ...copyAdvertiserFields(medTop.from, s),
+          format: 'MEDIUM',
+          rowSpan: 2,
+          colSpan: 1,
+          priceUsd: medTop.from.priceUsd,
+          notes: undefined,
+        };
+      }
+      const medBottom = origin.mediumMoves.find((m) => m.bottom.slotNumber === s.slotNumber);
+      if (medBottom) {
+        return {
+          ...s,
+          format: 'MEDIUM',
+          rowSpan: 1,
+          colSpan: 1,
+          status: 'VACANT',
+          priceUsd: 0,
+          businessName: undefined,
+          contactPerson: undefined,
+          phone: undefined,
+          email: undefined,
+          website: undefined,
+          logoUrl: undefined,
+          offerHeadline: undefined,
+          amountCollectedUsd: undefined,
+          paidAt: undefined,
+          paymentRef: undefined,
+          notes: `Covered by slot #${medBottom.top.slotNumber}`,
+        };
+      }
+      // An unpaid client displaced from the block keeps its data in a free chico.
+      const move = origin.moves.find((m) => m.to.slotNumber === s.slotNumber);
+      if (move) {
+        return {
+          ...copyAdvertiserFields(move.from, s),
+          format: 'SMALL',
+          rowSpan: 1,
+          colSpan: 1,
+          notes: undefined,
+        };
+      }
       const isCovered = coveredCoords.some((coord) => s.side === side && s.gridRow === coord.r && s.gridCol === coord.c);
       if (isCovered && s.slotNumber !== mainSlotNumber) {
         return {
           ...s,
           format: 'LARGE',
+          rowSpan: 1,
+          colSpan: 1,
           status: 'VACANT',
+          priceUsd: 0,
           businessName: undefined,
-          offerHeadline: undefined,
+          contactPerson: undefined,
           phone: undefined,
+          email: undefined,
+          website: undefined,
+          logoUrl: undefined,
+          offerHeadline: undefined,
+          amountCollectedUsd: undefined,
+          paidAt: undefined,
+          paymentRef: undefined,
           notes: `Covered by large slot #${mainSlotNumber}`,
         };
       }
@@ -662,6 +842,25 @@ export function mergeModularSlot(
  * Splits a merged MEDIUM or LARGE slot back into atomic SMALL ($350) slots,
  * or splits a LARGE (2×2) slot into two vertical MEDIUM (1×2, $650) slots.
  */
+/**
+ * The category for a cell coming back from under a merge: its own original one, unless that
+ * category is already on the face (merges move categories around), in which case the first of
+ * the face's original categories that is missing. Keeps a split from showing a niche twice.
+ */
+function restoredCategory(cell: SlotState, onFace: Set<number>) {
+  const own = MODULAR_GRID_DEFS.find((d) => d.slotNumber === cell.slotNumber)?.categoryId;
+  let id = own;
+  if (id === undefined || onFace.has(id)) {
+    id = MODULAR_GRID_DEFS.find((d) => d.side === cell.side && !d.isUspsZone && !onFace.has(d.categoryId))?.categoryId ?? own;
+  }
+  if (id !== undefined) onFace.add(id);
+  return CLOSED_CATEGORIES.find((c) => c.id === id);
+}
+
+function categoriesOnFace(slots: SlotState[], side?: CardSide): Set<number> {
+  return new Set(slots.filter((s) => s.side === side && !s.notes?.startsWith('Covered by')).map((s) => s.categoryId));
+}
+
 export function splitModularSlot(
   primarySlotNum: number,
   slots: SlotState[],
@@ -708,6 +907,7 @@ export function splitModularSlot(
     });
 
     const rightTopNum = rightTop?.slotNumber;
+    const onFace = categoriesOnFace(normalized, side);
 
     return computeAdaptiveDisplayNumbers(normalized.map((s) => {
       // 1. Left column top: Primary slot stays, becomes MEDIUM (1x2)
@@ -734,7 +934,10 @@ export function splitModularSlot(
           gridRow: originRow + 1,
           gridCol: originCol,
           status: 'VACANT',
-          priceUsd: activeMedPrice,
+          priceUsd: 0,
+          amountCollectedUsd: undefined,
+          paidAt: undefined,
+          paymentRef: undefined,
           businessName: undefined,
           contactPerson: undefined,
           phone: undefined,
@@ -748,8 +951,7 @@ export function splitModularSlot(
 
       // 3. Right column top: becomes a new independent VACANT MEDIUM slot
       if (rightTop && s.slotNumber === rightTop.slotNumber) {
-        const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === s.slotNumber);
-        const cat = CLOSED_CATEGORIES.find((c) => c.id === def?.categoryId);
+        const cat = restoredCategory(s, onFace);
         return {
           ...s,
           format: 'MEDIUM',
@@ -759,6 +961,7 @@ export function splitModularSlot(
           gridCol: originCol + 1,
           status: 'VACANT',
           priceUsd: activeMedPrice,
+          categoryId: cat?.id ?? s.categoryId,
           categoryName: cat?.name ?? s.categoryName,
           offerHeadline: cat?.defaultHeadline ?? s.offerHeadline,
           businessName: undefined,
@@ -781,7 +984,10 @@ export function splitModularSlot(
           gridRow: originRow + 1,
           gridCol: originCol + 1,
           status: 'VACANT',
-          priceUsd: activeMedPrice,
+          priceUsd: 0,
+          amountCollectedUsd: undefined,
+          paidAt: undefined,
+          paymentRef: undefined,
           businessName: undefined,
           contactPerson: undefined,
           phone: undefined,
@@ -798,6 +1004,7 @@ export function splitModularSlot(
   }
 
   // Target is SMALL (split to atomic 1x1 cells)
+  const onFace = categoriesOnFace(normalized, primary.side);
   return computeAdaptiveDisplayNumbers(normalized.map((s) => {
     if (s.slotNumber === primarySlotNum) {
       const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === primarySlotNum);
@@ -813,9 +1020,10 @@ export function splitModularSlot(
         notes: undefined,
       };
     }
-    if (s.notes?.includes(`Covered by`) && (s.notes?.includes(`#${primarySlotNum}`) || s.notes?.includes(`slot #${primarySlotNum}`))) {
+    // Exact owner match: a substring test let "#2" also free the cells of #20-#29.
+    if (s.notes?.includes(`Covered by`) && Number(s.notes.match(/#(\d+)/)?.[1]) === primarySlotNum) {
       const def = MODULAR_GRID_DEFS.find((d) => d.slotNumber === s.slotNumber);
-      const cat = CLOSED_CATEGORIES.find((c) => c.id === def?.categoryId);
+      const cat = restoredCategory(s, onFace);
       return {
         ...s,
         format: 'SMALL',
@@ -825,6 +1033,7 @@ export function splitModularSlot(
         gridCol: def?.gridCol ?? s.gridCol,
         status: 'VACANT',
         priceUsd: activeSmallPrice,
+        categoryId: cat?.id ?? s.categoryId,
         categoryName: cat?.name ?? s.categoryName,
         offerHeadline: cat?.defaultHeadline ?? s.offerHeadline,
         notes: undefined,
@@ -855,6 +1064,8 @@ function copyAdvertiserFields(source: SlotState, destination: SlotState): SlotSt
     paidAt: source.paidAt,
     amountCollectedUsd: source.amountCollectedUsd,
     scanCount: source.scanCount,
+    reservedAt: source.reservedAt,
+    reservationExpiresAt: source.reservationExpiresAt,
   };
 }
 
@@ -974,8 +1185,18 @@ function internalSwapModularSlots(
         updates.set(destBot.slotNumber, {
           ...destBot,
           format: 'MEDIUM',
+          rowSpan: 1,
+          colSpan: 1,
           status: 'VACANT',
+          priceUsd: 0,
+          amountCollectedUsd: undefined,
+          paidAt: undefined,
+          paymentRef: undefined,
           businessName: undefined,
+          contactPerson: undefined,
+          email: undefined,
+          website: undefined,
+          logoUrl: undefined,
           offerHeadline: undefined,
           phone: undefined,
           notes: `Covered by slot #${destTop.slotNumber}`,
@@ -1025,8 +1246,18 @@ function internalSwapModularSlots(
         updates.set(cov.slotNumber, {
           ...cov,
           format: 'LARGE',
+          rowSpan: 1,
+          colSpan: 1,
           status: 'VACANT',
+          priceUsd: 0,
+          amountCollectedUsd: undefined,
+          paidAt: undefined,
+          paymentRef: undefined,
           businessName: undefined,
+          contactPerson: undefined,
+          email: undefined,
+          website: undefined,
+          logoUrl: undefined,
           offerHeadline: undefined,
           phone: undefined,
           notes: lgCoveredNotes,
@@ -1159,8 +1390,18 @@ function internalSwapModularSlots(
         return {
           ...s,
           format: 'MEDIUM',
+          rowSpan: 1,
+          colSpan: 1,
           status: 'VACANT',
+          priceUsd: 0,
+          amountCollectedUsd: undefined,
+          paidAt: undefined,
+          paymentRef: undefined,
           businessName: undefined,
+          contactPerson: undefined,
+          email: undefined,
+          website: undefined,
+          logoUrl: undefined,
           offerHeadline: undefined,
           phone: undefined,
           notes: `Covered by slot #${smCol.top?.slotNumber}`,
@@ -1216,7 +1457,7 @@ export function getRemainingReservationMs(slot: SlotState): number {
     const resDate = new Date(slot.reservedAt).getTime();
     return Math.max(0, resDate + RESERVATION_HOLD_MS - Date.now());
   }
-  if (!slot.reservationExpiresAt) return RESERVATION_HOLD_MS;
+  if (!slot.reservationExpiresAt) return 0;
   const expiresAt = new Date(slot.reservationExpiresAt).getTime();
   return Math.max(0, expiresAt - Date.now());
 }
@@ -1243,13 +1484,28 @@ export function formatReservationCountdown(slot: SlotState): string {
 }
 
 /**
- * Returns base list price for a slot format
+ * Returns the operator's list price for a slot.
+ * - If the slot is currently RESERVED, the stored priceUsd is the discounted price;
+ *   we add the format discount back to recover the list price.
+ * - If not reserved, priceUsd IS the list price (operator may have scaled it).
+ * - Falls back to MODULAR_PRICES[format] only when priceUsd is absent.
  */
+/**
+ * A RESERVED slot stores its price as list − 72h discount, and so does a PAID one sold during
+ * the reservation (it keeps reservedAt). Anything else stores the list price.
+ */
+function storesDiscountedPrice(slot: { status?: string; reservedAt?: string }): boolean {
+  return slot.status === 'RESERVED' || (slot.status === 'PAID' && Boolean(slot.reservedAt));
+}
+
 export function getSlotListPrice(slot: {
   format?: SlotFormat;
   rowSpan?: number;
   colSpan?: number;
   slotNumber?: number;
+  priceUsd?: number;
+  status?: string;
+  reservedAt?: string;
 }): number {
   if (slot.slotNumber === 32 || slot.format === 'USPS') return 0;
   const fmt =
@@ -1259,20 +1515,36 @@ export function getSlotListPrice(slot: {
       : slot.rowSpan === 2
       ? 'MEDIUM'
       : 'SMALL');
+  const discount = RESERVATION_72H_DISCOUNTS[fmt] ?? 50;
+
+  if (typeof slot.priceUsd === 'number' && slot.priceUsd > 0) {
+    // The 72h offer is stored as list − discount → recover list
+    if (storesDiscountedPrice(slot)) return slot.priceUsd + discount;
+    // Otherwise priceUsd is already the list price
+    return slot.priceUsd;
+  }
   return MODULAR_PRICES[fmt] ?? 350;
 }
 
 /**
- * Returns discounted price for 72-hour reservation
+ * Returns the discounted price for 72-hour reservation.
+ * - If already RESERVED, priceUsd is already the discounted price → return as-is.
+ * - Otherwise, compute list price and subtract the format discount.
  */
 export function getSlotDiscountedPrice(slot: {
   format?: SlotFormat;
   rowSpan?: number;
   colSpan?: number;
   slotNumber?: number;
+  priceUsd?: number;
+  status?: string;
+  reservedAt?: string;
 }): number {
-  const listPrice = getSlotListPrice(slot);
-  if (listPrice === 0) return 0;
+  if (slot.slotNumber === 32 || slot.format === 'USPS') return 0;
+  // Already holding the 72h offer: the stored price is the discounted one.
+  if (storesDiscountedPrice(slot) && typeof slot.priceUsd === 'number' && slot.priceUsd > 0) {
+    return slot.priceUsd;
+  }
   const fmt =
     slot.format ||
     (slot.rowSpan === 2 && slot.colSpan === 2
@@ -1281,7 +1553,24 @@ export function getSlotDiscountedPrice(slot: {
       ? 'MEDIUM'
       : 'SMALL');
   const discount = RESERVATION_72H_DISCOUNTS[fmt] ?? 50;
+  const listPrice = getSlotListPrice(slot);
   return Math.max(0, listPrice - discount);
+}
+
+/**
+ * Runs a merge, split or swap with every reservation at its list price, then takes the 72h
+ * discount off again. A reserved slot stores list − discount, and the grid operations scale the
+ * new format's price from the slot's current one, so feeding them the discounted price
+ * compounds it (a $300 chico became a $555 mediano).
+ */
+export function withReservationsAtList(slots: SlotState[], op: (slots: SlotState[]) => SlotState[]): SlotState[] {
+  const shift = (list: SlotState[], sign: 1 | -1) =>
+    list.map((s) =>
+      s.status === 'RESERVED' && !s.notes?.startsWith('Covered by') && s.priceUsd
+        ? { ...s, priceUsd: Math.max(0, s.priceUsd + sign * (RESERVATION_72H_DISCOUNTS[s.format || 'SMALL'] ?? 50)) }
+        : s,
+    );
+  return shift(op(shift(slots, 1)), -1);
 }
 
 /**

@@ -1,7 +1,7 @@
 {
   "nav": {
     "tablero": "1. Tablero 12\"×9\" & Slots",
-    "leadSourcing": "2. Lead Sourcing (Yelp + LLM)",
+    "leadSourcing": "2. Lead Sourcing (Yelp + OSM)",
     "propensityEngine": "3. Propensity Engine (5k Hogares)",
     "postalExport": "4. QR & Exportación Postal",
     "architectureFastApi": "Arquitectura FastAPI & DB"
@@ -84,13 +84,13 @@
       "defaultHeadline": "Viaje Seguro por la Autopista | $99 Frenos Completos Por Eje + Diagnóstico Computarizado"
     },
     "6": {
-      "name": "Pizzería Artesanal",
-      "niche": "Pizzería Artesanal a la Leña",
+      "name": "Pizzería",
+      "niche": "Pizzería a la Leña",
       "description": "Posición estándar frontal. Imanes de nevera y cupones de alto canje para cenas familiares de fin de semana.",
       "defaultHeadline": "Masa Madre al Horno de Piedra | Compra 1 Pizza Grande y Lleva la Segunda al 50%"
     },
     "7": {
-      "name": "Gimnasio Boutique / CrossFit",
+      "name": "Gimnasio / Fitness",
       "niche": "CrossFit & Fitness Comunitario",
       "description": "Posición estándar frontal. Impulso a metas de salud en familias jóvenes de Eastvale y Corona.",
       "defaultHeadline": "Transforme su Salud Este Mes | 14 Días VIP Pass Ilimitado + Sesión de Coaching Gratis"
@@ -223,18 +223,20 @@
     },
     "summary": {
       "slots": "{{paid}} de {{total}} espacios pagados",
-      "curationDone": "{{count}} hogares curados y persistidos",
-      "curationPending": "Motor de propensión sin ejecutar",
+      "curationDone": "{{routes}} rutas de cartero · {{count}} buzones",
+      "curationPending": "Motor de rutas sin ejecutar",
       "manifestDone": "Manifiesto entregado a imprenta",
-      "manifestPending": "CSV de 5,000 filas sin cortar",
+      "manifestPending": "Manifiesto de rutas sin descargar",
       "productionMailed": "Tirada depositada en USPS",
-      "productionPending": "En imprenta, sin depositar"
+      "productionPending": "En imprenta, sin depositar",
+      "curationShort": "{{routes}} rutas, pero el score usó {{used}} de 6 variables"
     },
     "blocked": {
       "curation": "Requiere el piso operativo de {{floor}} espacios pagados. Faltan {{missing}}.",
-      "manifest": "Requiere la sección 2 sellada: sin hogares curados no hay manifiesto que cortar.",
+      "manifest": "Requiere la sección 2 sellada: sin rutas seleccionadas no hay manifiesto que entregar.",
       "production": "Requiere la sección 3 sellada: nada se deposita antes de imprimirse.",
-      "curationCost": "Requiere cubrir el costo de la tirada. Faltan ${{missing}} por cobrar."
+      "curationCost": "Requiere cubrir el costo de la tirada. Faltan ${{missing}} por cobrar.",
+      "manifestModel": "Las rutas están elegidas, pero el score usó {{used}} de 6 variables. Vuelve a la sección 2: recalcula o deja registrado que continúas así."
     },
     "imperative": {
       "fillSlot": "Conseguir comercio para el espacio {{slot}}",
@@ -299,9 +301,9 @@
     "targetMargin": "Margen Objetivo",
     "targetMarginSub": "Sincronizado con slots",
     "proportionalTariffs": "Tarifas proporcionales:",
-    "smallSize": "Chico (1×1)",
-    "mediumSize": "Mediano (1×2)",
-    "largeSize": "Grande (2×2)",
+    "smallSize": "Chico (1×1 · 2.8\" × 1.8\")",
+    "mediumSize": "Mediano (1×2 · 2.8\" × 3.6\")",
+    "largeSize": "Grande (2×2 · 5.6\" × 3.6\")",
     "compactView": "Vista compacta",
     "fullBreakdown": "Configuración y Tarifas",
     "collapse": "Plegar",

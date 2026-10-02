@@ -27,7 +27,7 @@ co-op-direct-mail-platform/
 │   │   │   ├── curation.py                 # Vectorized Propensity Engine endpoints
 │   │   │   └── export.py                   # QR redirects (/r/:camp/:slug) & CSV manifest download
 │   │   └── services/
-│   │       ├── lead_sourcing_service.py    # Yelp Fusion API + Geoapify + Llama.cpp LLM client
+│   │       ├── lead_sourcing_service.py    # Yelp Fusion + Geoapify + OpenStreetMap lead search
 │   │       ├── propensity_engine.py        # Vectorized demographic dot product with NumPy & Pandas
 │   │       └── postal_export_service.py    # CASS normalization, Carrier Route (CRRT) sorting
 │   ├── requirements.txt                    # FastAPI, Uvicorn, Pydantic, SQLAlchemy, NumPy, Pandas, DuckDB
@@ -35,7 +35,7 @@ co-op-direct-mail-platform/
 ├── src/                                    # Frontend React / TypeScript + Tailwind CSS
 │   ├── components/
 │   │   ├── PostalCanvas.tsx                # Interactive 12"x9" Postcard Layout (Front & Back)
-│   │   ├── ProspectingView.tsx             # Hit List / Lightweight CRM with one-shot pitch hooks
+│   │   ├── ProspectingView.tsx             # Hit List / Lightweight CRM
 │   │   ├── CurationStudio.tsx              # Demographic Weight Matrix & 5,000 Cut Histogram
 │   │   ├── PostalExportView.tsx            # Dynamic QR generator & Action Mail manifest export
 │   │   ├── FinancialMetrics.tsx            # Campaign budget tracker & cash rule unlock bar
@@ -152,30 +152,12 @@ from typing import List, Dict, Any
 
 class LeadSourcingService:
  """
- Yelp Fusion + Geoapify Places + Local Llama.cpp LLM Client.
+ Yelp Fusion + Geoapify Places + OpenStreetMap lead search.
  Strictly forbids Google Places API.
     """
  def __init__(self):
  self.yelp_key = os.getenv("YELP_FUSION_API_KEY", "")
- self.geoapify_key = os.getenv("GEOAPIFY_API_KEY", "")
- self.llama_url = os.getenv("LLAMA_CPP_BASE_URL", "http://localhost:8080/v1")
-
- async def generate_llm_pitch(self, business_name: str, category_name: str, avg_ticket: float) -> Dict[str, str]:
- system_prompt = (
-            "You are a master direct mail copywriter. Generate a high-converting bilingual B2B sales hook "
-            "(English and Spanish) for a 12x9 co-op mailer reaching 5,000 homeowners for $497 flat."
-        )
- payload = {
-            "model": "meta-llama-3-8b-instruct",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Business: {business_name}, Category: {category_name}, Ticket: \${avg_ticket}"}
-            ],
-            "temperature": 0.3
-        }
- async with httpx.AsyncClient(timeout=10.0) as client:
- resp = await client.post(f"{self.llama_url}/chat/completions", json=payload)
- return json.loads(resp.json()["choices"][0]["message"]["content"])`,
+ self.geoapify_key = os.getenv("GEOAPIFY_API_KEY", "")`,
   },
   export_service: {
     language: 'python',

@@ -44,6 +44,28 @@ MISSING_THRESHOLD = -999999
 _cache: Dict[str, Optional[dict]] = {}
 
 
+# backend/.env, two levels up from app/services/.
+ENV_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+
+
+def reload_key() -> str:
+    """
+    Re-read `.env` so a key pasted in while the server is running is seen.
+
+    `load_dotenv` at import time, without `override`, means an edited `.env`
+    changes nothing until a restart — which turns "paste the key and press
+    retry" into "paste the key and wonder why it still fails". The operator is
+    not going to restart uvicorn, and should not have to.
+    """
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(ENV_PATH, override=True)
+    except Exception:
+        pass  # no dotenv, or no file: whatever is in the environment stands
+    return api_key()
+
+
 def api_key() -> str:
     return (os.getenv("CENSUS_API_KEY", "") or "").strip().strip('"')
 
@@ -182,6 +204,8 @@ TIGERWEB_BG_URL = (
 )
 
 BG_VARIABLES = [
+    "B19013_001E",  # median household income
+    "B25010_001E",  # average household size of occupied units
     "B25003_001E",  # occupied units
     "B25003_002E",  # owner occupied
     "B25024_001E",  # units in structure, total
@@ -254,6 +278,11 @@ async def block_groups_for_county(state: str, county: str) -> Dict[str, dict]:
             )
             out[geoid] = {
                 "households": occupied,
+                # `_to_float` returns None for ACS's suppression sentinels, so a
+                # block group the bureau declined to estimate stays missing
+                # instead of arriving as a very negative income.
+                "median_income": _to_float(row[idx["B19013_001E"]]),
+                "household_size": _to_float(row[idx["B25010_001E"]]),
                 "owner_occupied": (get("B25003_002E") / occupied) if occupied else None,
                 "single_family": (get("B25024_002E") / structures) if structures else None,
                 "vehicles": (two_plus / vehicle_hh) if vehicle_hh else None,
@@ -262,7 +291,11 @@ async def block_groups_for_county(state: str, county: str) -> Dict[str, dict]:
         _bg_cache[key] = out
         return out
 
-    _bg_cache[key] = {}
+    # Deliberately not cached. Caching a failure makes the next attempt return
+    # the failure without asking anybody — which turns "fix the key and press
+    # retry" into a button that cannot work until the server restarts. A county
+    # that genuinely has no block groups is not a case that happens; an outage
+    # or a rejected key is.
     return {}
 
 
@@ -323,6 +356,11 @@ async def enrich_routes(routes: List[dict]) -> int:
     network, a ZIP the survey has nothing for — and the caller keeps scoring on
     the USPS variables rather than failing.
     """
+    # Read `.env` again before using it. Otherwise the key that was loaded when
+    # uvicorn started is the only one that ever exists: a key pasted in five
+    # minutes ago is invisible, and a key revoked upstream keeps "working" until
+    # somebody restarts the server. One small file read per plan.
+    reload_key()
     if not is_configured():
         return 0
 
@@ -366,8 +404,115 @@ async def enrich_routes(routes: List[dict]) -> int:
         route["vehicles"] = weighted("vehicles")
         value = weighted("home_value")
         route["home_value"] = min(value / HOME_VALUE_CAP, 1.0) if value else None
+
+        # Income and household size are the two USPS publishes itself, and for
+        # some ZIPs it publishes them empty — 92880 among them, which switched
+        # off the heaviest weight in the model without saying so. The census
+        # has both at block-group level, in the call already being made, so it
+        # stands in where USPS left a hole. USPS wins when it answered: it is
+        # the delivery authority and its figure describes the route, not the
+        # neighbourhoods the route happens to cross.
+        #
+        # Caveat worth keeping in view: a median cannot be averaged. Weighting
+        # block-group medians by households approximates the route's income
+        # well enough to rank routes against each other, which is what the
+        # score does, but it is not a census median for that route. The same
+        # approximation already applies to home value above.
+        if not route.get("median_income"):
+            census_income = weighted("median_income")
+            if census_income:
+                route["median_income"] = census_income
+                route["income_source"] = "CENSUS_ACS"
+        if not route.get("avg_household_size"):
+            census_size = weighted("household_size")
+            if census_size:
+                route["avg_household_size"] = census_size
+                route["size_source"] = "CENSUS_ACS"
+
         route["block_groups"] = len(rows)
         route["bg_households"] = int(total)
         enriched += 1
 
     return enriched
+
+
+# Why the census could not answer. The remedy is different for each, and an
+# alarm that guesses "check your API key" during an outage sends the operator
+# to regenerate a key that was never the problem.
+NO_KEY = "NO_KEY"
+KEY_REJECTED = "KEY_REJECTED"
+UNREACHABLE = "UNREACHABLE"
+OK = "OK"
+
+
+async def diagnose() -> dict:
+    """
+    Ask the census one small real question and report what happened.
+
+    Runs `reload_key` first, so this doubles as the retry: paste the key, press
+    the button, and the answer reflects the key that is on disk now.
+    """
+    key = reload_key()
+    if not key:
+        return {
+            "status": NO_KEY,
+            "detail": (
+                "No hay CENSUS_API_KEY en backend/.env. Es gratuita: pídela en "
+                "https://api.census.gov/data/key_signup.html y pégala ahí."
+            ),
+        }
+
+    # One variable, one block group, one county: the smallest request that still
+    # proves the key is accepted and the service is up.
+    url = BASE_URL.format(year=ACS_YEARS[0])
+    params = {
+        "get": "B19013_001E",
+        "for": "block group:*",
+        "in": "state:06 county:065 tract:040609",
+        "key": key,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.get(url, params=params)
+    except Exception as e:
+        return {
+            "status": UNREACHABLE,
+            "detail": (
+                "No es tu clave: el Censo no contesta. Puede ser tu conexión o una "
+                f"caída del servicio. Reintenta en unos minutos. ({type(e).__name__})"
+            ),
+        }
+
+    # A rejected key does not come back as 401. The API answers 302 to
+    # /data/invalid_key.html, so following the redirect lands on a 200 with an
+    # HTML error page — which is how a bad key can pass for a working service.
+    location = (resp.headers.get("location") or "").lower()
+    if resp.status_code in (301, 302, 307, 308) and "invalid_key" in location:
+        return {
+            "status": KEY_REJECTED,
+            "detail": (
+                "El Censo rechazó la clave: responde con su página de «Invalid Key». "
+                "Suele ser una clave caducada o mal pegada. Genera una nueva en "
+                "https://api.census.gov/data/key_signup.html y actualiza backend/.env."
+            ),
+        }
+
+    if resp.status_code in (400, 401, 403):
+        return {
+            "status": KEY_REJECTED,
+            "detail": (
+                f"El Censo rechazó la clave (HTTP {resp.status_code}). Suele ser una "
+                "clave caducada o mal pegada. Genera una nueva en "
+                "https://api.census.gov/data/key_signup.html y actualiza backend/.env."
+            ),
+        }
+    if resp.status_code != 200:
+        return {
+            "status": UNREACHABLE,
+            "detail": (
+                f"El Censo respondió HTTP {resp.status_code}. No es tu clave; el "
+                "servicio está con problemas. Reintenta en unos minutos."
+            ),
+        }
+
+    return {"status": OK, "detail": "El Censo responde y la clave es válida."}

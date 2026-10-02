@@ -86,7 +86,7 @@ CATALOGUE: List[dict] = [
     },
     {
         "id": "YELP",
-        "modes": ["LIVE"],
+        "modes": ["DEMO", "LIVE"],
         "name": "Yelp Fusion",
         "cost": "PAID",
         "env_key": "YELP_API_KEY",
@@ -107,7 +107,7 @@ CATALOGUE: List[dict] = [
     },
     {
         "id": "GEOAPIFY",
-        "modes": ["LIVE"],
+        "modes": ["DEMO", "LIVE"],
         "name": "Geoapify Places",
         "cost": "PAID",
         "env_key": "GEOAPIFY_API_KEY",
@@ -277,6 +277,37 @@ def rows_for(db: Session, mode: str) -> Dict[str, DataSourceSetting]:
     if created:
         db.commit()
     return rows
+
+
+def is_source_enabled(db: Optional[Session], source_id: str, mode: str = "DEMO") -> bool:
+    """
+    Whether the operator left this source switched on in this world.
+
+    Read-only: a source never touched in settings answers with its catalogue
+    default instead of writing a row. Without a session (a router that has none)
+    it opens a short one of its own.
+    """
+    if db is None:
+        from ..database import SessionLocal
+        with SessionLocal() as own:
+            return is_source_enabled(own, source_id, mode)
+    row = (
+        db.query(DataSourceSetting)
+        .filter(DataSourceSetting.mode == (mode or "DEMO").upper(), DataSourceSetting.source_id == source_id)
+        .first()
+    )
+    if row is not None:
+        return bool(row.enabled)
+    return bool(BY_ID.get(source_id, {}).get("default_enabled", True))
+
+
+LEAD_SOURCES = ("OSM_OVERPASS", "YELP", "GEOAPIFY")
+
+
+def disabled_lead_sources(db: Session, mode: Optional[str]) -> set:
+    """The business-search sources switched off for a campaign in this mode."""
+    return {sid for sid in LEAD_SOURCES if not is_source_enabled(db, sid, mode or "DEMO")}
+
 
 
 @router.get("/{mode}", response_model=List[SourceOut])

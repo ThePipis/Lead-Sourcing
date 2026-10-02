@@ -7,6 +7,7 @@ import { PaymentStamp } from './components/PaymentStamp.tsx';
 import { ProductionSection } from './components/ProductionSection.tsx';
 import { FinancialMetrics } from './components/FinancialMetrics.tsx';
 import { PostalCanvas } from './components/PostalCanvas.tsx';
+import { SlotCall, fetchSlotContacts } from './services/leadSourcingService.ts';
 import { SlotInspector } from './components/SlotInspector.tsx';
 import { CurationStudio } from './components/CurationStudio.tsx';
 import { PostalExportView } from './components/PostalExportView.tsx';
@@ -18,6 +19,9 @@ import {
   mergeModularSlot,
   splitModularSlot,
   swapModularSlots,
+  withReservationsAtList,
+  MODULAR_PRICES,
+  RESERVATION_72H_DISCOUNTS,
   getSlotListPrice,
   getSlotDiscountedPrice,
   isReservationExpired,
@@ -28,8 +32,6 @@ import {
   SlotStatus,
   SlotFormat,
   LeadProspect,
-  Household,
-  CurationSummary,
 } from './types.ts';
 import {
   billableHouseholds,
@@ -40,10 +42,6 @@ import {
 } from './workflow.ts';
 import type { AppMode } from './hooks/useAppMode.ts';
 import {
-  generateSyntheticHouseholds,
-  executePropensityCuration,
-} from './services/propensityEngine.ts';
-import {
   listCampaigns,
   createCampaign,
   updateCampaignSlot,
@@ -53,7 +51,7 @@ import {
   setCampaignArchived,
   deleteCampaign,
   batchUpdateCampaignSlots,
-  executeBackendCuration,
+  acknowledgeIncompleteModel,
 } from './services/campaignService.ts';
 import { useTheme } from './hooks/useTheme.ts';
 import { useExpertMode } from './hooks/useExpertMode.ts';
@@ -71,15 +69,21 @@ import {
 
 const LAST_OPENED_KEY = 'coop.lastOpenedCampaign';
 
+/** List price of a format, or that price with the 72h reservation discount taken off. */
+function isFormatPrice(format: 'MEDIUM' | 'LARGE', price?: number): boolean {
+  const list = MODULAR_PRICES[format];
+  return price === list || price === list - RESERVATION_72H_DISCOUNTS[format];
+}
+
 function mergeSlotUpdate(existing: SlotState, updated: SlotState): SlotState {
   const format: SlotFormat =
     updated.format && updated.format !== 'SMALL'
       ? updated.format
       : existing.format && existing.format !== 'SMALL'
       ? existing.format
-      : existing.priceUsd === 1200 || updated.priceUsd === 1200 || existing.priceUsd === 1000 || updated.priceUsd === 1000
+      : isFormatPrice('LARGE', existing.priceUsd) || isFormatPrice('LARGE', updated.priceUsd)
       ? 'LARGE'
-      : existing.priceUsd === 650 || updated.priceUsd === 650 || existing.priceUsd === 550 || updated.priceUsd === 550
+      : isFormatPrice('MEDIUM', existing.priceUsd) || isFormatPrice('MEDIUM', updated.priceUsd)
       ? 'MEDIUM'
       : updated.format || existing.format || 'SMALL';
 
@@ -100,7 +104,7 @@ export default function App() {
   const { t, i18n } = useTranslation(['common']);
   const { theme, toggleTheme } = useTheme();
   const { expertMode } = useExpertMode();
-  const { mode, setAppMode, mockMode } = useAppMode();
+  const { mode, setAppMode } = useAppMode();
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [openCampaignId, setOpenCampaignId] = useState<string | null>(null);
@@ -121,6 +125,8 @@ export default function App() {
 
   // Slot the operator is recording a payment for.
   const [pendingPaymentSlot, setPendingPaymentSlot] = useState<number | null>(null);
+  // A deposit separates the box without closing it; a full payment locks it.
+  const [pendingPaymentKind, setPendingPaymentKind] = useState<'full' | 'deposit'>('full');
   /** The box open in the inspector beside the card, if any. */
   const [inspectedSlot, setInspectedSlot] = useState<number | null>(null);
   /**
@@ -150,6 +156,17 @@ export default function App() {
    * handler having to remember to.
    */
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  /**
+   * Last call per business on the card.
+   *
+   * The flyer used to show the advertising hook in every box, including the
+   * ones nobody has closed yet — copy for an ad that does not exist, taking the
+   * space where the only live question belongs: when did we last phone them,
+   * and how long has it been. The hook comes back once the box is sold.
+   */
+  const [slotContacts, setSlotContacts] = useState<Record<string, SlotCall[]>>({});
+  // Bumped after a call is written down, so the card redraws its clocks.
+  const [contactsVersion, setContactsVersion] = useState(0);
   const wasSaving = useRef(false);
   useEffect(() => {
     if (wasSaving.current && !isSaving) setLastSavedAt(new Date());
@@ -183,23 +200,29 @@ export default function App() {
     }
   });
 
-  const [curatedHouseholds, setCuratedHouseholds] = useState<Household[]>([]);
-  const [curationSummary, setCurationSummary] = useState<CurationSummary | null>(null);
-  const [isCurating, setIsCurating] = useState(false);
-
   const campaign = useMemo(
     () => campaigns.find((c) => String(c.id) === String(openCampaignId)) ?? null,
     [campaigns, openCampaignId],
   );
 
-  const curatedCount = campaign
-    ? Math.max(campaign.curatedCount ?? 0, curatedHouseholds.length)
-    : 0;
+  const progress = useMemo(() => (campaign ? computeProgress(campaign) : null), [campaign]);
 
-  const progress = useMemo(
-    () => (campaign ? computeProgress(campaign, curatedCount) : null),
-    [campaign, curatedCount],
-  );
+  // One request for the whole card: every call, in every box, of this campaign.
+  // Asking by business name only ever returned the one name written on the
+  // slot, which is exactly the conversation the partner already knows about.
+  useEffect(() => {
+    if (!campaign?.id) {
+      setSlotContacts({});
+      return;
+    }
+    let alive = true;
+    fetchSlotContacts(String(campaign.id))
+      .then((c) => alive && setSlotContacts(c))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [campaign?.id, contactsVersion]);
 
   const loadFile = useCallback(async () => {
     setIsLoadingFile(true);
@@ -289,12 +312,10 @@ export default function App() {
       } catch {
         // Not being able to remember is not a reason to fail to open.
       }
-      setCuratedHouseholds([]);
-      setCurationSummary(null);
       setPendingPaymentSlot(null);
       // Land the operator on the section that owes work, not on section 1.
       if (next) {
-        setActivePhase(computeProgress(next, next.curatedCount ?? 0).current);
+        setActivePhase(computeProgress(next).current);
       }
       if (window.location.hash !== `#/c/${id}`) {
         window.location.hash = `#/c/${id}`;
@@ -346,8 +367,6 @@ export default function App() {
   const handleSwitchMode = (next: AppMode) => {
     if (next === mode) return;
     setOpenCampaignId(null);
-    setCuratedHouseholds([]);
-    setCurationSummary(null);
     setPendingPaymentSlot(null);
     if (window.location.hash) window.location.hash = '';
     setAppMode(next);
@@ -426,8 +445,6 @@ export default function App() {
       const updated = await resizeCampaign(campaign.id, households);
       patchCampaign(campaign.id, () => updated);
       setDraftReach(null);
-      setCuratedHouseholds([]);
-      setCurationSummary(null);
       setLoadError(null);
     } catch (err) {
       console.error('Failed to resize campaign:', err);
@@ -444,16 +461,19 @@ export default function App() {
    */
   const handleApplySuggestedPrices = async (prices: Record<number, number>) => {
     if (!campaign) return;
+    // The suggestion is a list price; a reserved slot keeps its 72h discount on top of it.
+    const priceFor = (s: SlotState) =>
+      prices[s.slotNumber] - (s.status === 'RESERVED' ? RESERVATION_72H_DISCOUNTS[s.format || 'SMALL'] ?? 0 : 0);
     const updates = campaign.slots
       .filter((s) => s.status !== 'PAID' && prices[s.slotNumber] !== undefined && prices[s.slotNumber] > 0)
-      .map((s) => ({ slotNumber: s.slotNumber, priceUsd: prices[s.slotNumber] }));
+      .map((s) => ({ slotNumber: s.slotNumber, priceUsd: priceFor(s) }));
     if (updates.length === 0) return;
 
     // Actualización optimista inmediata en memoria para UI ultra fluida
     patchSlots(campaign.id, (slots) =>
       slots.map((s) =>
         s.status !== 'PAID' && prices[s.slotNumber] !== undefined && prices[s.slotNumber] > 0
-          ? { ...s, priceUsd: prices[s.slotNumber] }
+          ? { ...s, priceUsd: priceFor(s) }
           : s,
       ),
     );
@@ -514,6 +534,7 @@ export default function App() {
       if (mode === 'LIVE' && !hasClient) {
         return;
       }
+      setPendingPaymentKind('full');
       setPendingPaymentSlot(slotNumber);
       return;
     }
@@ -587,7 +608,7 @@ export default function App() {
   const handleMergeSlot = async (slotNumber: number, targetFormat: 'MEDIUM' | 'LARGE') => {
     if (!campaign) return;
     setIsSaving(true);
-    const updatedSlots = mergeModularSlot(slotNumber, targetFormat, campaign.slots);
+    const updatedSlots = withReservationsAtList(campaign.slots, (s) => mergeModularSlot(slotNumber, targetFormat, s));
     patchSlots(campaign.id, () => updatedSlots);
     const primary = campaign.slots.find((s) => s.slotNumber === slotNumber);
     if (primary && (primary.gridRow === 2 || primary.gridRow === 4) && targetFormat === 'MEDIUM') {
@@ -603,7 +624,12 @@ export default function App() {
       }
     }
     try {
-      await batchUpdateCampaignSlots(campaign.id, updatedSlots);
+      // notes: null so a freed cell loses its stale "Covered by" in the DB;
+      // undefined is dropped from the payload and the backend keeps it a ghost.
+      await batchUpdateCampaignSlots(
+        campaign.id,
+        updatedSlots.map((s) => ({ ...s, notes: s.notes ?? (null as any) })),
+      );
     } catch (err) {
       console.error('Failed to persist merged modular slots:', err);
     } finally {
@@ -614,10 +640,15 @@ export default function App() {
   const handleSplitSlot = async (slotNumber: number, targetFormat: 'SMALL' | 'MEDIUM' = 'SMALL') => {
     if (!campaign) return;
     setIsSaving(true);
-    const updatedSlots = splitModularSlot(slotNumber, campaign.slots, targetFormat);
+    const updatedSlots = withReservationsAtList(campaign.slots, (s) => splitModularSlot(slotNumber, s, targetFormat));
     patchSlots(campaign.id, () => updatedSlots);
     try {
-      await batchUpdateCampaignSlots(campaign.id, updatedSlots);
+      // notes: null so a freed cell loses its stale "Covered by" in the DB;
+      // undefined is dropped from the payload and the backend keeps it a ghost.
+      await batchUpdateCampaignSlots(
+        campaign.id,
+        updatedSlots.map((s) => ({ ...s, notes: s.notes ?? (null as any) })),
+      );
     } catch (err) {
       console.error('Failed to persist split modular slots:', err);
     } finally {
@@ -726,16 +757,21 @@ export default function App() {
   }) => {
     if (!campaign || pendingPaymentSlot === null) return;
     const slotNumber = pendingPaymentSlot;
+    // A deposit is money in the till, not a closed sale: the box stays
+    // reserved, so it still shows up as something to finish collecting.
+    const isDeposit = pendingPaymentKind === 'deposit';
     setIsSaving(true);
     try {
       const updated = await updateCampaignSlot(campaign.id, slotNumber, {
-        status: 'PAID',
+        status: isDeposit ? 'RESERVED' : 'PAID',
         ...record,
+        ...(isDeposit ? { paidAt: undefined } : {}),
       });
       patchSlots(campaign.id, (slots) =>
         slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
       );
       setPendingPaymentSlot(null);
+      setPendingPaymentKind('full');
     } catch (err) {
       console.error('Failed to persist payment record to SQLite:', err);
     } finally {
@@ -815,6 +851,34 @@ export default function App() {
     }
   };
 
+  const handleUpdateSlotNotes = async (slotNumber: number, notes: string) => {
+    if (!campaign) return;
+    setIsSaving(true);
+    patchSlots(campaign.id, (slots) =>
+      slots.map((s) =>
+        s.slotNumber === slotNumber
+          ? {
+              ...s,
+              notes,
+            }
+          : s,
+      ),
+    );
+
+    try {
+      const updated = await updateCampaignSlot(campaign.id, slotNumber, {
+        notes,
+      });
+      patchSlots(campaign.id, (slots) =>
+        slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
+      );
+    } catch (err) {
+      console.error('Failed to persist slot notes to SQLite:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleClearSlot = async (slotNumber: number) => {
     if (!campaign) return;
     setIsSaving(true);
@@ -855,11 +919,16 @@ export default function App() {
   const handleSwapSlots = async (sourceSlotNumber: number, targetSlotNumber: number) => {
     if (!campaign || sourceSlotNumber === targetSlotNumber) return;
     setIsSaving(true);
-    const updatedSlots = swapModularSlots(sourceSlotNumber, targetSlotNumber, campaign.slots);
+    const updatedSlots = withReservationsAtList(campaign.slots, (s) => swapModularSlots(sourceSlotNumber, targetSlotNumber, s));
     patchSlots(campaign.id, () => updatedSlots);
 
     try {
-      await batchUpdateCampaignSlots(campaign.id, updatedSlots);
+      // notes: null so a freed cell loses its stale "Covered by" in the DB;
+      // undefined is dropped from the payload and the backend keeps it a ghost.
+      await batchUpdateCampaignSlots(
+        campaign.id,
+        updatedSlots.map((s) => ({ ...s, notes: s.notes ?? (null as any) })),
+      );
     } catch (err) {
       console.error('Failed to persist swapped slots to SQLite:', err);
     } finally {
@@ -878,6 +947,12 @@ export default function App() {
     try {
       const updated = await resetSlotLayout(campaign.id, wipe);
       patchCampaign(campaign.id, () => updated);
+      // El vaciado también borra llamadas y cuarentenas, así que los relojes
+      // dibujados en la tarjeta ya no describen nada.
+      if (wipe) {
+        setSlotContacts({});
+        setContactsVersion((v) => v + 1);
+      }
       setLoadError(null);
     } catch (err) {
       console.error('Failed to reset the slot layout:', err);
@@ -918,7 +993,7 @@ export default function App() {
       // teaches nothing about the actual microzone, and the free sources —
       // OpenStreetMap, and Yelp where it has to step in — cost nothing to ask.
       // A niche with no real business leaves its box empty and says so.
-      const report = await autofillSlots(campaign.id, false);
+      const report = await autofillSlots(campaign.id);
       setFillReport(report);
       const refreshed = await listCampaigns(mode);
       setCampaigns(refreshed);
@@ -936,7 +1011,7 @@ export default function App() {
     if (!campaign) return;
     setBusySlot(slotNumber);
     try {
-      const result = await nextCandidate(campaign.id, slotNumber, false, true);
+      const result = await nextCandidate(campaign.id, slotNumber, true);
       const refreshed = await listCampaigns(mode);
       setCampaigns(refreshed);
       setLoadError(result.exhausted ? (result.detail ?? null) : null);
@@ -1065,7 +1140,7 @@ export default function App() {
         businessAddress: lead.address ? `${lead.address}, ${lead.city || ''}`.trim() : undefined,
         status: targetStatus,
         priceUsd: targetPrice,
-        offerHeadline: lead.bilingualHooks?.es || '',
+        offerHeadline: '',
         ...(isReserving ? { reservedAt, reservationExpiresAt } : {}),
       });
       patchSlots(campaign.id, (slots) =>
@@ -1077,11 +1152,6 @@ export default function App() {
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleSourceLeadForSlot = (slotNumber: number) => {
-    setActivePhase('slots');
-    openInspector(slotNumber);
   };
 
   const handleIncrementScan = async (slotNumber: number) => {
@@ -1099,69 +1169,22 @@ export default function App() {
     }
   };
 
-  // ------------------------------------------------------------- curation
-
-  const handleRunCuration = async () => {
+  /**
+   * The operator states they are continuing on a model that scored short.
+   * This is the only way past the section 2 gate when a variable is missing,
+   * and it leaves a dated note on the campaign rather than just unlocking.
+   */
+  const handleAcknowledgeModel = async () => {
     if (!campaign) return;
-    setIsCurating(true);
+    setIsSaving(true);
     try {
-      const weights = CLOSED_CATEGORIES.map((c) => [
-        c.demographicWeights.income,
-        c.demographicWeights.homeOwnership,
-        c.demographicWeights.homeAgeYears,
-        c.demographicWeights.childrenPresent,
-        c.demographicWeights.vehiclesCount,
-        c.demographicWeights.petOwner,
-        c.demographicWeights.homeValue,
-      ]);
-
-      const target = campaign.totalTargetHouseholds;
-      const data = await executeBackendCuration(campaign.id, weights, target, mockMode);
-      const summary: CurationSummary = data.summary || {
-        totalAnalyzed: (data as any).total_analyzed || target * 3,
-        totalSelected: (data as any).total_selected || target,
-        minScore: (data as any).min_score || 60,
-        maxScore: (data as any).max_score || 90,
-        avgScore: (data as any).avg_score || 75,
-        carrierRouteDistribution: ((data as any).carrier_route_breakdown || []).map((r: any) => ({
-          route: r.carrier_route || r.route,
-          count: r.count,
-          zip: campaign.targetZip,
-        })),
-        categorySynergyBreakdown: [],
-        scoreHistogram: (data as any).histogram || [],
-      };
-
-      const households = data.top_5k || [];
-      setCuratedHouseholds(households);
-      setCurationSummary(summary);
-      patchCampaign(campaign.id, (c) => ({
-        ...c,
-        status: 'CURATED',
-        curatedCount: households.length || summary.totalSelected,
-      }));
+      const updated = await acknowledgeIncompleteModel(campaign.id);
+      patchCampaign(campaign.id, () => updated);
+      setLoadError(null);
     } catch (err) {
-      console.error('Backend curation failed, executing fallback local curation:', err);
-      const target = campaign.totalTargetHouseholds;
-      const pool = generateSyntheticHouseholds(
-        campaign.targetCity,
-        campaign.targetZip,
-        Math.max(15000, target * 3),
-      );
-      const { curatedHouseholds: top5k, summary } = executePropensityCuration(
-        pool,
-        CLOSED_CATEGORIES,
-        target,
-      );
-      setCuratedHouseholds(top5k);
-      setCurationSummary(summary);
-      patchCampaign(campaign.id, (c) => ({
-        ...c,
-        status: 'CURATED',
-        curatedCount: top5k.length,
-      }));
+      setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsCurating(false);
+      setIsSaving(false);
     }
   };
 
@@ -1281,7 +1304,7 @@ export default function App() {
               onApplySuggested={handleApplySuggestedPrices}
               onTargetMarginSave={async (val) => {
                 try {
-                  await updateCosts(mode, billableHouseholds(shown), { targetMargin: val / 100 });
+                  await updateCosts(mode, billableHouseholds(shown), { targetMargin: val / 100 }, campaign?.id);
                 } catch (err) {
                   console.error('Failed to persist target margin:', err);
                 }
@@ -1315,11 +1338,10 @@ export default function App() {
               selectedRoutes={shown.selectedRoutes ?? 0}
               onQuickSimulateAllPaid={undefined}
               onExecuteCuration={undefined}
-              onSourceLeadForSlot={handleSourceLeadForSlot}
-              onClearSlot={handleClearSlot}
               isSaving={isSaving}
               isLoading={false}
               onInspectSlot={openInspector}
+              slotContacts={slotContacts}
               selectedSlot={inspectedSlot}
               inspectorOpen={inspectorOpen}
               onCloseInspector={closeInspector}
@@ -1334,10 +1356,10 @@ export default function App() {
                     // Candidates are always the real ones, in both worlds. The
                     // practice file simulates the audience, never the businesses:
                     // an invented shop with no phone is a box nobody can sell.
-                    mockMode={false}
                     isSaving={isSaving}
                     onClose={closeInspector}
                     onUpdateBusiness={handleUpdateSlotBusiness}
+                    onUpdateNotes={handleUpdateSlotNotes}
                     onUpdateStatus={handleUpdateSlotStatus}
                     onReactivateOffer={handleReactivateOffer}
                     onSwapSlots={(from, to) => {
@@ -1349,6 +1371,12 @@ export default function App() {
                     }}
                     onUndoPayment={handleUndoPayment}
                     onAssignLead={handleAssignLeadToSlot}
+                    onContactRecorded={() => setContactsVersion((v) => v + 1)}
+                    onRequestDeposit={(slotNumber) => {
+                      setPendingPaymentKind('deposit');
+                      setPendingPaymentSlot(slotNumber);
+                    }}
+                    contactsVersion={contactsVersion}
                   />
                 ) : null
               }
@@ -1356,6 +1384,7 @@ export default function App() {
             {pendingSlot && (
               <PaymentStamp
                 slot={pendingSlot}
+                deposit={pendingPaymentKind === 'deposit'}
                 onConfirm={handleConfirmPayment}
                 onCancel={() => setPendingPaymentSlot(null)}
                 isSaving={isSaving}
@@ -1368,19 +1397,13 @@ export default function App() {
       case 'curation':
         return (
           <CurationStudio
-            campaignCode={campaign.code}
             campaignId={campaign.id}
-            targetCity={campaign.targetCity}
             targetZip={campaign.targetZip}
             targetHouseholds={campaign.totalTargetHouseholds}
             onCoverageChange={handleCoverageChange}
-            curatedHouseholds={curatedHouseholds}
-            curationSummary={curationSummary}
-            isCurating={isCurating}
-            onRunCuration={handleRunCuration}
             onGoToExport={() => setActivePhase('manifest')}
-            mockMode={mockMode}
-            persistedCount={campaign.curatedCount ?? 0}
+            onAcknowledgeModel={handleAcknowledgeModel}
+            modelAck={campaign.modelAck ?? null}
           />
         );
 
@@ -1389,12 +1412,10 @@ export default function App() {
           <PostalExportView
             campaign={campaign}
             slots={campaign.slots}
-            curatedHouseholds={curatedHouseholds}
             onIncrementScan={handleIncrementScan}
             section="manifest"
             onDeliveredToPrinter={() => advanceStatus('IN_PRODUCTION')}
             isSaving={isSaving}
-            persistedCount={curatedCount}
           />
         );
 
@@ -1410,7 +1431,6 @@ export default function App() {
               <PostalExportView
                 campaign={campaign}
                 slots={campaign.slots}
-                curatedHouseholds={curatedHouseholds}
                 onIncrementScan={handleIncrementScan}
                 section="telemetry"
               />
@@ -1501,6 +1521,7 @@ export default function App() {
         open={settingsOpen}
         mode={mode}
         households={campaign ? billableHouseholds(campaign) : 5000}
+        campaignId={campaign?.id}
         onClose={() => setSettingsOpen(false)}
         onCostsChanged={() => setCostsVersion((v) => v + 1)}
         onCostsChange={handleCostsChange}

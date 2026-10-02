@@ -13,10 +13,11 @@ Two things it is careful about:
 box is a call to make, not a deal that closed, and the card must not read as
 though somebody agreed to pay when nobody has been phoned yet.
 
-**A "no" is remembered.** When a business turns the offer down, its lead is
-marked REJECTED and it never comes back for that campaign. Handing the partner
-the same pizzeria they were turned down by yesterday is how an operator stops
-trusting the tool.
+**A "no" is remembered, not punished.** When a business turns the offer down
+the call is written down — what was said, and how many times it has happened —
+and the business stays in the pool. A microzone has one dentist worth having,
+and "no budget this quarter" is not "never": burning it over one call leaves
+the box empty for good. The history travels with the business instead.
 """
 
 import asyncio
@@ -43,12 +44,16 @@ def _campaign(db: Session, campaign_id: str) -> Campaign:
 
 
 def _rejected_names(db: Session, campaign_id: str) -> set:
-    rows = (
-        db.query(Lead.business_name)
-        .filter(Lead.campaign_id == campaign_id, Lead.status == "REJECTED")
-        .all()
-    )
-    return {(r[0] or "").strip().lower() for r in rows}
+    """
+    Nothing is barred for good any more.
+
+    This used to collect every business ever marked REJECTED and keep it out of
+    the campaign forever. In a microzone with one good dentist that is an empty
+    box for ever after one bad phone call. What is remembered instead is the
+    history — `LeadRegeneration` — which travels with the business rather than
+    deleting it.
+    """
+    return set()
 
 
 def _taken_names(camp: Campaign, except_slot: Optional[int] = None) -> set:
@@ -128,13 +133,19 @@ def _record_lead(db: Session, camp: Campaign, slot: Slot, candidate: dict) -> No
     )
 
 
-async def _candidates_for(slot: Slot, camp: Campaign, mock_mode: bool) -> List[dict]:
+async def _candidates_for(
+    slot: Slot,
+    camp: Campaign,
+    mock_mode: bool = False,
+    disabled_sources: Optional[set] = None,
+) -> List[dict]:
     try:
         return await service.search_candidates(
             category_id=slot.category_id,
             city=camp.target_city,
             zip_code=camp.target_zip,
-            mock_mode=mock_mode,
+            mock_mode=False,
+            disabled_sources=disabled_sources,
         )
     except Exception as e:
         print(f"[Autofill] slot {slot.slot_number}: {e}")
@@ -144,7 +155,7 @@ async def _candidates_for(slot: Slot, camp: Campaign, mock_mode: bool) -> List[d
 @router.post("/{campaign_id}/slots/autofill")
 async def autofill_slots(
     campaign_id: str,
-    mock_mode: bool = Query(True),
+    mock_mode: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     """
@@ -155,7 +166,14 @@ async def autofill_slots(
     done on the phone.
     """
     camp = _campaign(db, campaign_id)
-    empty = [s for s in camp.slots if s.status == "VACANT" and not s.business_name]
+    empty = [
+        s for s in camp.slots
+        if s.status == "VACANT"
+        and not s.business_name
+        and s.slot_number != 32
+        and (getattr(s, "slot_type", None) or getattr(s, "format", None)) != "USPS"
+        and not (s.notes and "Covered by" in s.notes)
+    ]
     if not empty:
         return {
             "filled": [],
@@ -163,10 +181,13 @@ async def autofill_slots(
             "message": "No hay espacios vacíos: la tarjeta ya está completa.",
         }
 
+    from .datasources import disabled_lead_sources
+    disabled_sources = disabled_lead_sources(db, camp.mode)
+
     # Fourteen searches at once. Sequentially this is fourteen round trips to
     # Yelp or Overpass, which is a minute the operator spends watching a spinner.
     results = await asyncio.gather(
-        *(_candidates_for(s, camp, mock_mode) for s in empty),
+        *(_candidates_for(s, camp, False, disabled_sources) for s in empty),
         return_exceptions=True,
     )
 
@@ -186,20 +207,22 @@ async def autofill_slots(
             key = name.lower()
             if not name or key in rejected or key in taken:
                 continue
-            # An invented business with an invented phone number is worse than an
-            # empty box: somebody would dial it. When the operator asked for real
-            # data, the fallback is refused and the box says so.
-            if candidate.get("simulated") and not mock_mode:
+            # A placeholder is not a lead. It exists so a screen has something
+            # to render when no source answered; putting it on the card would
+            # have the partner phoning a business that does not exist.
+            if candidate.get("simulated"):
                 continue
             pick = candidate
             break
 
         if pick is None:
-            simulated_only = any(c.get("simulated") for c in candidates) and not mock_mode
+            # Name why the box stays empty. "No candidates" covers three very
+            # different situations and the operator acts on each differently.
+            only_placeholders = bool(candidates) and all(c.get("simulated") for c in candidates)
             skipped.append(
                 {
                     "slot": slot.slot_number,
-                    "reason": "solo_simulados" if simulated_only else "todos_descartados",
+                    "reason": "solo_marcadores" if only_placeholders else "todos_descartados",
                 }
             )
             continue
@@ -219,14 +242,37 @@ async def autofill_slots(
         )
 
     db.commit()
-    return {"filled": filled, "skipped": skipped}
+
+    # Which connectors came back empty and why. An empty box has two very
+    # different causes — this microzone has no roofers, or your Yelp key
+    # expired — and only one of them is something the operator can fix. Without
+    # this, both arrive as "sin candidatos" and the neighbourhood gets blamed.
+    sources = [
+        {"source": name, **state}
+        for name, state in service.source_status.items()
+        if state.get("status") and state["status"] != "OK"
+    ]
+    if service.osm_last_error:
+        sources.append(
+            {
+                "source": "osm",
+                "status": "UNREACHABLE",
+                "detail": (
+                    f"OpenStreetMap (Overpass) no contestó: {service.osm_last_error}. "
+                    "Es gratuito y sin clave, así que casi siempre es una caída "
+                    "temporal del servidor público. Reintenta en unos minutos."
+                ),
+            }
+        )
+
+    return {"filled": filled, "skipped": skipped, "sources": sources}
 
 
 @router.post("/{campaign_id}/slots/{slot_number}/next-candidate")
 async def next_candidate(
     campaign_id: str,
     slot_number: int,
-    mock_mode: bool = Query(True),
+    mock_mode: bool = Query(False),
     rejected: bool = Query(True),
     db: Session = Depends(get_db),
 ):
@@ -255,7 +301,9 @@ async def next_candidate(
             .first()
         )
         if lead:
-            lead.status = "REJECTED"
+            # Kept as CONTACTED: somebody spoke to them, which is worth knowing,
+            # and it does not remove them from tomorrow's search.
+            lead.status = "CONTACTED"
         else:
             db.add(
                 Lead(
@@ -267,12 +315,14 @@ async def next_candidate(
                     phone=slot.phone or "",
                     city=camp.target_city,
                     zip=camp.target_zip,
-                    status="REJECTED",
+                    status="CONTACTED",
                 )
             )
         db.commit()
 
-    candidates = await _candidates_for(slot, camp, mock_mode)
+    from .datasources import disabled_lead_sources
+    disabled_sources = disabled_lead_sources(db, camp.mode)
+    candidates = await _candidates_for(slot, camp, False, disabled_sources)
     rejected_names = _rejected_names(db, campaign_id)
     taken = _taken_names(camp, except_slot=slot_number)
 
@@ -281,8 +331,6 @@ async def next_candidate(
         name = (candidate.get("business_name") or candidate.get("name") or "").strip()
         key = name.lower()
         if not name or key == current.lower() or key in rejected_names or key in taken:
-            continue
-        if candidate.get("simulated") and not mock_mode:
             continue
         pick = candidate
         break
@@ -348,9 +396,24 @@ def mark_all_paid(campaign_id: str, db: Session = Depends(get_db)):
 
     stamped = []
     for slot in camp.slots:
-        if slot.slot_number == 32 or slot.slot_type == "USPS":
+        if slot.slot_number == 32 or (getattr(slot, "slot_type", None) or getattr(slot, "format", None)) == "USPS":
             slot.status = "PAID"
             slot.price_usd = 0.0
+            slot.amount_collected_usd = 0.0
+            continue
+        if slot.notes and "Covered by" in slot.notes:
+            slot.status = "VACANT"
+            slot.price_usd = 0.0
+            slot.amount_collected_usd = 0.0
+            slot.business_name = None
+            slot.contact_person = None
+            slot.phone = None
+            slot.email = None
+            slot.website = None
+            slot.logo_url = None
+            slot.offer_headline = None
+            slot.paid_at = None
+            slot.payment_ref = None
             continue
         if slot.status == "PAID":
             continue
@@ -360,9 +423,16 @@ def mark_all_paid(campaign_id: str, db: Session = Depends(get_db)):
         slot.payment_ref = "SIMULACIÓN"
         stamped.append(slot.slot_number)
 
+    comm_slots = [
+        s for s in camp.slots
+        if s.slot_number != 32
+        and (getattr(s, "slot_type", None) or getattr(s, "format", None)) != "USPS"
+        and not (s.notes and "Covered by" in s.notes)
+    ]
     camp.status = "LOCKED_READY"
-    camp.paid_count = len([s for s in camp.slots if s.status == "PAID" and s.slot_number != 32])
-    camp.total_collected_usd = sum(s.amount_collected_usd or s.price_usd or 0 for s in camp.slots if s.status == "PAID")
+    camp.paid_count = len([s for s in comm_slots if s.status == "PAID"])
+    camp.total_collected_usd = sum(s.amount_collected_usd or s.price_usd or 0.0 for s in comm_slots if s.status == "PAID")
+    camp.target_gross_revenue = sum(s.price_usd or 0.0 for s in comm_slots)
 
     db.commit()
     db.refresh(camp)

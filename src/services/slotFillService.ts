@@ -15,9 +15,18 @@ export interface SkippedSlot {
   reason: string;
 }
 
+/** Why a connector came back empty, when it did. */
+export interface SourceFailure {
+  source: string;
+  status: 'NO_KEY' | 'KEY_REJECTED' | 'QUOTA' | 'UNREACHABLE' | 'BAD_REQUEST' | 'NOT_COVERED';
+  detail: string;
+}
+
 export interface AutofillResult {
   filled: FilledSlot[];
   skipped: SkippedSlot[];
+  /** Empty when every source answered. Never inferred from an empty box. */
+  sources?: SourceFailure[];
   message?: string;
 }
 
@@ -33,10 +42,9 @@ export interface NextCandidateResult {
 /** Put a real business in every empty box, in one pass. */
 export async function autofillSlots(
   campaignId: string,
-  mockMode: boolean,
 ): Promise<AutofillResult> {
   const res = await fetch(
-    `${API_BASE}/campaigns/${encodeURIComponent(campaignId)}/slots/autofill?mock_mode=${mockMode}`,
+    `${API_BASE}/campaigns/${encodeURIComponent(campaignId)}/slots/autofill`,
     { method: 'POST' },
   );
   if (!res.ok) {
@@ -56,11 +64,10 @@ export async function autofillSlots(
 export async function nextCandidate(
   campaignId: string,
   slotNumber: number,
-  mockMode: boolean,
   rejected = true,
 ): Promise<NextCandidateResult> {
   const res = await fetch(
-    `${API_BASE}/campaigns/${encodeURIComponent(campaignId)}/slots/${slotNumber}/next-candidate?mock_mode=${mockMode}&rejected=${rejected}`,
+    `${API_BASE}/campaigns/${encodeURIComponent(campaignId)}/slots/${slotNumber}/next-candidate?rejected=${rejected}`,
     { method: 'POST' },
   );
   if (!res.ok) {

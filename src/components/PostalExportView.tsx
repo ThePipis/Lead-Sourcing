@@ -2,31 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Download,
+  FileDown,
+  Home,
   Smartphone,
   BarChart,
   Copy,
   Check,
-  Eye,
-  EyeOff,
-  Table,
   QrCode,
 } from 'lucide-react';
-import { Campaign, SlotState, Household, AnalyticsEvent } from '../types.ts';
+import { Campaign, SlotState, AnalyticsEvent } from '../types.ts';
 import {
   generateCampaignQrCodes,
-  normalizeAndSortPostalManifest,
-  generateProductionManifestCsv,
-  downloadFile,
-  fetchPostalManifestPreview,
-  PostalManifestRow,
   GeneratedQrData,
   TRACKING_BASE_URL,
 } from '../services/postalExportService.ts';
+import {
+  campaignRouteManifestUrl,
+  fetchRouteProfile,
+  getCampaignRoutes,
+  RouteProfile,
+} from '../services/routeService.ts';
 
 interface PostalExportViewProps {
   campaign: Campaign;
   slots: SlotState[];
-  curatedHouseholds: Household[];
   onIncrementScan: (slotNumber: number) => void;
   /**
    * The manifest and the QR telemetry belong to different sections of the
@@ -36,33 +35,29 @@ interface PostalExportViewProps {
   /** Section 4 closing stamp: the printer has the file. */
   onDeliveredToPrinter?: () => void;
   isSaving?: boolean;
-  /**
-   * Households already persisted for this campaign. The session array is empty
-   * on a freshly opened campaign even when 5,000 rows exist in SQLite, so the
-   * gate reads this rather than the in-memory list.
-   */
-  persistedCount?: number;
 }
 
 export const PostalExportView: React.FC<PostalExportViewProps> = ({
   campaign,
   slots,
-  curatedHouseholds,
   onIncrementScan,
   section = 'all',
   onDeliveredToPrinter,
   isSaving = false,
-  persistedCount = 0,
 }) => {
   const { t, i18n } = useTranslation(['export', 'common']);
   const [qrList, setQrList] = useState<GeneratedQrData[]>([]);
   const [selectedQr, setSelectedQr] = useState<GeneratedQrData | null>(null);
   const [recentScanLog, setRecentScanLog] = useState<AnalyticsEvent[]>([]);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState<boolean>(false);
-  const [previewRows, setPreviewRows] = useState<PostalManifestRow[]>([]);
-  const [previewLoading, setPreviewLoading] = useState<boolean>(false);
-  const [downloading, setDownloading] = useState<boolean>(false);
+  const [profile, setProfile] = useState<RouteProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState<boolean>(false);
+  // The drop's real size, straight from the selected routes. It is what the
+  // postage is billed on, so it does not wait on the county: the profile can
+  // come back empty and this still has to be right.
+  const [selectedRoutes, setSelectedRoutes] = useState(0);
+  const [coveredHouseholds, setCoveredHouseholds] = useState(0);
+  const [routesLoading, setRoutesLoading] = useState(true);
 
   // Generate QR codes on mount or when slots change
   useEffect(() => {
@@ -78,60 +73,40 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
     };
   }, [campaign.id, slots]);
 
-  const handleTogglePreview = async () => {
-    if (!showPreview && previewRows.length === 0) {
-      setPreviewLoading(true);
-      setShowPreview(true);
-      try {
-        const rows = await fetchPostalManifestPreview(campaign.id, curatedHouseholds);
-        setPreviewRows(rows);
-      } catch (err) {
-        console.error('Error cargando preview del manifiesto:', err);
-      } finally {
-        setPreviewLoading(false);
-      }
-    } else {
-      setShowPreview(!showPreview);
-    }
-  };
+  // The routes first, because they are cheap and authoritative. The county
+  // parcel roll is a slow second call and is allowed to fail: a profile that
+  // never arrives is reported as unavailable, never as a zero.
+  useEffect(() => {
+    let alive = true;
+    setRoutesLoading(true);
+    getCampaignRoutes(campaign.id)
+      .then((plan) => {
+        if (!alive) return;
+        setSelectedRoutes(plan.selectedRoutes);
+        setCoveredHouseholds(plan.covered);
+      })
+      .catch(() => undefined)
+      .finally(() => alive && setRoutesLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [campaign.id]);
 
-  const handleDownloadCsv = async () => {
-    setDownloading(true);
-    try {
-      // Intentar descarga directa del archivo certificado desde el backend
-      const res = await fetch(`/api/export/${campaign.id}/manifest.csv`);
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `production_manifest_${campaign.id}_5000_ActionMail.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        setDownloading(false);
-        return;
-      }
-      console.warn(
-        `[PostalExport] Backend manifest returned HTTP ${res.status}, using client generator`,
-      );
-    } catch (err) {
-      console.warn('[PostalExport] Fallback a generador de cliente:', err);
-    }
-
-    if (curatedHouseholds.length === 0) {
-      alert(t('export:alerts.needCuration'));
-      setDownloading(false);
+  useEffect(() => {
+    if (selectedRoutes === 0) {
+      setProfile(null);
       return;
     }
-
-    const normalizedRows = normalizeAndSortPostalManifest(curatedHouseholds);
-    const csvContent = generateProductionManifestCsv(normalizedRows);
-    const filename = `production_manifest_${campaign.code}_5000_ActionMail.csv`;
-    downloadFile(filename, csvContent);
-    setDownloading(false);
-  };
+    let alive = true;
+    setProfileLoading(true);
+    fetchRouteProfile(campaign.id)
+      .then((p) => alive && setProfile(p))
+      .catch(() => alive && setProfile(null))
+      .finally(() => alive && setProfileLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [campaign.id, selectedRoutes]);
 
   const handleSimulateScan = (qr: GeneratedQrData) => {
     onIncrementScan(qr.slotNumber);
@@ -157,176 +132,164 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
   const showManifest = section === 'manifest' || section === 'all';
   const showTelemetry = section === 'telemetry' || section === 'all';
   const deliveredToPrinter = campaign.status === 'IN_PRODUCTION' || campaign.status === 'MAILED';
-  const availableHouseholds = Math.max(persistedCount, curatedHouseholds.length);
+  const availableHouseholds = coveredHouseholds;
 
   return (
     <div className="space-y-6">
       {showManifest && (
         <>
-          {/* Header Banner */}
-          <div className="flex flex-col gap-4 border border-border bg-card p-5 text-card-foreground transition-colors lg:flex-row lg:items-center">
-            <p className="min-w-0 sm:min-w-[34ch] max-w-[68ch] flex-1 text-xs leading-relaxed text-muted-foreground">
-              {t('export:header.description')}
-            </p>
+          {/* ------------------------------------------------------------ *
+              Two files leave this section and they are not interchangeable.
+              One is what the printer and the post office act on; the other is
+              what the advertiser is shown. Mixing them is how a neighbourhood
+              study ends up on a loading dock as a delivery list, so each one
+              says on its face what it is and where it goes.
+           * ------------------------------------------------------------ */}
 
-            {/* Action Buttons: Preview + Download CSV */}
-            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-              <button
-                id="btn-preview-production-csv"
-                type="button"
-                onClick={handleTogglePreview}
-                className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider border transition-colors cursor-pointer flex items-center space-x-2  ${
-                  showPreview
-                    ? 'bg-primary text-primary-foreground border-primary '
-                    : 'bg-secondary hover:bg-accent text-secondary-foreground border-border'
-                }`}
-              >
-                {showPreview ? (
-                  <EyeOff className="w-4 h-4" />
-                ) : (
-                  <Eye className="w-4 h-4 text-primary" />
-                )}
-                <span>
-                  {showPreview ? t('export:header.hidePreview') : t('export:header.showPreview')}
-                </span>
-              </button>
+          {/* FILE 1 — the operative one */}
+          <section className="border border-clear/50 bg-card text-card-foreground">
+            <header className="flex flex-wrap items-center gap-2 border-b border-clear/30 bg-clear/10 px-5 py-2.5">
+              <FileDown className="h-4 w-4 shrink-0 text-clear" />
+              <h3 className="text-sm font-bold text-clear uppercase tracking-wider">
+                {t('export:routeManifest.title')}
+              </h3>
+              <span className="border border-clear/40 bg-clear/15 px-2 py-0.5 font-mono text-[0.63rem] font-bold text-clear">
+                {t('export:routeManifest.badge')}
+              </span>
+            </header>
 
-              <button
-                id="btn-download-production-csv"
-                type="button"
-                onClick={handleDownloadCsv}
-                disabled={downloading}
-                className="px-5 py-2.5 text-xs font-bold uppercase tracking-wider bg-clear hover:opacity-90 disabled:opacity-50 text-background flex items-center justify-center gap-2 transition-opacity cursor-pointer text-center"
-              >
-                <Download className="w-4 h-4" />
-                <span>
-                  {downloading ? t('export:header.generating') : t('export:header.downloadCsv')}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Interactive Manifest Preview Section */}
-          {showPreview && (
-            <div className="bg-card border border-border p-5 space-y-4  text-card-foreground transition-colors">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-border pb-3">
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <Table className="w-4 h-4 text-primary" />
-                    <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">
-                      {t('export:preview.title')}
-                    </h3>
-                    <span className="px-2 py-0.5 text-[0.63rem] font-mono bg-clear/15 text-clear border border-clear/40 font-bold">
-                      {t('export:preview.badge')}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    {t('export:preview.subtitle', { id: campaign.id })}
-                  </p>
-                </div>
-
-                <div className="flex items-center space-x-3 text-xs font-mono">
-                  <span className="text-muted-foreground">
-                    {t('export:preview.totalDataset')}{' '}
-                    <strong className="text-foreground">{t('export:preview.households')}</strong>
-                  </span>
-                  <span className="text-muted-foreground">|</span>
-                  <span className="text-primary font-bold">{t('export:preview.fixedColumns')}</span>
-                </div>
+            <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center">
+              <div className="min-w-0 flex-1">
+                <p className="max-w-[68ch] text-xs leading-relaxed text-muted-foreground">
+                  {t('export:routeManifest.description')}
+                </p>
+                <p className="mt-2 font-mono text-[0.69rem] tabular-nums text-foreground">
+                  {routesLoading
+                    ? t('export:routeManifest.loading')
+                    : selectedRoutes > 0
+                      ? t('export:routeManifest.summary', {
+                          routes: selectedRoutes,
+                          households: coveredHouseholds.toLocaleString('en-US'),
+                        })
+                      : t('export:routeManifest.noRoutes')}
+                </p>
               </div>
 
-              {previewLoading ? (
-                <div className="py-12 text-center text-muted-foreground space-y-2">
-                  <div className="w-6 h-6 border border-primary border-t-transparent  animate-spin mx-auto"></div>
-                  <p className="text-xs font-mono">{t('export:preview.loading')}</p>
-                </div>
-              ) : previewRows.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground text-xs">
-                  {t('export:preview.noRecords')}
-                </div>
+              <a
+                id="btn-download-route-manifest"
+                href={campaignRouteManifestUrl(campaign.id)}
+                download
+                aria-disabled={selectedRoutes === 0}
+                className={`flex shrink-0 items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-opacity ${
+                  selectedRoutes === 0
+                    ? 'pointer-events-none bg-secondary text-muted-foreground opacity-50'
+                    : 'bg-clear text-background hover:opacity-90'
+                }`}
+              >
+                <Download className="h-4 w-4" />
+                <span>{t('export:routeManifest.download')}</span>
+              </a>
+            </div>
+          </section>
+
+          {/* FILE 2 — the evidence, which never leaves for the post office */}
+          <section className="border border-border bg-card text-card-foreground">
+            <header className="flex flex-wrap items-center gap-2 border-b border-border bg-secondary/50 px-5 py-2.5">
+              <Home className="h-4 w-4 shrink-0 text-primary" />
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">
+                {t('export:profile.title')}
+              </h3>
+              <span className="border border-border bg-secondary px-2 py-0.5 font-mono text-[0.63rem] font-bold text-secondary-foreground">
+                {t('export:profile.badge')}
+              </span>
+            </header>
+
+            <div className="space-y-4 p-5">
+              <p className="max-w-[68ch] text-xs leading-relaxed text-muted-foreground">
+                {t('export:profile.description')}
+              </p>
+
+              {profileLoading ? (
+                <p className="flex items-center gap-2 py-6 font-mono text-xs text-muted-foreground">
+                  <span className="h-3 w-3 animate-spin border border-primary border-t-transparent" />
+                  {t('export:profile.loading')}
+                </p>
+              ) : !profile ? (
+                <p className="border border-border bg-secondary/40 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+                  {selectedRoutes === 0
+                    ? t('export:profile.noRoutes')
+                    : t('export:profile.unavailable')}
+                </p>
               ) : (
-                <div className="overflow-x-auto border border-border">
-                  <table className="w-full text-left text-xs font-mono">
-                    <thead className="bg-secondary text-secondary-foreground border-b border-border">
-                      <tr>
-                        <th className="px-3 py-2.5 font-bold text-primary whitespace-nowrap">
-                          # RECORD_ID
-                        </th>
-                        <th className="px-3 py-2.5 font-bold text-foreground whitespace-nowrap">
-                          ENDORSEMENT_LINE
-                        </th>
-                        <th className="px-3 py-2.5 font-bold text-foreground whitespace-nowrap">
-                          PRIMARY_ADDRESS
-                        </th>
-                        <th className="px-3 py-2.5 font-bold text-foreground whitespace-nowrap">
-                          CITY
-                        </th>
-                        <th className="px-3 py-2.5 font-bold text-foreground whitespace-nowrap">
-                          STATE
-                        </th>
-                        <th className="px-3 py-2.5 font-bold text-foreground whitespace-nowrap">
-                          ZIP_CODE
-                        </th>
-                        <th className="px-3 py-2.5 font-bold text-foreground whitespace-nowrap">
-                          ZIP4
-                        </th>
-                        <th className="px-3 py-2.5 font-bold text-ink whitespace-nowrap">
-                          CARRIER_ROUTE
-                        </th>
-                        <th className="px-3 py-2.5 font-bold text-clear whitespace-nowrap">
-                          WALK_SEQ
-                        </th>
-                        <th className="px-3 py-2.5 font-bold text-live whitespace-nowrap">SCORE</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border bg-card">
-                      {previewRows.map((r) => (
-                        <tr key={r.RECORD_ID} className="hover:bg-muted/50 transition-colors">
-                          <td className="px-3 py-2 font-bold text-primary whitespace-nowrap">
-                            {r.RECORD_ID}
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                            <span className="px-1.5 py-0.5 text-[0.63rem] bg-secondary text-secondary-foreground border border-border">
-                              {r.ENDORSEMENT_LINE}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-foreground font-medium whitespace-nowrap">
-                            {r.PRIMARY_ADDRESS}
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                            {r.CITY}
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                            {r.STATE}
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                            {r.ZIP_CODE}
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                            {r.ZIP4}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            <span className="px-2 py-0.5 text-[0.69rem] font-bold bg-secondary text-ink border border-rule-strong">
-                              {r.CARRIER_ROUTE}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 font-bold text-clear whitespace-nowrap">
-                            {r.WALK_SEQUENCE}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            <span className="px-1.5 py-0.5 text-[0.63rem] font-bold bg-live/15 text-live border border-live/40">
-                              {r.HOUSEHOLD_SCORE}
-                            </span>
-                          </td>
-                        </tr>
+                <>
+                  <dl className="grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+                    {(
+                      [
+                        [
+                          'profile.singleFamily',
+                          profile.singleFamilyRate != null
+                            ? `${Math.round(profile.singleFamilyRate * 100)}%`
+                            : '—',
+                        ],
+                        [
+                          'profile.medianValue',
+                          profile.medianValue != null
+                            ? `$${profile.medianValue.toLocaleString('en-US')}`
+                            : '—',
+                        ],
+                        [
+                          'profile.medianAge',
+                          profile.medianAgeYears != null
+                            ? t('export:profile.years', { count: profile.medianAgeYears })
+                            : '—',
+                        ],
+                        ['profile.sampled', profile.parcelsSampled.toLocaleString('en-US')],
+                      ] as const
+                    ).map(([label, value]) => (
+                      <div key={label} className="bg-card px-4 py-3">
+                        <dt className="field-label">{t(`export:${label}`)}</dt>
+                        <dd className="field-value mt-1 font-mono text-sm tabular-nums text-ink">
+                          {value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+
+                  {profile.classBreakdown.length > 0 && (
+                    <ul className="space-y-1">
+                      {profile.classBreakdown.map((c) => (
+                        <li
+                          key={c.classCode}
+                          className="flex items-baseline justify-between gap-3 border-b border-rule pb-1 text-xs"
+                        >
+                          <span className="min-w-0 truncate text-foreground">{c.classCode}</span>
+                          <span className="shrink-0 font-mono tabular-nums text-muted-foreground">
+                            {c.count.toLocaleString('en-US')}
+                          </span>
+                        </li>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </ul>
+                  )}
+
+                  {/* The sample is smaller than the drop, and saying so is the
+                      point: the ratios describe the housing, the USPS count is
+                      what gets mailed and billed. */}
+                  <p className="border-t border-rule pt-3 font-mono text-[0.69rem] leading-relaxed text-ink-faint">
+                    {t('export:profile.footnote', {
+                      households: profile.households.toLocaleString('en-US'),
+                      routes: profile.routes,
+                      sampled: profile.parcelsSampled.toLocaleString('en-US'),
+                      coverage:
+                        profile.yearBuiltCoverage != null
+                          ? `${Math.round(profile.yearBuiltCoverage * 100)}%`
+                          : '—',
+                      source: profile.source,
+                    })}
+                  </p>
+                </>
               )}
             </div>
-          )}
-
+          </section>
           {/* Fixed specification of the file this section produces. These are
               constants of the USPS/printer contract, not checks that can fail,
               so they are printed as a ruled block rather than dressed as state. */}

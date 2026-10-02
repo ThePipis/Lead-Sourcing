@@ -264,6 +264,29 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
     ? `$${unitPieceCost.toFixed(3)}/ud · ${householdsNum} hogares (${routesNum} rutas)`
     : `$${unitPieceCost.toFixed(3)}/ud · ${householdsNum} hogares`;
 
+  // Plegar la tarjeta al hacer clic en cualquier parte que no sea una caja de texto o control interactivo
+  const handleExpandedContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    // Proteger campos de texto, botones, etiquetas, selector de socios y notas interactivas
+    if (
+      target.closest(
+        'input, textarea, select, button, label, #campaign-reach-note, [data-no-collapse]'
+      )
+    ) {
+      return;
+    }
+
+    // No plegar si el usuario está seleccionando texto con el cursor
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim().length > 0) {
+      return;
+    }
+
+    toggleExpanded();
+  };
+
   return (
     <section data-tour="reach" className="mb-5 border border-rule bg-background shadow-xs">
       {/* ========================================================= 1. VISTA MINIMIZADA / PLEGADA (DEFAULT) ========================================================= */}
@@ -439,10 +462,17 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
 
       {/* ========================================================= 2. VISTA DETALLADA / EXPANDIDA ========================================================= */}
       {isExpanded && (
-        <div id="financial-metrics-details" className="flex flex-col">
+        <div
+          id="financial-metrics-details"
+          onClick={handleExpandedContainerClick}
+          className="flex flex-col cursor-pointer select-none"
+        >
           {/* Cabecera de vista detallada: barra horizontal clickeable para plegar */}
           <div
-            onClick={toggleExpanded}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleExpanded();
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
@@ -475,7 +505,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
               >
                 {t('common:reach.label', 'Alcance de la tirada')}:
               </label>
-              <div className="flex items-center gap-1.5">
+              <div data-no-collapse className="flex items-center gap-1.5 cursor-default">
                 <input
                   id="campaign-reach"
                   type="number"
@@ -495,7 +525,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                   }}
                   aria-describedby="campaign-reach-note"
                   aria-invalid={!validReach}
-                  className={`h-7 w-24 border bg-card px-2 text-center font-mono text-xs font-bold text-ink focus-visible:ring-1 focus-visible:ring-live focus:outline-none disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+                  className={`h-7 w-24 border bg-card px-2 text-center font-mono text-xs font-bold text-ink cursor-text focus-visible:ring-1 focus-visible:ring-live focus:outline-none disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
                     validReach ? 'border-rule' : 'border-due'
                   }`}
                 />
@@ -522,7 +552,10 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                 )}
                 <button
                   type="button"
-                  onClick={() => setShowReachInfo((v) => !v)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowReachInfo((v) => !v);
+                  }}
                   aria-label="Ver explicación de rutas EDDM"
                   title="Información sobre distribución postal por rutas carrier"
                   className="p-1 text-ink-dim hover:text-ink transition-colors cursor-pointer"
@@ -542,7 +575,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                 >
                   {t('common:finance.targetMargin', 'Margen')}:
                 </label>
-                <div className="relative flex items-center">
+                <div data-no-collapse className="relative flex items-center cursor-default">
                   <input
                     id="target-margin-input"
                     type="number"
@@ -559,7 +592,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                         e.currentTarget.blur();
                       }
                     }}
-                    className="h-7 w-14 border border-rule bg-card px-1.5 pr-4 text-center font-mono text-xs font-bold text-ink focus-visible:ring-1 focus-visible:ring-live focus:outline-none"
+                    className="h-7 w-14 border border-rule bg-card px-1.5 pr-4 text-center font-mono text-xs font-bold text-ink cursor-text focus-visible:ring-1 focus-visible:ring-live focus:outline-none"
                     title="Margen de beneficio objetivo porcentual sobre la recaudación bruta"
                   />
                   <span className="pointer-events-none absolute right-1.5 font-mono text-[0.62rem] text-ink-dim">
@@ -597,7 +630,9 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
           {showReachInfo && (
             <div
               id="campaign-reach-note"
-              className="border-b border-rule bg-secondary/15 px-4 py-2.5 text-xs leading-relaxed text-ink-dim flex items-start justify-between gap-3 animate-fadeIn"
+              data-no-collapse
+              onClick={(e) => e.stopPropagation()}
+              className="border-b border-rule bg-secondary/15 px-4 py-2.5 text-xs leading-relaxed text-ink-dim flex items-start justify-between gap-3 animate-fadeIn cursor-default"
             >
               <p>
                 {floor
@@ -609,9 +644,12 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
               </p>
               <button
                 type="button"
-                onClick={() => setShowReachInfo(false)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowReachInfo(false);
+                }}
                 aria-label="Cerrar nota informativa"
-                className="text-xs text-ink-dim hover:text-ink font-bold px-1.5 py-0.5"
+                className="text-xs text-ink-dim hover:text-ink font-bold px-1.5 py-0.5 cursor-pointer"
               >
                 ✕
               </button>
@@ -641,7 +679,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
               {/* Cabecera: Título + Stepper de Socios */}
               <div className="flex items-center justify-between gap-1.5">
                 <dt className="field-label">{t('common:finance.margin')}</dt>
-                <div className="flex items-center gap-1 bg-secondary/80 px-2 py-0.5 border border-rule">
+                <div data-no-collapse className="flex items-center gap-1 bg-secondary/80 px-2 py-0.5 border border-rule cursor-default">
                   <label
                     htmlFor="partners-count-input"
                     className="field-label text-[0.62rem] text-ink-dim cursor-pointer select-none"
@@ -662,7 +700,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                       const val = parseInt(e.target.value, 10);
                       if (!isNaN(val)) handlePartnersChange(val);
                     }}
-                    className="w-11 h-5 text-center font-mono text-xs font-bold border border-rule bg-background text-ink focus-visible:ring-1 focus-visible:ring-live focus:outline-none"
+                    className="w-11 h-5 text-center font-mono text-xs font-bold border border-rule bg-background text-ink cursor-text focus-visible:ring-1 focus-visible:ring-live focus:outline-none"
                     title="Número de socios para repartir ganancia (scroll con rueda del ratón o flechas)"
                   />
                 </div>
@@ -754,7 +792,10 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
 
           {/* Pie de cierre: barra horizontal clickeable para plegar */}
           <div
-            onClick={toggleExpanded}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleExpanded();
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();

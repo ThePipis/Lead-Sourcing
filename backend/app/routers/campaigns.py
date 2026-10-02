@@ -4,8 +4,17 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from typing import List, Optional, Any, Dict
 from ..database import get_db
-from ..models import Campaign, Slot, Household, Lead, AnalyticsEvent, CostSettings, CampaignRoute
-from ..schemas import CampaignCreate, CampaignResponse, CampaignStatusUpdate, SlotUpdate, SlotResponse
+from ..models import (
+    Campaign,
+    Slot,
+    Lead,
+    LeadContact,
+    LeadRegeneration,
+    AnalyticsEvent,
+    CostSettings,
+    CampaignRoute,
+)
+from ..schemas import CampaignCreate, CampaignResponse, CampaignStatusUpdate, ModelAck, SlotUpdate, SlotResponse
 # One cost model for the whole system: the campaign reads it, never its own copy.
 from .costs import (
     unit_cost as cost_unit_per_piece,
@@ -22,8 +31,8 @@ INITIAL_SLOT_DEFS = [
     (3, "Hospital Veterinario", "FRONT", "SMALL", 2.8, 1.8, 350.0, 450.0, "Cuidado Médico Compasivo 7 Días | 50% de Descuento en Primera Consulta Preventiva"),
     (4, "Plomería Residencial", "FRONT", "SMALL", 2.8, 1.8, 350.0, 780.0, "Plomeros de Confianza 24/7 | $50 Off Desazolve de Drenaje o Inspección con Cámara Gratis"),
     (5, "Taller Mecánico / Frenos", "FRONT", "SMALL", 2.8, 1.8, 350.0, 550.0, "Viaje Seguro por la Autopista | $99 Frenos Completos Por Eje + Diagnóstico Computarizado"),
-    (6, "Pizzería Artesanal", "FRONT", "SMALL", 2.8, 1.8, 350.0, 55.0, "Masa Madre al Horno de Piedra | Compra 1 Pizza Grande y Lleva la Segunda al 50%"),
-    (7, "Gimnasio Boutique / Fitness", "FRONT", "SMALL", 2.8, 1.8, 350.0, 140.0, "Transforme su Salud Este Mes | 14 Días VIP Pass Ilimitado + Sesión de Coaching Gratis"),
+    (6, "Pizzería", "FRONT", "SMALL", 2.8, 1.8, 350.0, 55.0, "Masa Madre al Horno de Piedra | Compra 1 Pizza Grande y Lleva la Segunda al 50%"),
+    (7, "Gimnasio / Fitness", "FRONT", "SMALL", 2.8, 1.8, 350.0, 140.0, "Transforme su Salud Este Mes | 14 Días VIP Pass Ilimitado + Sesión de Coaching Gratis"),
     (8, "Techado y Paneles Solares", "FRONT", "SMALL", 2.8, 1.8, 350.0, 14500.0, "Ahorre Hasta 80% en Electricidad SCE | Reemplazo de Techo con $0 de Pago Inicial"),
     (9, "Quiropráctico / Fisioterapia", "FRONT", "SMALL", 2.8, 1.8, 350.0, 480.0, "Alivio Inmediato del Dolor de Espalda | $29 Consulta + Ajuste Vertebral + Terapia Térmica"),
     (10, "Limpieza de Alfombras y Pisos", "FRONT", "SMALL", 2.8, 1.8, 350.0, 320.0, "Hogar Impecable y Libre de Alérgenos | 3 Habitaciones Limpieza a Vapor Profunda por $99"),
@@ -48,7 +57,7 @@ INITIAL_SLOT_DEFS = [
     (27, "Preparación de Impuestos y Tax", "BACK", "SMALL", 2.8, 1.8, 350.0, 380.0, "Maximiza tu Reembolso Fiscal | $50 de Descuento en tu Declaración de Impuestos"),
     (28, "Centro Óptico y Oftalmología", "BACK", "SMALL", 2.8, 1.8, 350.0, 320.0, "Claridad para tu Vista | Examen Completo + Armazón de Diseñador con 30% Off"),
     (29, "Tintorería y Dry Cleaning", "BACK", "SMALL", 2.8, 1.8, 350.0, 85.0, "Prendas Impecables Sin Salir de Casa | 20% Off en tu Primera Orden con Entrega Gratis"),
-    (30, "Taquería y Mariscos Tradicional", "BACK", "SMALL", 2.8, 1.8, 350.0, 48.0, "Martes de Tacos 2x1 y Ceviche Familiar | Bebida Grande de Cortesía en Orden de $25+"),
+    (30, "Taquería y Mariscos", "BACK", "SMALL", 2.8, 1.8, 350.0, 48.0, "Martes de Tacos 2x1 y Ceviche Familiar | Bebida Grande de Cortesía en Orden de $25+"),
     (31, "Salón de Belleza y Uñas (Nails)", "BACK", "SMALL", 2.8, 1.8, 350.0, 120.0, "Luce Espectacular | Manicure + Pedicure Spa con $15 Off en Primera Cita"),
     (32, "USPS EDDM Technical Zone", "BACK", "USPS", 2.8, 1.8, 0.0, 0.0, "Espacio técnico reservado por ley federal USPS. No se vende."),
 ]
@@ -99,6 +108,18 @@ def ensure_campaign_slots(camp: Campaign, db: Session) -> None:
 
 PRODUCTION_STATUSES = ("IN_PRODUCTION", "MAILED")
 
+# The six the propensity model is built on. Named here because the campaign has
+# to report which of them actually reached the score, and "six variables" is a
+# claim the operator repeats to an advertiser.
+MODEL_VARIABLES = (
+    "income",
+    "owner_occupied",
+    "single_family",
+    "vehicles",
+    "home_value",
+    "household_size",
+)
+
 # The prices in INITIAL_SLOT_DEFS are the rate card at 5,000 households. They
 # survive as the *weights* — what each position is worth relative to the others
 # — and as the fallback when no cost model has been configured yet. The price
@@ -125,7 +146,7 @@ def slot_prices(db: Optional[Session], camp: Campaign) -> Dict[int, float]:
     # longer has is how a campaign loses money quietly.
     households = billable_households(camp, db)
     if db is not None:
-        derived = prices_for_campaign(db, camp.mode or "DEMO", households)
+        derived = prices_for_campaign(db, camp.mode or "DEMO", households, camp.id)
         if derived:
             return derived
     return {num: price_for(price, households) for num, *_rest, price in
@@ -183,7 +204,28 @@ def _populate_campaign_computed(camp: Campaign, db: Optional[Session] = None) ->
     if db is not None and (len(camp.slots) < 32 or any(8 <= s.slot_number <= 16 and s.side == "BACK" for s in camp.slots)):
         ensure_campaign_slots(camp, db)
 
-    paid_slots = [s for s in camp.slots if s.status == "PAID" and s.slot_number != 32]
+    for s in camp.slots:
+        if s.notes and "Covered by" in s.notes:
+            s.price_usd = 0.0
+            s.amount_collected_usd = 0.0
+            s.status = "VACANT"
+            s.business_name = None
+            s.contact_person = None
+            s.phone = None
+            s.email = None
+            s.website = None
+            s.logo_url = None
+            s.offer_headline = None
+            s.payment_ref = None
+            s.paid_at = None
+
+    commercial_slots = [
+        s for s in camp.slots
+        if s.slot_number != 32
+        and (getattr(s, "slot_type", None) or getattr(s, "format", None)) != "USPS"
+        and not (s.notes and "Covered by" in s.notes)
+    ]
+    paid_slots = [s for s in commercial_slots if s.status == "PAID"]
     camp.paid_count = len(paid_slots)
     # Cost follows the drop size rather than sitting at a fixed $3,000.
     camp.unit_cost_usd = effective_unit_cost(camp, db)
@@ -195,17 +237,28 @@ def _populate_campaign_computed(camp: Campaign, db: Optional[Session] = None) ->
         )
         camp.covered_households = sum(r.residential for r in selected)
         camp.selected_routes = len(selected)
+        # Which of the six the score was actually built from, across every route
+        # in the drop. A variable that is missing on one route is missing for the
+        # campaign: the routes are ranked against each other, so a gap anywhere
+        # makes the ranking uneven.
+        missing = sorted(
+            v
+            for v in MODEL_VARIABLES
+            if selected and not all(v in ((r.scored_on or "").split(",")) for r in selected)
+        )
+        camp.model_missing = missing
+        camp.model_variables = len(MODEL_VARIABLES) - len(missing)
+        camp.model_complete = bool(selected) and not missing
     else:
         camp.covered_households = 0
         camp.selected_routes = 0
+        camp.model_missing = []
+        camp.model_variables = 0
+        camp.model_complete = False
     camp.fixed_cost_usd = drop_fixed_cost(camp, db)
     camp.operating_cost_est = drop_cost(camp, db)
-    if db is not None:
-        camp.curated_count = db.query(Household).filter(
-            Household.campaign_id == camp.id
-        ).count()
-    camp.total_collected_usd = sum(s.amount_collected_usd or s.price_usd for s in paid_slots)
-    camp.target_gross_revenue = sum(s.price_usd for s in camp.slots)
+    camp.total_collected_usd = sum(s.amount_collected_usd or s.price_usd or 0.0 for s in paid_slots)
+    camp.target_gross_revenue = sum(s.price_usd or 0.0 for s in commercial_slots)
     camp.net_margin_est = max(0.0, camp.target_gross_revenue - camp.operating_cost_est)
     if camp.target_gross_revenue > 0:
         camp.target_margin = round((camp.target_gross_revenue - camp.operating_cost_est) / camp.target_gross_revenue, 4)
@@ -299,6 +352,44 @@ def list_campaigns(
     return [_populate_campaign_computed(c, db) for c in camps]
 
 
+@router.post("/{campaign_id}/model-ack", response_model=CampaignResponse)
+def acknowledge_incomplete_model(
+    campaign_id: str,
+    req: ModelAck = Body(default=ModelAck()),
+    db: Session = Depends(get_db),
+):
+    """
+    Record that the operator is continuing with an incomplete model.
+
+    The gate exists so nobody sells "six variables" on a score built from four.
+    It can still be passed — a census outage should not stop a drop that is
+    already sold — but not silently: what was missing and when is written down,
+    and it travels with the campaign from here on.
+    """
+    camp = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if not camp:
+        raise HTTPException(status_code=404, detail=f"Campaign {campaign_id} not found")
+
+    if not req.acknowledged:
+        camp.model_ack = None
+        db.commit()
+        db.refresh(camp)
+        return _populate_campaign_computed(camp, db)
+
+    _populate_campaign_computed(camp, db)
+    if camp.model_complete:
+        raise HTTPException(
+            status_code=409,
+            detail="El modelo está completo: no hay nada que reconocer.",
+        )
+
+    stamp = datetime.datetime.utcnow().isoformat(timespec="seconds")
+    camp.model_ack = f"{stamp}|{','.join(camp.model_missing)}"
+    db.commit()
+    db.refresh(camp)
+    return _populate_campaign_computed(camp, db)
+
+
 @router.patch("/{campaign_id}", response_model=CampaignResponse)
 def update_campaign_status(
     campaign_id: str,
@@ -333,15 +424,6 @@ def update_campaign_status(
             camp.target_households = req.target_households
             # Slot list prices remain fixed ($350/$650/$1200). Operating cost and margin % scale dynamically.
 
-            # The persisted audience was cut to the old reach, so it no longer
-            # describes this drop. Drop it and send the campaign back to the
-            # curation step rather than leaving a manifest of the wrong size.
-            removed = (
-                db.query(Household).filter(Household.campaign_id == camp.id).delete()
-            )
-            if removed and camp.status == "CURATED":
-                camp.status = "PROSPECTING"
-
     if req.archived is not None:
         camp.archived_at = datetime.datetime.utcnow() if req.archived else None
 
@@ -353,6 +435,11 @@ def update_campaign_status(
             # Freeze what the drop actually cost. From here the cost settings can
             # move with the next quote without rewriting this drop's history.
             camp.unit_cost_usd = effective_unit_cost(camp, db)
+        if req.status == "MAILED":
+            if camp.production_at is None:
+                camp.production_at = now
+            if camp.mailed_at is None:
+                camp.mailed_at = now
     if db is not None:
         selected = (
             db.query(CampaignRoute)
@@ -364,14 +451,14 @@ def update_campaign_status(
     else:
         camp.covered_households = 0
         camp.selected_routes = 0
-        if req.status == "MAILED":
-            if camp.production_at is None:
-                camp.production_at = now
-            if camp.mailed_at is None:
-                camp.mailed_at = now
 
     camp.operating_cost_est = drop_cost(camp, db)
-    camp.target_gross_revenue = sum(s.price_usd for s in camp.slots)
+    camp.target_gross_revenue = sum(
+        s.price_usd or 0.0 for s in camp.slots
+        if s.slot_number != 32
+        and (getattr(s, "slot_type", None) or getattr(s, "format", None)) != "USPS"
+        and not (s.notes and "Covered by" in s.notes)
+    )
     camp.net_margin_est = max(0.0, camp.target_gross_revenue - camp.operating_cost_est)
     db.commit()
     db.refresh(camp)
@@ -507,11 +594,25 @@ def update_slot(campaign_id: str, slot_id: str, req: SlotUpdate, db: Session = D
     if "format" in update_data and "slot_type" not in update_data and update_data["format"]:
         slot.slot_type = update_data["format"]
 
-    # When slot is rolled back or unlocked from PAID, clear all payment artifacts
-    if slot.status != "PAID":
+    # When a slot goes back to being unsold, clear the payment artifacts.
+    #
+    # RESERVED is deliberately not on that list: a box can be separated with a
+    # deposit, and that money arrived. Clearing on "anything but PAID" erased
+    # every part payment the moment it was written. Rolling a payment back
+    # sends the zeroes itself, so nothing depended on the wider rule.
+    if slot.status in ("VACANT", "PROSPECTING"):
         slot.paid_at = None
         slot.payment_ref = None
         slot.amount_collected_usd = 0.0
+
+    # Clear reservation timestamps once the slot is back on the market, unless the
+    # caller supplies new ones. A PAID slot keeps them: they record that its price
+    # was the 72h offer, which undoing the payment needs to restore the list price.
+    if slot.status in ("VACANT", "PROSPECTING"):
+        if "reserved_at" not in update_data:
+            slot.reserved_at = None
+        if "reservation_expires_at" not in update_data:
+            slot.reservation_expires_at = None
 
     # When slot is rolled back to VACANT (unregister), ensure advertiser fields are emptied
     if slot.status == "VACANT":
@@ -529,16 +630,41 @@ def update_slot(campaign_id: str, slot_id: str, req: SlotUpdate, db: Session = D
             slot.business_address = None
         if "offer_headline" not in update_data:
             slot.offer_headline = None
+
+    if slot.notes and "Covered by" in slot.notes:
+        slot.price_usd = 0.0
+        slot.amount_collected_usd = 0.0
+        slot.status = "VACANT"
+        slot.business_name = None
+        slot.contact_person = None
+        slot.phone = None
+        slot.email = None
+        slot.website = None
+        slot.logo_url = None
+        slot.offer_headline = None
+        slot.paid_at = None
+        slot.payment_ref = None
     
     # Recalculate campaign financials dynamically
     all_slots = db.query(Slot).filter(Slot.campaign_id == camp.id).all()
-    camp.target_gross_revenue = sum(s.price_usd for s in all_slots)
+    for s in all_slots:
+        if s.notes and "Covered by" in s.notes:
+            s.price_usd = 0.0
+            s.amount_collected_usd = 0.0
+
+    comm_slots = [
+        s for s in all_slots
+        if s.slot_number != 32
+        and (getattr(s, "slot_type", None) or getattr(s, "format", None)) != "USPS"
+        and not (s.notes and "Covered by" in s.notes)
+    ]
+    camp.target_gross_revenue = sum(s.price_usd or 0.0 for s in comm_slots)
     camp.operating_cost_est = drop_cost(camp, db)
     camp.net_margin_est = max(0.0, camp.target_gross_revenue - camp.operating_cost_est)
-    camp.total_collected_usd = sum(s.price_usd for s in all_slots if s.status == "PAID")
+    camp.total_collected_usd = sum(s.amount_collected_usd or s.price_usd or 0.0 for s in comm_slots if s.status == "PAID")
 
-    paid_count = len([s for s in all_slots if s.status == "PAID" and s.slot_number != 32])
-    advertiser_slots_count = len([s for s in all_slots if s.slot_number != 32])
+    paid_count = len([s for s in comm_slots if s.status == "PAID"])
+    advertiser_slots_count = len(comm_slots)
     if advertiser_slots_count > 0 and paid_count >= advertiser_slots_count:
         camp.status = "LOCKED_READY"
     elif camp.status == "LOCKED_READY":
@@ -613,9 +739,27 @@ def batch_update_slots(campaign_id: str, updates: List[dict] = Body(...), db: Se
             val = item.get("paid_at") or item.get("paidAt")
             if isinstance(val, str):
                 try:
-                    slot.paid_at = datetime.datetime.fromisoformat(val.replace("Z", "+00:00"))
+                    slot.paid_at = datetime.datetime.fromisoformat(val.rstrip("Z"))
                 except Exception:
                     pass
+        if "reserved_at" in item or "reservedAt" in item:
+            val = item.get("reserved_at") or item.get("reservedAt")
+            if isinstance(val, str):
+                try:
+                    slot.reserved_at = datetime.datetime.fromisoformat(val.rstrip("Z"))
+                except Exception:
+                    pass
+            elif val is None:
+                slot.reserved_at = None
+        if "reservation_expires_at" in item or "reservationExpiresAt" in item:
+            val = item.get("reservation_expires_at") or item.get("reservationExpiresAt")
+            if isinstance(val, str):
+                try:
+                    slot.reservation_expires_at = datetime.datetime.fromisoformat(val.rstrip("Z"))
+                except Exception:
+                    pass
+            elif val is None:
+                slot.reservation_expires_at = None
         if "amount_collected_usd" in item or "amountCollectedUsd" in item:
             val = item.get("amount_collected_usd") if "amount_collected_usd" in item else item.get("amountCollectedUsd")
             if val is not None:
@@ -626,6 +770,13 @@ def batch_update_slots(campaign_id: str, updates: List[dict] = Body(...), db: Se
             slot.paid_at = None
             slot.payment_ref = None
             slot.amount_collected_usd = 0.0
+
+        # Clear reservation timestamps once the slot is back on the market (see update_slot)
+        if slot.status in ("VACANT", "PROSPECTING"):
+            if "reserved_at" not in item and "reservedAt" not in item:
+                slot.reserved_at = None
+            if "reservation_expires_at" not in item and "reservationExpiresAt" not in item:
+                slot.reservation_expires_at = None
 
         # When slot is rolled back to VACANT (unregister), ensure advertiser fields are emptied
         if slot.status == "VACANT":
@@ -644,6 +795,22 @@ def batch_update_slots(campaign_id: str, updates: List[dict] = Body(...), db: Se
             if "offer_headline" not in item and "offerHeadline" not in item:
                 slot.offer_headline = None
 
+        if slot.notes and "Covered by" in slot.notes:
+            slot.price_usd = 0.0
+            slot.amount_collected_usd = 0.0
+            slot.status = "VACANT"
+            slot.business_name = None
+            slot.contact_person = None
+            slot.phone = None
+            slot.email = None
+            slot.website = None
+            slot.logo_url = None
+            slot.offer_headline = None
+            slot.paid_at = None
+            slot.payment_ref = None
+            slot.row_span = 1
+            slot.col_span = 1
+
         updated_slots.append(slot)
 
     db.commit()
@@ -651,12 +818,23 @@ def batch_update_slots(campaign_id: str, updates: List[dict] = Body(...), db: Se
         db.refresh(s)
 
     all_slots = db.query(Slot).filter(Slot.campaign_id == camp.id).all()
-    camp.target_gross_revenue = sum(s.price_usd for s in all_slots)
+    for s in all_slots:
+        if s.notes and "Covered by" in s.notes:
+            s.price_usd = 0.0
+            s.amount_collected_usd = 0.0
+
+    comm_slots = [
+        s for s in all_slots
+        if s.slot_number != 32
+        and (getattr(s, "slot_type", None) or getattr(s, "format", None)) != "USPS"
+        and not (s.notes and "Covered by" in s.notes)
+    ]
+    camp.target_gross_revenue = sum(s.price_usd or 0.0 for s in comm_slots)
     camp.operating_cost_est = drop_cost(camp, db)
     camp.net_margin_est = max(0.0, camp.target_gross_revenue - camp.operating_cost_est)
-    camp.total_collected_usd = sum(s.price_usd for s in all_slots if s.status == "PAID")
-    paid_count = len([s for s in all_slots if s.status == "PAID" and s.slot_number != 32])
-    advertiser_slots_count = len([s for s in all_slots if s.slot_number != 32])
+    camp.total_collected_usd = sum(s.amount_collected_usd or s.price_usd or 0.0 for s in comm_slots if s.status == "PAID")
+    paid_count = len([s for s in comm_slots if s.status == "PAID"])
+    advertiser_slots_count = len(comm_slots)
     if advertiser_slots_count > 0 and paid_count >= advertiser_slots_count:
         camp.status = "LOCKED_READY"
     elif camp.status == "LOCKED_READY":
@@ -702,9 +880,8 @@ def delete_campaign(campaign_id: str, db: Session = Depends(get_db)):
                 ),
             )
 
-    # Households are not in the ORM cascade; slots and leads are cleared here so
-    # no orphan rows are left behind pointing at a campaign that is gone.
-    db.query(Household).filter(Household.campaign_id == camp.id).delete()
+    # Leads, events and routes are not in the ORM cascade; they are cleared here
+    # so no orphan rows are left behind pointing at a campaign that is gone.
     db.query(Lead).filter(Lead.campaign_id == camp.id).delete()
     db.query(AnalyticsEvent).filter(AnalyticsEvent.campaign_id == camp.id).delete()
     db.query(CampaignRoute).filter(CampaignRoute.campaign_id == camp.id).delete()
@@ -735,15 +912,17 @@ def reset_slot_layout(
     home = {num: (num, cat_name) for num, cat_name, *_ in INITIAL_SLOT_DEFS}
 
     if wipe:
-        # A blank card, as on day one. This throws away advertisers, headlines
-        # and recorded payments, so it is a rehearsal tool: in the live file
-        # those are business records, not clutter.
+        # A blank card, as on day one. This throws away advertisers, headlines,
+        # recorded payments and the whole prospecting history, so it is a
+        # rehearsal tool: in the live file those are business records, not
+        # clutter.
         if (camp.mode or "DEMO").upper() != "DEMO":
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    "Solo en modo simulación. Vaciar los espacios borraría comercios y "
-                    "cobros registrados, que en el archivo real son documentación."
+                    "Solo en modo simulación. Vaciar los espacios borraría comercios, "
+                    "cobros registrados y el historial de llamadas, que en el archivo "
+                    "real son documentación."
                 ),
             )
         for slot in camp.slots:
@@ -776,14 +955,38 @@ def reset_slot_layout(
                 "offer_headline",
                 "payment_ref",
                 "paid_at",
+                "reserved_at",
+                "reservation_expires_at",
             ):
                 setattr(slot, field, None)
             slot.avg_ticket_usd = 0.0
             slot.amount_collected_usd = 0.0
             slot.scan_count = 0
+
+        # Blank paper is not a fresh start on its own.
+        #
+        # The calls, the set-asides and the cached candidates all outlived the
+        # wipe, so the next rehearsal met the same businesses carrying a x3
+        # attempt count and a quarantine clock still running — a record of a
+        # campaign that, on screen, no longer existed.
+        #
+        # Scoped to this campaign: another campaign's history is its own, even
+        # when it works the same ZIP.
+        for model in (LeadContact, LeadRegeneration, Lead):
+            db.query(model).filter(
+                or_(model.campaign_id == camp.id, model.campaign_id == None)
+            ).delete(
+                synchronize_session=False
+            )
+
         camp.status = "PROSPECTING"
         camp.operating_cost_est = drop_cost(camp, db)
-        camp.target_gross_revenue = sum(s.price_usd for s in camp.slots)
+        camp.target_gross_revenue = sum(
+            s.price_usd or 0.0 for s in camp.slots
+            if s.slot_number != 32
+            and (getattr(s, "slot_type", None) or getattr(s, "format", None)) != "USPS"
+            and not (s.notes and "Covered by" in s.notes)
+        )
         camp.net_margin_est = max(0.0, camp.target_gross_revenue - camp.operating_cost_est)
         db.commit()
         db.refresh(camp)
@@ -803,6 +1006,8 @@ def reset_slot_layout(
             "avg_ticket_usd": s.avg_ticket_usd,
             "payment_ref": s.payment_ref,
             "paid_at": s.paid_at,
+            "reserved_at": s.reserved_at,
+            "reservation_expires_at": s.reservation_expires_at,
             "amount_collected_usd": s.amount_collected_usd,
             "scan_count": s.scan_count,
         }
@@ -833,7 +1038,12 @@ def reset_slot_layout(
             slot.price_usd = 350.0
 
     camp.operating_cost_est = drop_cost(camp, db)
-    camp.target_gross_revenue = sum(s.price_usd for s in camp.slots)
+    camp.target_gross_revenue = sum(
+        s.price_usd or 0.0 for s in camp.slots
+        if s.slot_number != 32
+        and (getattr(s, "slot_type", None) or getattr(s, "format", None)) != "USPS"
+        and not (s.notes and "Covered by" in s.notes)
+    )
     camp.net_margin_est = max(0.0, camp.target_gross_revenue - camp.operating_cost_est)
     db.commit()
     db.refresh(camp)

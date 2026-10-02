@@ -1152,9 +1152,12 @@ function generateRealisticRoutes(campaignId: string, zipCode: string, city: stri
     { num: 15, res: 465, bus: 16, incDelta: -3000, size: 3.2, score: 89.9 },
   ];
 
+  // 1. Ordenar primero por SCORE descendente para que las mejores rutas sean seleccionadas
+  const sortedConfigs = [...routeConfigs].sort((a, b) => b.score - a.score);
+
   const routes: any[] = [];
   let running = 0;
-  for (const cfg of routeConfigs) {
+  for (const cfg of sortedConfigs) {
     const crid = `C${String(cfg.num).padStart(3, '0')}`;
     const routeId = `${normZip}${crid}`;
     const isSelected = running < targetHouseholds;
@@ -1180,15 +1183,31 @@ function generateRealisticRoutes(campaignId: string, zipCode: string, city: stri
     });
   }
 
-  routes.sort((a, b) => b.score - a.score);
+  // 2. Ordenar: primero las que están en la tirada (selected=true) por score desc, luego las no seleccionadas por score desc
+  routes.sort((a, b) => {
+    if (Boolean(b.selected) !== Boolean(a.selected)) {
+      return b.selected ? 1 : -1;
+    }
+    return b.score - a.score;
+  });
+
   return routes;
 }
 
 function serializeRoutePlan(routes: any[], target: number, zipCode: string) {
   const allVars = ["income", "owner_occupied", "single_family", "vehicles", "home_value", "household_size"];
-  const selected = routes.filter((r: any) => Boolean(r.selected));
+
+  // Ordenar siempre: seleccionadas (selected=true) primero por score desc, luego no seleccionadas por score desc
+  const sorted = [...routes].sort((a: any, b: any) => {
+    const aSel = Boolean(a.selected);
+    const bSel = Boolean(b.selected);
+    if (aSel !== bSel) return bSel ? 1 : -1;
+    return (b.score || 0) - (a.score || 0);
+  });
+
+  const selected = sorted.filter((r: any) => Boolean(r.selected));
   return {
-    routes: routes.map((r: any) => ({
+    routes: sorted.map((r: any) => ({
       route_id: r.route_id,
       zip_code: r.zip_code,
       crid: r.crid,
@@ -1684,7 +1703,8 @@ export default {
 
         if (env.DB) {
           const d1Routes = await d1GetCampaignRoutes(env.DB, campId);
-          if (d1Routes && d1Routes.length > 0) {
+          const hasInversion = d1Routes && d1Routes.some((r: any) => !r.selected && d1Routes.some((s: any) => s.selected && (s.score || 0) < (r.score || 0)));
+          if (d1Routes && d1Routes.length > 0 && !hasInversion) {
             return json(serializeRoutePlan(d1Routes, target, d1Routes[0]?.zip_code || zipCode));
           }
         }

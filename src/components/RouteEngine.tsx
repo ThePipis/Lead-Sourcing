@@ -454,7 +454,12 @@ export const RouteEngine: React.FC<RouteEngineProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {plan.routes.map((r) => (
+                {[...plan.routes]
+                  .sort((a, b) => {
+                    if (a.selected !== b.selected) return a.selected ? -1 : 1;
+                    return b.score - a.score;
+                  })
+                  .map((r) => (
                   <tr
                     key={r.routeId}
                     className={`border-b border-rule last:border-b-0 ${

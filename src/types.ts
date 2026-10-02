@@ -47,6 +47,8 @@ export interface SlotState {
   qrCodeUrl?: string;
   qrRedirectUrl?: string;
   scanCount: number;
+  /** Code of the printed short link, /q/<code>. */
+  qrToken?: string;
   paymentRef?: string;
   /** Recorded when the transfer is registered; the money moves outside the app. */
   paidAt?: string;
@@ -144,6 +146,7 @@ export interface Campaign {
   productionAt?: string;
   mailedAt?: string;
   curationCompletedAt?: string;
+  createdAt?: string;
 }
 
 export interface AnalyticsEvent {

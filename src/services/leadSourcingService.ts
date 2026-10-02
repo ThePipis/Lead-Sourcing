@@ -114,6 +114,8 @@ export async function searchCategoryLeads(
     if (allExcluded.length > 0) {
       params.append('exclude_names', allExcluded.join(','));
     }
+    // Several campaigns of one microzone can be open: the backend must know which one.
+    if (campaignId) params.append('campaign_id', campaignId);
 
     const resp = await fetch(`/api/prospecting/search?${params.toString()}`);
     if (resp.ok) {
@@ -198,6 +200,7 @@ export async function fetchReplacementLead(
     if (allExcluded.length > 0) {
       params.append('exclude_names', allExcluded.join(','));
     }
+    if (campaignId) params.append('campaign_id', campaignId);
 
     // `/prospecting/replace` never existed: this call had been answering 404
     // since it was written, so "regenerate" silently did nothing. The search

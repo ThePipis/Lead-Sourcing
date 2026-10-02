@@ -14,7 +14,7 @@ interface RouteEngineProps {
   targetZip: string;
   targetHouseholds: number;
   /** Reports the covered count upward so the ledger and the card follow it. */
-  onCoverageChange: (covered: number, routeCount: number) => void;
+  onCoverageChange: (covered: number, routeCount: number, missing: string[], replanned?: boolean) => void;
   /** Written down when the operator continues on a model that scored short. */
   onAcknowledgeModel?: () => void;
   /** The acknowledgement already on file, if any: "<stamp>|<missing>". */
@@ -56,8 +56,8 @@ export const RouteEngine: React.FC<RouteEngineProps> = ({
 }) => {
   const { t } = useTranslation(['curation', 'common']);
   const [plan, setPlan] = useState<RoutePlan | null>(null);
-  const [zip, setZip] = useState(targetZip);
-  const [target, setTarget] = useState(String(targetHouseholds));
+  const zip = targetZip;
+  const target = String(targetHouseholds);
   const [isPlanning, setIsPlanning] = useState(false);
   const [busyRoute, setBusyRoute] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,10 +72,13 @@ export const RouteEngine: React.FC<RouteEngineProps> = ({
     'home_value',
     'household_size',
   ] as const;
-  const inDrop = plan?.routes.filter((r) => r.selected) ?? [];
-  const shortVars = inDrop.length
-    ? MODEL_VARS.filter((v) => !inDrop.every((r) => r.scoredOn.includes(v)))
-    : [];
+  // Same rule as the backend's model_missing; the campaign's copy of it is
+  // refreshed from here, so the phase gate never judges a stale plan.
+  const missingIn = (p: RoutePlan) => {
+    const picked = p.routes.filter((r) => r.selected);
+    return picked.length ? MODEL_VARS.filter((v) => !picked.every((r) => r.scoredOn.includes(v))) : [];
+  };
+  const shortVars = plan ? missingIn(plan) : [];
   const acknowledged = Boolean(modelAck);
   // The census could not answer and no plan was written. Held apart from the
   // generic error because it is the one failure with a remedy the operator can
@@ -89,7 +92,7 @@ export const RouteEngine: React.FC<RouteEngineProps> = ({
       .then((p) => {
         if (!alive || p.routes.length === 0) return;
         setPlan(p);
-        onCoverageChange(p.covered, p.selectedRoutes);
+        onCoverageChange(p.covered, p.selectedRoutes, missingIn(p));
       })
       .catch(() => undefined);
     return () => {
@@ -107,7 +110,7 @@ export const RouteEngine: React.FC<RouteEngineProps> = ({
       const next = await planCampaignRoutes(campaignId, zip, wanted, degraded);
       setPlan(next);
       setCensusDown(null);
-      onCoverageChange(next.covered, next.selectedRoutes);
+      onCoverageChange(next.covered, next.selectedRoutes, missingIn(next), true);
     } catch (e) {
       // Matched by shape, not by `instanceof`: the dev server re-evaluates
       // modules on edit, which mints a second copy of the class, and then the
@@ -128,7 +131,7 @@ export const RouteEngine: React.FC<RouteEngineProps> = ({
     try {
       const next = await toggleCampaignRoute(campaignId, routeId, selected);
       setPlan((prev) => (prev ? { ...next, target: prev.target, zipCode: prev.zipCode } : next));
-      onCoverageChange(next.covered, next.selectedRoutes);
+      onCoverageChange(next.covered, next.selectedRoutes, missingIn(next));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -154,8 +157,9 @@ export const RouteEngine: React.FC<RouteEngineProps> = ({
               id="route-zip"
               value={zip}
               inputMode="numeric"
-              onChange={(e) => setZip(e.target.value.replace(/[^0-9]/g, '').slice(0, 5))}
-              className="field-value w-28 border border-rule bg-card px-3 py-2 text-sm text-ink"
+              readOnly
+              title={t('curation:routeEngine.lockedFromSales')}
+              className="field-value w-28 cursor-not-allowed border border-rule bg-card px-3 py-2 text-sm text-ink opacity-60"
             />
           </div>
           <div>
@@ -166,8 +170,9 @@ export const RouteEngine: React.FC<RouteEngineProps> = ({
               id="route-target"
               value={target}
               inputMode="numeric"
-              onChange={(e) => setTarget(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
-              className="field-value w-32 border border-rule bg-card px-3 py-2 text-sm text-ink"
+              readOnly
+              title={t('curation:routeEngine.lockedFromSales')}
+              className="field-value w-32 cursor-not-allowed border border-rule bg-card px-3 py-2 text-sm text-ink opacity-60"
             />
           </div>
           <button

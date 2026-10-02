@@ -192,7 +192,8 @@ async def autofill_slots(
     )
 
     rejected = _rejected_names(db, campaign_id)
-    taken = _taken_names(camp)
+    from .campaigns import businesses_held_elsewhere
+    taken = _taken_names(camp) | set(businesses_held_elsewhere(db, camp))
     filled: List[dict] = []
     skipped: List[dict] = []
 
@@ -324,7 +325,8 @@ async def next_candidate(
     disabled_sources = disabled_lead_sources(db, camp.mode)
     candidates = await _candidates_for(slot, camp, False, disabled_sources)
     rejected_names = _rejected_names(db, campaign_id)
-    taken = _taken_names(camp, except_slot=slot_number)
+    from .campaigns import businesses_held_elsewhere
+    taken = _taken_names(camp, except_slot=slot_number) | set(businesses_held_elsewhere(db, camp))
 
     pick = None
     for candidate in candidates:

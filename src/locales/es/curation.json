@@ -79,6 +79,7 @@
     "title": "Motor de rutas · a quién llega la tirada",
     "intro": "Una tirada cooperativa se entrega por saturación: el cartero la deja en todos los buzones de la ruta, dirigida a «Postal Customer». Por eso aquí se elige por RUTAS, no por hogares, y no hace falta comprar ninguna lista. El USPS aporta el conteo oficial de buzones de cada ruta; el Censo aporta el perfil de los hogares que esa ruta atraviesa. Con eso se puntúan las 24 rutas del ZIP y se compran las mejores.",
     "zip": "ZIP objetivo",
+    "lockedFromSales": "Fijado por la campaña: la microzona y el alcance que se vendieron en la sección 1.",
     "target": "Hogares objetivo",
     "plan": "Calcular rutas",
     "planning": "Consultando USPS y Census…",

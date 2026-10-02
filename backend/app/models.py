@@ -84,6 +84,9 @@ class Slot(Base):
     reservation_expires_at = Column(DateTime, nullable=True)
     amount_collected_usd = Column(Float, nullable=True)
     scan_count = Column(Integer, default=0)
+    # Opaque code the printed QR carries (/q/<code>): no campaign or slot number
+    # in the link, so it reads clean and cannot be walked to inflate scans.
+    qr_token = Column(String(16), nullable=True, index=True)
     notes = Column(Text, nullable=True)
     format = Column(String(16), nullable=True, default="SMALL")
     row_span = Column(Integer, nullable=True, default=1)
@@ -141,6 +144,10 @@ class AnalyticsEvent(Base):
     user_agent = Column(Text, nullable=True)
     ip_hash = Column(String(64), nullable=True)
     client_ip = Column(String(64), nullable=True)
+    # Where the scan came from, looked up from the IP after the redirect.
+    region = Column(String(128), nullable=True)
+    country = Column(String(8), nullable=True)
+    isp = Column(String(255), nullable=True)
 
     campaign = relationship("Campaign", back_populates="analytics_events")
 

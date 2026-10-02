@@ -7,6 +7,24 @@ from ..models import Slot, AnalyticsEvent
 router = APIRouter(tags=["QR Tracking"])
 
 
+@router.get("/tracking/lan-ip")
+def lan_ip():
+    """
+    This PC's address on the local network. A QR that encodes "localhost" can
+    only be opened on this PC; a phone on the same Wi-Fi reaches it by this IP.
+    The UDP connect sends nothing, it only asks the OS which interface routes out.
+    """
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return {"ip": s.getsockname()[0]}
+    except OSError:
+        return {"ip": None}
+    finally:
+        s.close()
+
+
 @router.get("/r/{campaign_id}/{business_slug}")
 def redirect_qr_code(campaign_id: str, business_slug: str, request: Request, db: Session = Depends(get_db)):
     """Dynamic short URL redirect with scan analytics tracking."""

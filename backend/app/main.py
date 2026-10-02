@@ -49,6 +49,7 @@ def _add_missing_columns() -> None:
             "col_span": "INTEGER DEFAULT 1",
             "reserved_at": "DATETIME",
             "reservation_expires_at": "DATETIME",
+            "qr_token": "VARCHAR(16)",
         },
         "leads": {
             "email": "VARCHAR(128)",
@@ -67,6 +68,11 @@ def _add_missing_columns() -> None:
         "lead_regenerations": {
             "cooldown_until": "DATETIME",
             "business_address": "VARCHAR(255)",
+        },
+        "analytics_events": {
+            "region": "VARCHAR(128)",
+            "country": "VARCHAR(8)",
+            "isp": "VARCHAR(255)",
         },
         "campaign_routes": {
             "scored_on": "VARCHAR(160) DEFAULT ''",
@@ -152,6 +158,8 @@ app.include_router(costs.router, prefix="/api/v1")
 
 # Mount QR tracking and telemetry router under /r
 app.include_router(tracking.router, prefix="/r")
+# Short links printed on the card: /q/<code>
+app.include_router(tracking.short_router)
 
 @app.get("/api/health")
 def health_check():

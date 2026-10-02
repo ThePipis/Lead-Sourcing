@@ -195,14 +195,83 @@ def billable_households(camp: Campaign, db: Optional[Session] = None) -> int:
     return camp.target_households or 0
 
 
+def campaign_is_closed(camp: Campaign) -> bool:
+    """A campaign is over once its drop is mailed, or when it is archived."""
+    return camp.archived_at is not None or (camp.status or "").upper() == "MAILED"
+
+
+def businesses_held_elsewhere(db: Session, camp: Campaign) -> Dict[str, str]:
+    """
+    Businesses that other open campaigns of the same microzone already hold:
+    {normalised name: campaign code}.
+
+    Several campaigns of one microzone can run at once, but they mail the same
+    households, so one business cannot be in two of them: it is offered again
+    only when the campaign that holds it is closed (mailed or archived). DEMO and
+    LIVE never share anything.
+    """
+    mode = (camp.mode or "DEMO").upper()
+    others = (
+        db.query(Campaign)
+        .filter(Campaign.target_zip == camp.target_zip, Campaign.id != camp.id)
+        .all()
+    )
+    held: Dict[str, str] = {}
+    for other in others:
+        if (other.mode or "DEMO").upper() != mode or campaign_is_closed(other):
+            continue
+        for s in other.slots:
+            name = (s.business_name or "").strip().lower()
+            if name and s.status != "VACANT" and not (s.notes and "Covered by" in s.notes):
+                held.setdefault(name, other.code)
+    return held
+
+
+def ensure_business_free(db: Session, camp: Campaign, business_name: Optional[str]) -> None:
+    """Refuse to put a business on this card while another open campaign of the zone holds it."""
+    name = (business_name or "").strip()
+    if not name:
+        return
+    code = businesses_held_elsewhere(db, camp).get(name.lower())
+    if code:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{name} ya está asignado en la campaña {code} de esta microzona, que sigue abierta. "
+                "Podrá usarse aquí cuando esa campaña se cierre (depositada o archivada)."
+            ),
+        )
+
+
 def drop_cost(camp: Campaign, db: Optional[Session] = None) -> float:
     unit = effective_unit_cost(camp, db)
     return round(billable_households(camp, db) * unit + drop_fixed_cost(camp, db), 2)
 
 
+_QR_ALPHABET = "23456789abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"  # no 0/O, 1/l/I
+
+
+def ensure_qr_tokens(camp: Campaign, db: Session) -> None:
+    """Give every slot its permanent short-link code the first time it is read."""
+    import secrets
+    missing = [s for s in camp.slots if not s.qr_token]
+    if not missing:
+        return
+    for s in missing:
+        while True:
+            token = "".join(secrets.choice(_QR_ALPHABET) for _ in range(7))
+            if not db.query(Slot).filter(Slot.qr_token == token).first():
+                break
+        s.qr_token = token
+        db.flush()
+    db.commit()
+
+
 def _populate_campaign_computed(camp: Campaign, db: Optional[Session] = None) -> Campaign:
     if db is not None and (len(camp.slots) < 32 or any(8 <= s.slot_number <= 16 and s.side == "BACK" for s in camp.slots)):
         ensure_campaign_slots(camp, db)
+    if db is not None:
+        ensure_qr_tokens(camp, db)
 
     for s in camp.slots:
         if s.notes and "Covered by" in s.notes:
@@ -287,11 +356,13 @@ def create_campaign(req: CampaignCreate, db: Session = Depends(get_db)):
         code = f"{zone}-{datetime.datetime.utcnow():%y%m}"
         camp_id = f"camp_{code.lower()}"
 
-    if db.query(Campaign).filter(Campaign.code == code).first():
-        raise HTTPException(
-            status_code=409,
-            detail=f"A campaign with code {code} already exists",
-        )
+    # Several campaigns of one microzone can be open at once: the second and later
+    # ones of the same code get a sequence number (IE-EAST-92880-2, -3...).
+    base_code, seq = code, 1
+    while db.query(Campaign).filter(Campaign.code == code).first():
+        seq += 1
+        code = f"{base_code}-{seq}"
+        camp_id = f"camp_{code.lower()}"
 
     camp = Campaign(
         id=camp_id,
@@ -580,6 +651,10 @@ def update_slot(campaign_id: str, slot_id: str, req: SlotUpdate, db: Session = D
     
     update_data = req.model_dump(exclude_unset=True)
 
+    new_name = (update_data.get("business_name") or "").strip()
+    if new_name and new_name.lower() != (slot.business_name or "").strip().lower():
+        ensure_business_free(db, camp, new_name)
+
     # In LIVE mode, a slot cannot be marked as PAID without an assigned business
     if (camp.mode or "DEMO").upper() == "LIVE" and req.status == "PAID":
         biz = (update_data.get("business_name") or slot.business_name or "").strip()
@@ -665,7 +740,12 @@ def update_slot(campaign_id: str, slot_id: str, req: SlotUpdate, db: Session = D
 
     paid_count = len([s for s in comm_slots if s.status == "PAID"])
     advertiser_slots_count = len(comm_slots)
-    if advertiser_slots_count > 0 and paid_count >= advertiser_slots_count:
+    # Only the sales stages follow the slots. A drop already at the printer or
+    # mailed keeps its stage: editing a QR destination or logging a scan must
+    # not pull it back to section 3.
+    if camp.status in ("IN_PRODUCTION", "MAILED"):
+        pass
+    elif advertiser_slots_count > 0 and paid_count >= advertiser_slots_count:
         camp.status = "LOCKED_READY"
     elif camp.status == "LOCKED_READY":
         camp.status = "PROSPECTING"
@@ -705,6 +785,10 @@ def batch_update_slots(campaign_id: str, updates: List[dict] = Body(...), db: Se
         if "business_address" in item or "businessAddress" in item:
             slot.business_address = item.get("business_address") or item.get("businessAddress")
         if "business_name" in item or "businessName" in item:
+            new_name = (item.get("business_name") or item.get("businessName") or "").strip()
+            on_card = {(s.business_name or "").strip().lower() for s in camp.slots}
+            if new_name and new_name.lower() not in on_card:
+                ensure_business_free(db, camp, new_name)
             slot.business_name = item.get("business_name") or item.get("businessName")
         if "status" in item:
             slot.status = item["status"]
@@ -835,7 +919,12 @@ def batch_update_slots(campaign_id: str, updates: List[dict] = Body(...), db: Se
     camp.total_collected_usd = sum(s.amount_collected_usd or s.price_usd or 0.0 for s in comm_slots if s.status == "PAID")
     paid_count = len([s for s in comm_slots if s.status == "PAID"])
     advertiser_slots_count = len(comm_slots)
-    if advertiser_slots_count > 0 and paid_count >= advertiser_slots_count:
+    # Only the sales stages follow the slots. A drop already at the printer or
+    # mailed keeps its stage: editing a QR destination or logging a scan must
+    # not pull it back to section 3.
+    if camp.status in ("IN_PRODUCTION", "MAILED"):
+        pass
+    elif advertiser_slots_count > 0 and paid_count >= advertiser_slots_count:
         camp.status = "LOCKED_READY"
     elif camp.status == "LOCKED_READY":
         camp.status = "PROSPECTING"

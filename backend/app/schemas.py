@@ -29,6 +29,7 @@ class SlotBase(BaseModel):
     reservation_expires_at: Optional[datetime.datetime] = Field(None, alias="reservationExpiresAt")
     amount_collected_usd: Optional[float] = None
     scan_count: int = 0
+    qr_token: Optional[str] = None
     notes: Optional[str] = None
     format: Optional[str] = "SMALL"
     row_span: Optional[int] = Field(1, alias="rowSpan")

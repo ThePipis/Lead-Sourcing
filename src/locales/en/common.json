@@ -3,8 +3,7 @@
     "tablero": "1. 12\"×9\" Board & Slots",
     "leadSourcing": "2. Lead Sourcing (Yelp + OSM)",
     "propensityEngine": "3. Propensity Engine (5k Homes)",
-    "postalExport": "4. QR & Postal Export",
-    "architectureFastApi": "FastAPI & DB Architecture"
+    "postalExport": "4. QR & Postal Export"
   },
   "status": {
     "vacant": "VACANT",
@@ -138,17 +137,6 @@
       "defaultHeadline": "Save up to $600/Year on Bundled Policies | Fast 5-Minute Quote with No Obligation"
     }
   },
-  "architecture": {
-    "tag": "FULL-STACK ENTERPRISE SYSTEM ARCHITECTURE",
-    "title": "FastAPI Backend + React Frontend + SpatiaLite / PostGIS",
-    "description": "High-performance decoupled architecture. Engineered to process vectorized matrices with NumPy in milliseconds, orchestrate external APIs (Yelp, Geoapify, Data Axle, Llama.cpp) and export certified postal manifests.",
-    "stackBadge": "FastAPI 0.115 + Pydantic v2 + SQLAlchemy 2.0",
-    "treeTitle": "1. Complete Directory & File Structure",
-    "copyTree": "Copy Tree",
-    "codeTitle": "2. Production Backend Code (FastAPI / Python)",
-    "copyCode": "Copy Code",
-    "copied": "Copied"
-  },
   "footer": {
     "copyright": "Co-Op Direct Mail Platform • Inland Empire Shared Direct Mail Operations",
     "specs": "USPS Marketing Mail ECRWSS • CASS/NCOA Certified • Action Mail Spec"
@@ -168,13 +156,14 @@
     "newLabel": "Open a new form",
     "pickZone": "Pick a microzone…",
     "allZonesUsed": "Every microzone already has a form",
+    "openInZone_one": "{{count}} open",
+    "openInZone_other": "{{count}} open",
     "create": "Open form",
     "creating": "Opening…",
     "sectionsDone": "{{done}} of {{total}} sections stamped",
     "loadError": "Could not read the file: {{error}}",
-    "spec": "FastAPI & DB specification",
     "emptyLiveTitle": "Your first real campaign starts here",
-    "emptyLiveBody": "The live file is empty on purpose. Pick a microzone below and open the form: the campaign starts with its 14 slots empty, and the app tells you what to do at every step.",
+    "emptyLiveBody": "The live file has no campaigns yet. Pick a microzone below to open the form and start merchant prospecting, reservations, and postal curation.",
     "emptyDemoTitle": "The practice file is empty",
     "emptyDemoBody": "No simulation campaigns left. Open a new one below to practise the whole process again.",
     "createConflict": "A campaign for {{zone}} already exists this month. Open it from the file, or wait for next month.",
@@ -185,6 +174,7 @@
     "indexTitle": "File index",
     "filters": {
       "active": "Active",
+      "closed": "Closed",
       "archived": "Archived",
       "all": "All"
     },
@@ -200,11 +190,24 @@
     "confirmNo": "No",
     "emptyIndex": "The active file is empty.",
     "emptyArchived": "Nothing archived yet.",
+    "searchPlaceholder": "Search by code, city or ZIP...",
+    "noSearchResults": "No drops found matching your search.",
+    "showing": "Showing {{from}}-{{to}} of {{total}}",
+    "prevPage": "Previous",
+    "nextPage": "Next",
+    "colCampaign": "Campaign",
+    "colCity": "City",
+    "colZip": "ZIP",
+    "colSlots": "Slots",
+    "colCreatedAt": "Created",
+    "colProgress": "Progress",
+    "colActions": "Actions",
     "deleteFailed": "Could not delete: the campaign already holds collected money or is at the printer. Archive it instead.",
     "leadTag": "In hand",
     "sizeHintFloor": "A carrier walks whole routes, not single houses. In {{zip}} the smallest route has {{floor}} boxes: that is the smallest possible drop and this field's minimum. The price of all 14 boxes and the print cost come from this number.",
     "sizeHintNoFloor": "The USPS route list for {{zip}} could not be read, so the real floor is unknown. The system will take whole routes until your target is covered and report how many boxes that really is.",
-    "sizeHintLoading": "Asking the USPS for the routes in {{zip}} to find the smallest possible drop…"
+    "sizeHintLoading": "Asking the USPS for the routes in {{zip}} to find the smallest possible drop…",
+    "emptyClosed": "No closed campaigns yet. A campaign closes when its USPS deposit is sealed."
   },
   "form": {
     "backToFile": "File",
@@ -292,7 +295,7 @@
     "partners": "Partners",
     "perPartner": "ea. at completion",
     "collectedSub": "Funds collected",
-    "contractedSub": "Commercial capacity (31 slots)",
+    "contractedSub": "Commercial capacity ({{count}} spaces)",
     "netProfitTotalSub": "Total free of costs",
     "fromRoutes": "On {{households}} real pieces across {{routes}} routes",
     "floorMet": "Operating floor reached",

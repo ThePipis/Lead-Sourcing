@@ -3,9 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, HelpCircle, Lock } from 'lucide-react';
 import { Campaign } from '../types.ts';
 import {
-  OPERATING_FLOOR,
-  TOTAL_SLOTS,
   billableHouseholds,
+  slotTally,
   collectedUsd,
   contractedUsd,
   dropCostUsd,
@@ -109,9 +108,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
 
   useEffect(() => () => window.clearTimeout(reachTimer.current), []);
 
-  const paid = campaign.slots.filter(
-    (s) => s.status === 'PAID' && s.format !== 'USPS' && s.slotNumber !== 32,
-  ).length;
+  const { paid, total: totalSlots, floor: slotFloor } = slotTally(campaign.slots);
   const inProduction = campaign.status === 'IN_PRODUCTION' || campaign.status === 'MAILED';
   const locked = paid > 0 || inProduction;
 
@@ -193,7 +190,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
   const cost = dropCostUsd(campaign);
   const netProfit = contracted - cost;
   const costCovered = collected >= cost;
-  const slotsMet = paid >= OPERATING_FLOOR;
+  const slotsMet = paid >= slotFloor;
   const floorMet = costCovered && slotsMet;
 
   const validPartners = Math.max(1, partnersCount);
@@ -254,7 +251,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
     onTargetMarginSave?.(val);
   };
 
-  const pct = (n: number) => `${Math.min(100, Math.max(0, (n / TOTAL_SLOTS) * 100))}%`;
+  const pct = (n: number) => `${Math.min(100, Math.max(0, (n / totalSlots) * 100))}%`;
 
   // Nota de costo operativo enriquecida sin duplicaciones
   const unitPieceCost = campaign.unitCostUsd ?? 0.615;
@@ -325,7 +322,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                 <span className="inline-flex items-center gap-1 text-[0.62rem] text-due font-mono font-medium">
                   <Lock className="h-3 w-3" aria-hidden="true" />
                   <span className="hidden md:inline">
-                    {inProduction ? t('common:reach.lockedProduction') : `(${paid}/${TOTAL_SLOTS} pagados)`}
+                    {inProduction ? t('common:reach.lockedProduction') : `(${paid}/${totalSlots} pagados)`}
                   </span>
                 </span>
               )}
@@ -358,7 +355,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
               <span className="text-rule/60 hidden sm:inline" aria-hidden="true">|</span>
 
               {/* Valor de la Tarjeta */}
-              <div className="flex items-baseline gap-1" title={t('common:finance.contractedSub')}>
+              <div className="flex items-baseline gap-1" title={t('common:finance.contractedSub', { count: totalSlots })}>
                 <span className="field-label text-[0.60rem] text-ink-dim uppercase">
                   {t('common:finance.contracted')}:
                 </span>
@@ -426,12 +423,12 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                         households: householdsNum,
                       })
                     : t('common:finance.floorMissing', {
-                        missing: OPERATING_FLOOR - paid,
-                        floor: OPERATING_FLOOR,
+                        missing: slotFloor - paid,
+                        floor: slotFloor,
                       })}
               </span>
               <span className="field-value text-[0.68rem] font-mono text-ink-dim font-bold">
-                {paid}/{TOTAL_SLOTS}
+                {paid}/{totalSlots}
               </span>
             </div>
 
@@ -446,14 +443,14 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
               <span
                 aria-hidden="true"
                 className="absolute inset-y-[-2px] w-px bg-ink-dim"
-                style={{ left: pct(OPERATING_FLOOR) }}
+                style={{ left: pct(slotFloor) }}
               />
               <span
                 aria-hidden="true"
                 className="field-label absolute top-2.5 -translate-x-1/2 text-[0.52rem] text-ink-faint font-mono"
-                style={{ left: pct(OPERATING_FLOOR) }}
+                style={{ left: pct(slotFloor) }}
               >
-                {OPERATING_FLOOR}
+                {slotFloor}
               </span>
             </div>
           </div>
@@ -539,7 +536,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                 {locked ? (
                   <span className="inline-flex items-center gap-1 text-[0.65rem] text-due font-mono font-medium">
                     <Lock className="h-3 w-3" />
-                    {inProduction ? t('common:reach.lockedProduction') : `Bloqueado (${paid} de ${TOTAL_SLOTS} espacios pagados)`}
+                    {inProduction ? t('common:reach.lockedProduction') : `Bloqueado (${paid} de ${totalSlots} espacios pagados)`}
                   </span>
                 ) : isSaving || pendingReach ? (
                   <span className="text-[0.65rem] font-bold font-mono text-live animate-pulse">
@@ -667,7 +664,7 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
             <Entry
               label={t('common:finance.contracted')}
               value={money(contracted)}
-              sublabel={t('common:finance.contractedSub')}
+              sublabel={t('common:finance.contractedSub', { count: totalSlots })}
             />
             <Entry
               label={t('common:finance.cost')}
@@ -758,12 +755,12 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
                         households: householdsNum,
                       })
                     : t('common:finance.floorMissing', {
-                        missing: OPERATING_FLOOR - paid,
-                        floor: OPERATING_FLOOR,
+                        missing: slotFloor - paid,
+                        floor: slotFloor,
                       })}
               </span>
               <span className="field-value text-xs text-ink-dim font-mono">
-                {paid}/{TOTAL_SLOTS}
+                {paid}/{totalSlots}
               </span>
             </div>
 
@@ -778,14 +775,14 @@ export const FinancialMetrics: React.FC<FinancialMetricsProps> = ({
               <span
                 aria-hidden="true"
                 className="absolute inset-y-[-4px] w-px bg-ink-dim"
-                style={{ left: pct(OPERATING_FLOOR) }}
+                style={{ left: pct(slotFloor) }}
               />
               <span
                 aria-hidden="true"
                 className="field-label absolute top-4 -translate-x-1/2 text-[0.56rem] text-ink-faint"
-                style={{ left: pct(OPERATING_FLOOR) }}
+                style={{ left: pct(slotFloor) }}
               >
-                {OPERATING_FLOOR}
+                {slotFloor}
               </span>
             </div>
           </div>

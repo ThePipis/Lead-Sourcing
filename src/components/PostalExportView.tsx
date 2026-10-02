@@ -10,11 +10,11 @@ import {
   Check,
   QrCode,
 } from 'lucide-react';
-import { Campaign, SlotState, AnalyticsEvent } from '../types.ts';
+import { Campaign, SlotState } from '../types.ts';
 import {
   generateCampaignQrCodes,
   GeneratedQrData,
-  TRACKING_BASE_URL,
+  resolveTrackingBase,
 } from '../services/postalExportService.ts';
 import {
   campaignRouteManifestUrl,
@@ -35,6 +35,64 @@ interface PostalExportViewProps {
   /** Section 4 closing stamp: the printer has the file. */
   onDeliveredToPrinter?: () => void;
   isSaving?: boolean;
+  /** Saves where a slot's QR redirects (the slot's website). */
+  onSetDestination?: (slotNumber: number, url: string) => Promise<void>;
+}
+
+interface ScanEvent {
+  id: string;
+  slot_number: number;
+  business_name: string;
+  timestamp: string | null;
+  device_type: string | null;
+  user_agent: string | null;
+  ip_hash: string | null;
+  client_ip: string | null;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  isp: string | null;
+  is_test: boolean;
+}
+
+/** The reader's IP with the last part hidden: enough to verify, not to identify. */
+function maskIp(ip: string | null): string {
+  if (!ip) return '—';
+  if (ip.includes('.')) return ip.split('.').slice(0, 3).join('.') + '.xxx';
+  return ip.split(':').slice(0, 4).join(':') + ':xxxx';
+}
+
+/** "iPhone · iOS 18.1 · Safari" from the scanning phone's user agent. */
+function describeDevice(ua: string | null, fallback: string | null): string {
+  if (!ua) return fallback || '—';
+  const os =
+    ua.match(/iPhone OS (\d+[_\d]*)/)?.[1]?.replace(/_/g, '.') !== undefined
+      ? `iPhone · iOS ${ua.match(/iPhone OS (\d+[_\d]*)/)![1].replace(/_/g, '.')}`
+      : /iPad/.test(ua)
+        ? 'iPad'
+        : ua.match(/Android (\d+(\.\d+)?)/)
+          ? `Android ${ua.match(/Android (\d+(\.\d+)?)/)![1]}${ua.match(/; ([^;)]+) Build/) ? ` · ${ua.match(/; ([^;)]+) Build/)![1]}` : ''}`
+          : /Windows/.test(ua)
+            ? 'Windows'
+            : /Mac OS X/.test(ua)
+              ? 'Mac'
+              : fallback || '—';
+  const browser = /Instagram/.test(ua)
+    ? 'Instagram'
+    : /FBAN|FBAV/.test(ua)
+      ? 'Facebook'
+      : /SamsungBrowser/.test(ua)
+        ? 'Samsung Internet'
+        : /CriOS|Chrome\//.test(ua) && !/Edg\//.test(ua)
+          ? 'Chrome'
+          : /Edg\//.test(ua)
+            ? 'Edge'
+            : /Firefox|FxiOS/.test(ua)
+              ? 'Firefox'
+              : /Safari\//.test(ua)
+                ? 'Safari'
+                : '';
+  return browser ? `${os} · ${browser}` : os;
 }
 
 export const PostalExportView: React.FC<PostalExportViewProps> = ({
@@ -44,11 +102,65 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
   section = 'all',
   onDeliveredToPrinter,
   isSaving = false,
+  onSetDestination,
 }) => {
   const { t, i18n } = useTranslation(['export', 'common']);
   const [qrList, setQrList] = useState<GeneratedQrData[]>([]);
   const [selectedQr, setSelectedQr] = useState<GeneratedQrData | null>(null);
-  const [recentScanLog, setRecentScanLog] = useState<AnalyticsEvent[]>([]);
+  // Real scans, straight from the tracking table and refreshed while the panel
+  // is open, so a phone scan shows up within seconds without reloading.
+  const [scanEvents, setScanEvents] = useState<ScanEvent[]>([]);
+  const loadScans = React.useCallback(() => {
+    fetch(`/r/events?campaign_id=${encodeURIComponent(campaign.id)}&limit=500`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => setScanEvents(Array.isArray(rows) ? rows : []))
+      .catch(() => undefined);
+  }, [campaign.id]);
+  useEffect(() => {
+    if (section === 'manifest') return;
+    loadScans();
+    const id = window.setInterval(loadScans, 5000);
+    return () => window.clearInterval(id);
+  }, [loadScans, section]);
+  const scansBySlot = scanEvents.reduce<Record<number, number>>((acc, e) => {
+    acc[e.slot_number] = (acc[e.slot_number] ?? 0) + 1;
+    return acc;
+  }, {});
+  // First scan of each device per slot is a unique visitor; later ones are repeats.
+  const repeatIds = new Set<string>();
+  {
+    const seen = new Set<string>();
+    [...scanEvents].reverse().forEach((e) => {
+      const key = `${e.slot_number}|${e.ip_hash}|${e.user_agent}`;
+      if (seen.has(key)) repeatIds.add(e.id);
+      seen.add(key);
+    });
+  }
+  const realScans = scanEvents.filter((e) => !e.is_test);
+  const exportUrl = (slotNumber?: number) =>
+    `/r/events/export?campaign_id=${encodeURIComponent(campaign.id)}${slotNumber !== undefined ? `&slot_number=${slotNumber}` : ''}`;
+  const [clearingTests, setClearingTests] = useState(false);
+  const handleClearAll = async () => {
+    if (!window.confirm(t('export:telemetry.clearAllConfirm', { code: campaign.code }))) return;
+    setClearingTests(true);
+    try {
+      await fetch(`/r/events?campaign_id=${encodeURIComponent(campaign.id)}`, { method: 'DELETE' });
+      loadScans();
+    } finally {
+      setClearingTests(false);
+    }
+  };
+  const handleClearTests = async () => {
+    if (!window.confirm(t('export:telemetry.clearConfirm'))) return;
+    setClearingTests(true);
+    try {
+      await fetch(`/r/events/tests?campaign_id=${encodeURIComponent(campaign.id)}`, { method: 'DELETE' });
+      loadScans();
+    } finally {
+      setClearingTests(false);
+    }
+  };
+  const uniqueReal = realScans.filter((e) => !repeatIds.has(e.id)).length;
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [profile, setProfile] = useState<RouteProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState<boolean>(false);
@@ -62,10 +174,13 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
   // Generate QR codes on mount or when slots change
   useEffect(() => {
     let isMounted = true;
-    generateCampaignQrCodes(campaign.id, slots, TRACKING_BASE_URL).then((list) => {
+    resolveTrackingBase()
+      .then((base) => generateCampaignQrCodes(campaign.id, slots, base))
+      .then((list) => {
       if (isMounted) {
         setQrList(list);
-        setSelectedQr((prev) => prev ?? list[0] ?? null);
+        // Keep the selection on the same slot, with its fresh destination.
+        setSelectedQr((prev) => list.find((q) => q.slotNumber === prev?.slotNumber) ?? list[0] ?? null);
       }
     });
     return () => {
@@ -108,19 +223,36 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
     };
   }, [campaign.id, selectedRoutes]);
 
-  const handleSimulateScan = (qr: GeneratedQrData) => {
-    onIncrementScan(qr.slotNumber);
-    const newEvent: AnalyticsEvent = {
-      id: `EVT-${Date.now()}`,
-      campaignId: campaign.id,
-      slotNumber: qr.slotNumber,
-      businessName: qr.businessName,
-      timestamp: new Date().toLocaleTimeString(i18n.language),
-      deviceType: 'Mobile',
-      city: campaign.targetCity,
-      ipMock: `172.56.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
-    };
-    setRecentScanLog((prev) => [newEvent, ...prev.slice(0, 7)]);
+  // A simulated scan goes through the real tracking link from this PC, so it is
+  // stored like any scan and flagged as a test by its local address.
+  const handleSimulateScan = async (qr: GeneratedQrData) => {
+    await fetch(`/r/${encodeURIComponent(campaign.id)}/slot-${qr.slotNumber}`, { redirect: 'manual' }).catch(
+      () => undefined,
+    );
+    window.setTimeout(loadScans, 1500);
+  };
+
+  // The printed QR always encodes the tracking URL, so a scan is counted before
+  // it is forwarded; what the operator sets here is only where it is forwarded to.
+  const [destDraft, setDestDraft] = useState('');
+  const [editingDest, setEditingDest] = useState(false);
+  const [savingDest, setSavingDest] = useState(false);
+  useEffect(() => {
+    setDestDraft(selectedQr?.destination ?? '');
+    setEditingDest(false);
+  }, [selectedQr?.slotNumber]);
+
+  const handleSaveDestination = async () => {
+    const raw = destDraft.trim();
+    if (!selectedQr || !raw || !onSetDestination) return;
+    const url = /^(https?:|tel:)/i.test(raw) ? raw : `https://${raw}`;
+    setSavingDest(true);
+    try {
+      await onSetDestination(selectedQr.slotNumber, url);
+      setEditingDest(false);
+    } finally {
+      setSavingDest(false);
+    }
   };
 
   const handleCopyUrl = (url: string) => {
@@ -296,16 +428,16 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
           <dl className="grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
             {(
               [
-                ['specs.suffix', 'specs.suffixVal'],
-                ['specs.zipValidation', 'specs.zipValidationVal'],
-                ['specs.carrierRoute', 'specs.carrierRouteVal'],
-                ['specs.urls', 'specs.urlsVal'],
+                ['specs.suffix', 'specs.suffixVal', { code: campaign.code, households: coveredHouseholds }],
+                ['specs.zipValidation', 'specs.zipValidationVal', {}],
+                ['specs.carrierRoute', 'specs.carrierRouteVal', {}],
+                ['specs.urls', 'specs.urlsVal', {}],
               ] as const
-            ).map(([label, value]) => (
+            ).map(([label, value, params]) => (
               <div key={label} className="bg-card px-4 py-3">
                 <dt className="field-label">{t(`export:${label}`)}</dt>
                 <dd className="field-value mt-1 text-[0.69rem] leading-snug text-ink">
-                  {t(`export:${value}`)}
+                  {t(`export:${value}`, params)}
                 </dd>
               </div>
             ))}
@@ -345,7 +477,7 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-border pb-2">
                 <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
                   <QrCode className="w-4 h-4 shrink-0 text-primary" />
-                  <span>{t('export:qr.listTitle')}</span>
+                  <span>{t('export:qr.listTitle', { count: qrList.length })}</span>
                 </h3>
                 <span className="max-w-full text-[0.69rem] font-mono text-muted-foreground">
                   {t('export:qr.listSubtitle')}
@@ -368,15 +500,21 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                       }`}
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <img
-                          src={qr.qrDataUrl}
-                          alt={t('export:qr.slotPrefix', { id: qr.displayNumber ?? qr.slotNumber })}
-                          width={36}
-                          height={36}
-                          loading="lazy"
-                          decoding="async"
-                          className="w-9 h-9 shrink-0 bg-card p-0.5 border border-border"
-                        />
+                        {qr.destination ? (
+                          <img
+                            src={qr.qrDataUrl}
+                            alt={t('export:qr.slotPrefix', { id: qr.displayNumber ?? qr.slotNumber })}
+                            width={36}
+                            height={36}
+                            loading="lazy"
+                            decoding="async"
+                            className="w-9 h-9 shrink-0 bg-card p-0.5 border border-border"
+                          />
+                        ) : (
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center border border-dashed border-border text-muted-foreground">
+                            <QrCode className="h-4 w-4 opacity-40" />
+                          </span>
+                        )}
                         <div className="min-w-0">
                           <span className="text-[0.63rem] font-mono font-bold text-primary block">
                             {t('export:qr.slotPrefix', { id: qr.displayNumber ?? qr.slotNumber })}
@@ -384,12 +522,29 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                           <h4 className="truncate text-xs font-bold text-foreground">
                             {qr.businessName}
                           </h4>
+                          <span
+                            className={`block truncate text-[0.63rem] font-mono ${qr.destination ? 'text-muted-foreground' : 'font-bold text-primary'}`}
+                          >
+                            {qr.destination ? (
+                              <a
+                                href={qr.destination}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="underline decoration-dotted hover:text-primary"
+                              >
+                                → {qr.destination}
+                              </a>
+                            ) : (
+                              t('export:qr.pending')
+                            )}
+                          </span>
                         </div>
                       </div>
 
                       <div className="ml-3 shrink-0 text-right">
                         <span className="text-xs font-mono font-bold text-clear">
-                          {slot?.scanCount || 0}
+                          {scansBySlot[qr.slotNumber] ?? 0}
                         </span>
                         <span className="text-[0.63rem] text-muted-foreground block">
                           {t('export:qr.scans')}
@@ -414,6 +569,47 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                     </span>
                   </div>
 
+                  {(!selectedQr.destination || editingDest) ? (
+                    <div className="space-y-3 border border-border bg-secondary/40 p-4">
+                      <h3 className="text-sm font-bold text-foreground">{selectedQr.businessName}</h3>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{t('export:qr.pendingBody')}</p>
+                      <label className="field-label block" htmlFor="qr-destination">
+                        {t('export:qr.destinationLabel')}
+                      </label>
+                      <input
+                        id="qr-destination"
+                        type="url"
+                        value={destDraft}
+                        onChange={(e) => setDestDraft(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveDestination()}
+                        placeholder="https://www.negocio.com"
+                        className="w-full border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={handleSaveDestination}
+                          disabled={!destDraft.trim() || savingDest || !onSetDestination}
+                          className="inline-flex items-center gap-1.5 bg-live px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <QrCode className="h-3.5 w-3.5" />
+                          <span>{t('export:qr.generate')}</span>
+                        </button>
+                        {editingDest && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDestDraft(selectedQr.destination);
+                              setEditingDest(false);
+                            }}
+                            className="border border-border bg-secondary px-3 py-1.5 text-xs text-secondary-foreground hover:bg-accent"
+                          >
+                            {t('export:qr.cancel')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
                   <div className="flex flex-col items-center justify-center p-4 bg-secondary/40 border border-border">
                     <img
                       src={selectedQr.qrDataUrl}
@@ -427,7 +623,9 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                       {selectedQr.businessName}
                     </h3>
                     <p className="text-[0.69rem] text-muted-foreground mt-1 font-mono text-center truncate max-w-full">
-                      {selectedQr.shortUrl}
+                      <a href={selectedQr.destination} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted hover:text-primary">
+                        → {selectedQr.destination}
+                      </a>
                     </p>
                     <a
                       href={selectedQr.qrDataUrl}
@@ -437,11 +635,37 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                       <Download className="w-3.5 h-3.5" />
                       <span>Descargar QR (PNG Imprenta)</span>
                     </a>
+                    <p className="mt-3 max-w-full truncate text-center font-mono text-[0.69rem] text-foreground">
+                      {t('export:qr.destination')}{' '}
+                      <a href={selectedQr.destination} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted hover:text-primary">
+                        {selectedQr.destination}
+                      </a>
+                    </p>
+                    {onSetDestination && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingDest(true)}
+                        className="mt-1 text-[0.69rem] text-primary underline hover:opacity-80"
+                      >
+                        {t('export:qr.changeDestination')}
+                      </button>
+                    )}
+                    <a
+                      href={exportUrl(selectedQr.slotNumber)}
+                      className="mt-3 inline-flex items-center gap-1.5 border border-live px-3 py-1.5 text-xs font-bold text-live hover:bg-live/10"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      <span>{t('export:telemetry.exportOne')}</span>
+                    </a>
                   </div>
+                  )}
 
                   {/* The redirect URL and its copy control. The button wraps
                       under the field rather than pushing out of the panel. */}
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <p className="mt-3 text-[0.69rem] leading-snug text-muted-foreground">
+                    {t('export:qr.trackingNote')}
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <input
                       type="text"
                       readOnly
@@ -492,47 +716,101 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
                   <BarChart className="w-4 h-4 text-clear" />
                   <span>{t('export:telemetry.title')}</span>
                 </h3>
-                <span className="text-[0.69rem] text-muted-foreground font-mono">
-                  {t('export:telemetry.totalScans', {
-                    count: slots.reduce((acc, s) => acc + s.scanCount, 0),
-                  })}
-                </span>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <span className="text-[0.69rem] text-muted-foreground font-mono">
+                    {t('export:telemetry.summary', {
+                      real: realScans.length,
+                      unique: uniqueReal,
+                      tests: scanEvents.length - realScans.length,
+                    })}
+                  </span>
+                  {scanEvents.length > realScans.length && (
+                    <button
+                      type="button"
+                      onClick={handleClearTests}
+                      disabled={clearingTests}
+                      className="border border-border bg-secondary px-2.5 py-1 text-[0.69rem] text-secondary-foreground hover:bg-accent disabled:opacity-40"
+                    >
+                      {t('export:telemetry.clearTests')}
+                    </button>
+                  )}
+                  {scanEvents.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAll}
+                      disabled={clearingTests}
+                      className="border border-due/50 px-2.5 py-1 text-[0.69rem] text-due hover:bg-due/10 disabled:opacity-40"
+                    >
+                      {t('export:telemetry.clearAll')}
+                    </button>
+                  )}
+                  <a
+                    href={exportUrl()}
+                    className="inline-flex items-center gap-1.5 bg-live px-3 py-1 text-[0.69rem] font-bold text-primary-foreground hover:opacity-90"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    <span>{t('export:telemetry.exportAll')}</span>
+                  </a>
+                </div>
               </div>
 
               <div className="space-y-2 max-h-[460px] overflow-y-auto">
-                {recentScanLog.length === 0 ? (
+                {scanEvents.length === 0 ? (
                   <div className="text-center py-12 text-xs text-muted-foreground space-y-2">
                     <Smartphone className="w-6 h-6 mx-auto text-muted-foreground opacity-40" />
                     <p>{t('export:telemetry.noScans')}</p>
                     <p className="text-[0.63rem]">{t('export:telemetry.noScansSub')}</p>
                   </div>
                 ) : (
-                  recentScanLog.map((evt) => (
-                    <div
-                      key={evt.id}
-                      className="bg-secondary/40 p-2.5 border border-border text-xs space-y-1"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-primary font-mono">
-                          {t('export:telemetry.slotPrefix', {
-                            id: slots.find((s) => s.slotNumber === evt.slotNumber)?.displayNumber ?? evt.slotNumber,
-                            business: evt.businessName,
-                          })}
-                        </span>
-                        <span className="text-[0.63rem] font-mono text-muted-foreground">
-                          {evt.timestamp}
-                        </span>
+                  scanEvents.map((evt) => {
+                    const where = [evt.city, evt.region, evt.country].filter(Boolean).join(', ');
+                    return (
+                      <div
+                        key={evt.id}
+                        className={`border p-2.5 text-xs space-y-1 ${evt.is_test ? 'border-dashed border-border bg-background opacity-70' : 'border-border bg-secondary/40'}`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-bold text-primary font-mono">
+                            {t('export:telemetry.slotPrefix', {
+                              id: slots.find((s) => s.slotNumber === evt.slot_number)?.displayNumber ?? evt.slot_number,
+                              business: evt.business_name,
+                            })}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            {evt.is_test && (
+                              <span className="border border-border px-1 text-[0.6rem] font-bold uppercase text-muted-foreground">
+                                {t('export:telemetry.test')}
+                              </span>
+                            )}
+                            {repeatIds.has(evt.id) && (
+                              <span className="border border-border px-1 text-[0.6rem] font-bold uppercase text-muted-foreground">
+                                {t('export:telemetry.repeat')}
+                              </span>
+                            )}
+                            <span className="text-[0.63rem] font-mono text-muted-foreground">
+                              {evt.timestamp
+                                ? new Date(evt.timestamp.endsWith('Z') || evt.timestamp.includes('+') ? evt.timestamp : `${evt.timestamp}Z`).toLocaleString(i18n.language)
+                                : ''}
+                            </span>
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 text-[0.69rem] text-muted-foreground font-mono sm:grid-cols-2">
+                          <span>
+                            {t('export:telemetry.device')} {describeDevice(evt.user_agent, evt.device_type)}
+                          </span>
+                          <span>
+                            {t('export:telemetry.ip')} {maskIp(evt.client_ip)}
+                          </span>
+                          <span>
+                            {t('export:telemetry.location')} {where || t('export:telemetry.locating')}
+                          </span>
+                          <span>
+                            {t('export:telemetry.isp')} {evt.isp || '—'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between text-[0.69rem] text-muted-foreground font-mono">
-                        <span>
-                          {t('export:telemetry.device')} {evt.deviceType}
-                        </span>
-                        <span>
-                          {t('export:telemetry.ip')} {evt.ipMock}
-                        </span>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>

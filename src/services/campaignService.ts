@@ -64,6 +64,7 @@ export function mapBackendSlotToFrontend(raw: any): SlotState {
     qrCodeUrl: raw.qr_code_url ?? raw.qrCodeUrl ?? '',
     qrRedirectUrl: raw.short_url ?? raw.qrRedirectUrl ?? '',
     scanCount: raw.scan_count ?? raw.scanCount ?? 0,
+    qrToken: raw.qr_token ?? undefined,
     paymentRef: raw.payment_ref ?? raw.paymentRef ?? '',
     paidAt: raw.paid_at ?? raw.paidAt ?? undefined,
     amountCollectedUsd: raw.amount_collected_usd ?? raw.amountCollectedUsd ?? undefined,
@@ -179,6 +180,7 @@ export function mapBackendCampaignToFrontend(raw: any): Campaign {
     modelVariables: raw.model_variables ?? 0,
     modelAck: raw.model_ack ?? null,
     selectedRoutes: raw.selected_routes ?? raw.selectedRoutes ?? 0,
+    createdAt: raw.created_at ?? raw.createdAt ?? undefined,
   };
 }
 
@@ -384,7 +386,10 @@ export async function updateCampaignSlot(
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to update slot ${slotNumber}: HTTP ${response.status}`);
+    // The backend explains refusals (e.g. a business held by another open campaign
+    // of the microzone); pass that on instead of a bare status code.
+    const detail = await response.json().then((b) => b?.detail).catch(() => null);
+    throw new Error(typeof detail === 'string' ? detail : `Failed to update slot ${slotNumber}: HTTP ${response.status}`);
   }
 
   const result = await response.json();

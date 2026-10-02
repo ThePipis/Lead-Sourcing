@@ -1,12 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Archive, ArchiveRestore, Plus, Trash2, X } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { Campaign } from '../types.ts';
 import { INLAND_EMPIRE_ZONES } from '../data/categories.ts';
 import { getReachFloor } from '../services/routeService.ts';
-import { computeProgress, collectedUsd, PHASE_ORDER, TOTAL_SLOTS } from '../workflow.ts';
+import { computeProgress, collectedUsd, PHASE_ORDER, slotTally } from '../workflow.ts';
 
-type FilterId = 'ACTIVE' | 'ARCHIVED' | 'ALL';
+type FilterId = 'ACTIVE' | 'CLOSED' | 'ARCHIVED' | 'ALL';
+type SortField = 'code' | 'city' | 'zip' | 'slots' | 'createdAt';
+type SortOrder = 'asc' | 'desc';
 
 interface CampaignFileProps {
   campaigns: Campaign[];
@@ -20,7 +34,6 @@ interface CampaignFileProps {
   isCreating: boolean;
   /** Set while an archive or delete is in flight. */
   isFiling: boolean;
-  onOpenSpec: () => void;
   /** Language and stock controls, seated on the drawer's header rule. */
   chrome: React.ReactNode;
   onReplayTour: () => void;
@@ -35,6 +48,20 @@ const money = (n: number) =>
     currency: 'USD',
     maximumFractionDigits: 0,
   });
+
+const formatDate = (iso?: string) => {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  } catch {
+    return '—';
+  }
+};
 
 /**
  * Four cells, one per section, printed the way a form shows which blocks are
@@ -94,7 +121,6 @@ export const CampaignFile: React.FC<CampaignFileProps> = ({
   onDeleteCampaign,
   isCreating,
   isFiling,
-  onOpenSpec,
   chrome,
   onReplayTour,
   modeSwitch,
@@ -109,16 +135,24 @@ export const CampaignFile: React.FC<CampaignFileProps> = ({
   const [showNew, setShowNew] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
 
-  const active = useMemo(() => campaigns.filter((c) => !c.archivedAt), [campaigns]);
+  // A campaign is closed once its drop is deposited with USPS (section 4 sealed):
+  // nothing is left to do but read the scans, so it leaves the working list.
+  const active = useMemo(() => campaigns.filter((c) => !c.archivedAt && c.status !== 'MAILED'), [campaigns]);
+  const closed = useMemo(() => campaigns.filter((c) => !c.archivedAt && c.status === 'MAILED'), [campaigns]);
   const archived = useMemo(() => campaigns.filter((c) => c.archivedAt), [campaigns]);
   const counts: Record<FilterId, number> = {
     ACTIVE: active.length,
+    CLOSED: closed.length,
     ARCHIVED: archived.length,
     ALL: campaigns.length,
   };
 
-  const existingZips = new Set(campaigns.map((c) => c.targetZip));
-  const availableZones = INLAND_EMPIRE_ZONES.filter((z) => !existingZips.has(z.zip));
+  // Several campaigns of one microzone can run at once (a business is exclusive
+  // to one open campaign of its zone, enforced by the backend), so every zone is
+  // offered; the count says how many are already open there.
+  const openInZone = (zip: string) =>
+    campaigns.filter((c) => c.targetZip === zip && !c.archivedAt && c.status !== 'MAILED').length;
+  const availableZones = INLAND_EMPIRE_ZONES;
 
   // One campaign is lifted to the top of the drawer as a card, and it is the one
   // this operator opened last: opening a form is the act of picking up a job, so
@@ -158,9 +192,117 @@ export const CampaignFile: React.FC<CampaignFileProps> = ({
 
   const listed = useMemo(() => {
     if (filter === 'ARCHIVED') return archived;
-    if (filter === 'ALL') return [...ordered.activeOrdered, ...archived];
+    if (filter === 'CLOSED') return closed;
+    if (filter === 'ALL') return [...ordered.activeOrdered, ...closed, ...archived];
     return ordered.activeOrdered;
-  }, [filter, ordered.activeOrdered, archived]);
+  }, [filter, ordered.activeOrdered, closed, archived]);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 3;
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder(field === 'createdAt' ? 'desc' : 'asc');
+    }
+    setCurrentPage(1);
+  };
+
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-3 w-3 shrink-0 opacity-30 group-hover:opacity-75 transition-opacity" />;
+    }
+    return sortOrder === 'asc' ? (
+      <ChevronUp className="h-3 w-3 shrink-0 text-live" />
+    ) : (
+      <ChevronDown className="h-3 w-3 shrink-0 text-live" />
+    );
+  };
+
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const base = !q
+      ? listed
+      : listed.filter((c) => {
+          const code = (c.code || '').toLowerCase();
+          const city = (c.targetCity || '').toLowerCase();
+          const zip = (c.targetZip || '').toLowerCase();
+          const name = (c.name || '').toLowerCase();
+          return code.includes(q) || city.includes(q) || zip.includes(q) || name.includes(q);
+        });
+
+    const leadId = ordered.lead?.id;
+    const isLeadCampaign = (c: Campaign) => c.id === leadId && !c.archivedAt;
+
+    const leadCamp = base.find(isLeadCampaign);
+    const otherCamps = base.filter((c) => !isLeadCampaign(c));
+
+    if (!sortField) {
+      return leadCamp ? [leadCamp, ...otherCamps] : otherCamps;
+    }
+
+    const sortedOthers = [...otherCamps].sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'code':
+          comparison = (a.code || '').localeCompare(b.code || '');
+          break;
+        case 'city':
+          comparison = (a.targetCity || '').localeCompare(b.targetCity || '');
+          break;
+        case 'zip':
+          comparison = (a.targetZip || '').localeCompare(b.targetZip || '');
+          break;
+        case 'slots': {
+          const paidA = a.slots.filter(
+            (s) => s.status === 'PAID' && s.format !== 'USPS' && s.slotNumber !== 32,
+          ).length;
+          const paidB = b.slots.filter(
+            (s) => s.status === 'PAID' && s.format !== 'USPS' && s.slotNumber !== 32,
+          ).length;
+          comparison = paidA - paidB;
+          break;
+        }
+        case 'createdAt': {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          comparison = timeA - timeB;
+          break;
+        }
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    return leadCamp ? [leadCamp, ...sortedOthers] : sortedOthers;
+  }, [listed, searchQuery, sortField, sortOrder, ordered.lead]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paged = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, currentPage]);
+
+  const handleFilterChange = (id: FilterId) => {
+    setFilter(id);
+    setCurrentPage(1);
+  };
+
+  const handleSearchChange = (q: string) => {
+    setSearchQuery(q);
+    setCurrentPage(1);
+  };
 
   // An empty file has nothing to browse, so the only thing on screen is how to
   // start one. While the file is still loading it is empty for the wrong
@@ -280,15 +422,15 @@ export const CampaignFile: React.FC<CampaignFileProps> = ({
               aria-label={t('common:file.indexTitle')}
               className="flex gap-px overflow-x-auto max-w-full"
             >
-              {(['ACTIVE', 'ARCHIVED', 'ALL'] as FilterId[]).map((id) => (
+              {(['ACTIVE', 'CLOSED', 'ARCHIVED', 'ALL'] as FilterId[]).map((id) => (
                 <button
                   key={id}
                   id={`btn-filter-${id.toLowerCase()}`}
                   type="button"
                   role="tab"
                   aria-selected={filter === id}
-                  onClick={() => setFilter(id)}
-                  className={`field-label flex min-h-11 items-center gap-1.5 px-3 transition-colors ${
+                  onClick={() => handleFilterChange(id)}
+                  className={`field-label flex min-h-11 items-center gap-1.5 px-3 transition-colors cursor-pointer ${
                     filter === id
                       ? 'bg-secondary text-ink'
                       : 'text-ink-dim hover:bg-secondary hover:text-ink'
@@ -302,29 +444,139 @@ export const CampaignFile: React.FC<CampaignFileProps> = ({
               ))}
             </div>
 
-            <button
-              id="btn-toggle-new"
-              type="button"
-              data-tour="new-campaign"
-              aria-expanded={showNew}
-              onClick={() => setShowNew((v) => !v)}
-              className="field-label flex min-h-11 items-center gap-1.5 px-3 text-live transition-colors hover:bg-secondary"
-            >
-              {showNew ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-              {t(showNew ? 'common:file.newClose' : 'common:file.newToggle')}
-            </button>
+            <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end min-w-[240px]">
+              {/* Buscador */}
+              <div className="relative flex-1 sm:w-60">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-dim pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  placeholder={t('common:file.searchPlaceholder', 'Buscar código, ciudad o ZIP...')}
+                  className="h-8.5 w-full rounded-sm border border-rule bg-background pl-8 pr-7 text-xs text-ink placeholder:text-ink-dim/60 focus:border-live focus:outline-none transition-colors"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => handleSearchChange('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-dim hover:text-ink cursor-pointer"
+                    title="Limpiar búsqueda"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+
+              <button
+                id="btn-toggle-new"
+                type="button"
+                data-tour="new-campaign"
+                aria-expanded={showNew}
+                onClick={() => setShowNew((v) => !v)}
+                className="field-label flex min-h-11 items-center gap-1.5 px-3 text-live transition-colors hover:bg-secondary whitespace-nowrap cursor-pointer"
+              >
+                {showNew ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                {t(showNew ? 'common:file.newClose' : 'common:file.newToggle')}
+              </button>
+            </div>
+          </div>
+
+          {/* Encabezado de columnas con ordenamiento */}
+          <div className="flex items-center border-b border-rule bg-secondary/40 select-none">
+            <div className="flex min-w-0 flex-1 items-center gap-x-3 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => handleSort('code')}
+                className={`group field-label flex min-w-0 flex-1 sm:w-44 sm:flex-none items-center gap-1 truncate text-left transition-colors cursor-pointer ${
+                  sortField === 'code' ? 'text-live font-bold' : 'text-ink-dim hover:text-ink'
+                }`}
+                title={t('common:file.sortCol', 'Ordenar por campaña')}
+              >
+                <span className="truncate">{t('common:file.colCampaign', 'Campaña')}</span>
+                {renderSortIcon('code')}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSort('city')}
+                className={`group field-label hidden w-28 shrink-0 md:flex items-center gap-1 text-left transition-colors cursor-pointer ${
+                  sortField === 'city' ? 'text-live font-bold' : 'text-ink-dim hover:text-ink'
+                }`}
+                title={t('common:file.sortCol', 'Ordenar por ciudad')}
+              >
+                <span>{t('common:file.colCity', 'Ciudad')}</span>
+                {renderSortIcon('city')}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSort('zip')}
+                className={`group field-label hidden w-14 shrink-0 lg:flex items-center gap-1 text-left transition-colors cursor-pointer ${
+                  sortField === 'zip' ? 'text-live font-bold' : 'text-ink-dim hover:text-ink'
+                }`}
+                title={t('common:file.sortCol', 'Ordenar por ZIP')}
+              >
+                <span>{t('common:file.colZip', 'ZIP')}</span>
+                {renderSortIcon('zip')}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSort('slots')}
+                className={`group field-label w-16 shrink-0 flex items-center gap-1 text-left transition-colors cursor-pointer ${
+                  sortField === 'slots' ? 'text-live font-bold' : 'text-ink-dim hover:text-ink'
+                }`}
+                title={t('common:file.sortCol', 'Ordenar por casillas')}
+              >
+                <span>{t('common:file.colSlots', 'Casillas')}</span>
+                {renderSortIcon('slots')}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSort('createdAt')}
+                className={`group field-label hidden w-24 shrink-0 sm:flex items-center gap-1 text-left transition-colors cursor-pointer ${
+                  sortField === 'createdAt' ? 'text-live font-bold' : 'text-ink-dim hover:text-ink'
+                }`}
+                title={t('common:file.sortCol', 'Ordenar por fecha de creación')}
+              >
+                <span>{t('common:file.colCreatedAt', 'Creación')}</span>
+                {renderSortIcon('createdAt')}
+              </button>
+
+              <span className="field-label ml-auto text-right">
+                {t('common:file.colProgress', 'Progreso')}
+              </span>
+            </div>
+            <div className="field-label w-[92px] shrink-0 pr-1 text-center">
+              {t('common:file.colActions', 'Acciones')}
+            </div>
           </div>
 
           {/* The index scrolls inside its own frame: the file can hold fifty
               drops without the page ever getting taller. */}
-          <div className="max-h-[15.5rem] overflow-y-auto overscroll-contain">
-            {listed.length === 0 ? (
-              <p className="px-3 py-6 text-center text-xs text-ink-dim">
-                {t(filter === 'ARCHIVED' ? 'common:file.emptyArchived' : 'common:file.emptyIndex')}
-              </p>
+          <div className="max-h-[16rem] overflow-y-auto overscroll-contain">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-8 text-center text-xs text-ink-dim">
+                {searchQuery.trim() ? (
+                  <p>
+                    {t('common:file.noSearchResults', 'No se encontraron campañas que coincidan con la búsqueda.')}
+                  </p>
+                ) : (
+                  <p>
+                    {t(
+                      filter === 'ARCHIVED'
+                        ? 'common:file.emptyArchived'
+                        : filter === 'CLOSED'
+                          ? 'common:file.emptyClosed'
+                          : 'common:file.emptyIndex',
+                    )}
+                  </p>
+                )}
+              </div>
             ) : (
               <ul>
-                {listed.map((c) => (
+                {paged.map((c) => (
                   <FileRow
                     key={c.id}
                     campaign={c}
@@ -345,6 +597,63 @@ export const CampaignFile: React.FC<CampaignFileProps> = ({
               </ul>
             )}
           </div>
+
+          {/* Barra de paginación */}
+          {filtered.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-rule bg-secondary/30 px-3 py-2 text-xs">
+              <span className="font-mono text-[0.68rem] text-ink-dim">
+                {t('common:file.showing', {
+                  from: (currentPage - 1) * PAGE_SIZE + 1,
+                  to: Math.min(currentPage * PAGE_SIZE, filtered.length),
+                  total: filtered.length,
+                  defaultValue: `Mostrando ${(currentPage - 1) * PAGE_SIZE + 1}-${Math.min(currentPage * PAGE_SIZE, filtered.length)} de ${filtered.length}`,
+                })}
+              </span>
+
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className="flex h-7 items-center gap-0.5 rounded border border-rule px-2 text-[0.68rem] font-medium text-ink transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                    title="Página anterior"
+                  >
+                    <ChevronLeft className="h-3 w-3" />
+                    <span className="hidden sm:inline">{t('common:file.prevPage', 'Anterior')}</span>
+                  </button>
+
+                  <div className="flex items-center gap-1 font-mono text-[0.68rem]">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setCurrentPage(p)}
+                        className={`h-7 min-w-7 rounded border px-1.5 font-bold transition-colors cursor-pointer ${
+                          p === currentPage
+                            ? 'border-live bg-live text-primary-foreground'
+                            : 'border-rule bg-background text-ink hover:bg-secondary'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className="flex h-7 items-center gap-0.5 rounded border border-rule px-2 text-[0.68rem] font-medium text-ink transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                    title="Página siguiente"
+                  >
+                    <span className="hidden sm:inline">{t('common:file.nextPage', 'Siguiente')}</span>
+                    <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 
@@ -388,6 +697,7 @@ export const CampaignFile: React.FC<CampaignFileProps> = ({
                 {availableZones.map((z) => (
                   <option key={z.zip} value={`${z.city}|${z.zip}`}>
                     {z.city} · {z.zip} · {z.county}
+                    {openInZone(z.zip) > 0 ? ` · ${t('common:file.openInZone', { count: openInZone(z.zip) })}` : ''}
                   </option>
                 ))}
               </select>
@@ -455,17 +765,9 @@ export const CampaignFile: React.FC<CampaignFileProps> = ({
             id="btn-replay-tour"
             type="button"
             onClick={onReplayTour}
-            className="field-label text-live transition-colors hover:text-ink"
+            className="field-label text-live transition-colors hover:text-ink cursor-pointer"
           >
             {t('common:tour.replay')}
-          </button>
-          <button
-            id="btn-open-spec"
-            type="button"
-            onClick={onOpenSpec}
-            className="field-label transition-colors hover:text-ink"
-          >
-            {t('common:file.spec')} →
           </button>
         </div>
       </footer>
@@ -478,7 +780,8 @@ const LeadRow: React.FC<{ campaign: Campaign; onOpen: () => void }> = ({ campaig
   const { t } = useTranslation(['common']);
   const progress = computeProgress(campaign);
   const collected = collectedUsd(campaign);
-  const owedSlots = campaign.slots.filter((s) => s.status !== 'PAID').length;
+  const tally = slotTally(campaign.slots);
+  const owedSlots = tally.total - tally.paid;
 
   return (
     <section className="mt-4 border border-live/60 bg-card">
@@ -584,10 +887,8 @@ const FileRow: React.FC<FileRowProps> = ({
   onDelete,
 }) => {
   const { t } = useTranslation(['common']);
-  const paid = campaign.slots.filter(
-    (s) => s.status === 'PAID' && s.format !== 'USPS' && s.slotNumber !== 32,
-  ).length;
-  const owed = Math.max(0, TOTAL_SLOTS - paid);
+  const { paid, total } = slotTally(campaign.slots);
+  const owed = total - paid;
   const mailed = campaign.status === 'MAILED';
   const isArchived = Boolean(campaign.archivedAt);
 
@@ -606,7 +907,7 @@ const FileRow: React.FC<FileRowProps> = ({
       >
         {/* Narrow widths drop city and ZIP. What the campaign owes never goes:
             it is the reason to open the row at all. */}
-        <span className="field-value min-w-0 flex-1 truncate text-xs text-ink sm:w-52 sm:flex-none sm:text-sm">
+        <span className="field-value min-w-0 flex-1 truncate text-xs text-ink sm:w-44 sm:flex-none sm:text-sm">
           {campaign.code}
         </span>
         <span className="field-label hidden w-28 shrink-0 normal-case tracking-normal md:block">
@@ -616,10 +917,16 @@ const FileRow: React.FC<FileRowProps> = ({
           {campaign.targetZip}
         </span>
         <span
-          className={`field-value w-12 shrink-0 text-xs ${owed > 0 ? 'text-due' : 'text-clear'}`}
+          className={`field-value w-16 shrink-0 text-xs ${owed > 0 ? 'text-due' : 'text-clear'}`}
           title={t('common:file.slotsOwed')}
         >
-          {paid}/{TOTAL_SLOTS}
+          {paid}/{total}
+        </span>
+        <span
+          className="field-value hidden w-24 shrink-0 text-xs text-ink-dim sm:block"
+          title={campaign.createdAt ? new Date(campaign.createdAt).toLocaleString() : undefined}
+        >
+          {formatDate(campaign.createdAt)}
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-3">
           {isLead && !isArchived && (

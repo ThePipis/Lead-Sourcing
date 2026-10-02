@@ -574,6 +574,8 @@ CITY_COORDINATES: Dict[str, Tuple[float, float]] = {
     "chino hills": (33.9898, -117.7326),
     "92506": (33.9533, -117.3962),  # Riverside
     "riverside": (33.9533, -117.3962),
+    "92336": (34.1386, -117.4620),  # Fontana (norte)
+    "fontana": (34.1386, -117.4620),
 }
 
 def get_campaign_center(city: str, zip_code: str) -> Tuple[float, float]:
@@ -585,6 +587,10 @@ def get_campaign_center(city: str, zip_code: str) -> Tuple[float, float]:
     for k, coords in CITY_COORDINATES.items():
         if k in c:
             return coords
+    # Unknown microzone: searching around Eastvale is the only fallback there is,
+    # but it must not happen silently — that is how other towns' campaigns were
+    # prospected in Eastvale. Add the ZIP to CITY_COORDINATES.
+    print(f"[LeadSourcing] Sin coordenadas para {city!r} {zip_code!r}: se usa Eastvale. Añádelo a CITY_COORDINATES.")
     return (33.9634, -117.5639)
 
 def haversine_distance_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -696,7 +702,7 @@ def normalize_candidate_record(
     t_zip = target_zip.strip()
     is_eastvale_target = (t_zip == "92880" or "eastvale" in t_city)
 
-    if cand_zip == "92880":
+    if is_eastvale_target and cand_zip == "92880":
         c["city"] = "Eastvale (92880)"
         c["zip_code"] = "92880"
         c["zip"] = "92880"
@@ -1046,9 +1052,7 @@ class LeadSourcingService:
         category_id: Optional[int],
     ) -> List[Dict[str, Any]]:
 
-        is_corona = "corona" in city.lower() or zip_code == "92882"
-        lat = 33.8753 if is_corona else 33.9634
-        lon = -117.5664 if is_corona else -117.5639
+        lat, lon = get_campaign_center(city, zip_code)
 
         headers = {
             "Authorization": f"Bearer {self.yelp_api_key}",
@@ -1219,9 +1223,7 @@ class LeadSourcingService:
             )
             return []
 
-        is_corona = "corona" in city.lower() or zip_code == "92882"
-        center_lat = 33.8753 if is_corona else 33.9634
-        center_lon = -117.5664 if is_corona else -117.5639
+        center_lat, center_lon = get_campaign_center(city, zip_code)
 
         params = {
             "categories": geoapify_category,
@@ -1340,9 +1342,7 @@ class LeadSourcingService:
     async def _fetch_area_uncached(
         self, cache_key: str, city: str, zip_code: str
     ) -> Dict[int, List[Dict[str, Any]]]:
-        is_corona = "corona" in city.lower() or zip_code == "92882"
-        lat = 33.8753 if is_corona else 33.9634
-        lon = -117.5664 if is_corona else -117.5639
+        lat, lon = get_campaign_center(city, zip_code)
         radius = 8050
 
         seen = set()
@@ -1460,9 +1460,7 @@ class LeadSourcingService:
         if not filters:
             return []
 
-        is_corona = "corona" in city.lower() or zip_code == "92882"
-        lat = 33.8753 if is_corona else 33.9634
-        lon = -117.5664 if is_corona else -117.5639
+        lat, lon = get_campaign_center(city, zip_code)
         radius = 8050  # the same five miles the paid providers are asked for
 
         parts = "".join(

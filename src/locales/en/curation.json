@@ -79,6 +79,7 @@
     "title": "Route engine · who the drop reaches",
     "intro": "A co-op drop is delivered by saturation: the carrier leaves it in every box on the route, addressed to \"Postal Customer\". So the choice here is made by ROUTE, not by household, and no list has to be bought. USPS supplies each route's official box count; the Census supplies the profile of the households that route runs through. The ZIP's routes are scored on that, and the best ones are bought.",
     "zip": "Target ZIP",
+    "lockedFromSales": "Set by the campaign: the microzone and reach sold in section 1.",
     "target": "Target households",
     "plan": "Compute routes",
     "planning": "Querying USPS and Census…",

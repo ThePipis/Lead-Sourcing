@@ -20,9 +20,18 @@ export default defineConfig(() => {
           target: 'http://127.0.0.1:8000',
           changeOrigin: true,
         },
+        // Printed short links, /q/<code>.
+        '/q': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: true,
+          xfwd: true,
+        },
         '/r': {
           target: 'http://127.0.0.1:8000',
           changeOrigin: true,
+          // Pass the scanning phone's address on (X-Forwarded-For), or every
+          // scan would be logged as coming from this PC.
+          xfwd: true,
         },
       },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

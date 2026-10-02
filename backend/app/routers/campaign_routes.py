@@ -92,8 +92,10 @@ async def plan_routes(
     mail the same box twice.
     """
     camp = _campaign(db, campaign_id)
-    zip_code = zip_code or camp.target_zip
-    target = target or camp.target_households or 5000
+    # The drop is the one that was sold: the campaign's microzone and the reach
+    # locked in section 1. The request cannot plan another ZIP or size.
+    zip_code = camp.target_zip
+    target = camp.target_households or 5000
 
     try:
         routes = await eddm_service.fetch_routes(zip_code)

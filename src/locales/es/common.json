@@ -3,8 +3,7 @@
     "tablero": "1. Tablero 12\"×9\" & Slots",
     "leadSourcing": "2. Lead Sourcing (Yelp + OSM)",
     "propensityEngine": "3. Propensity Engine (5k Hogares)",
-    "postalExport": "4. QR & Exportación Postal",
-    "architectureFastApi": "Arquitectura FastAPI & DB"
+    "postalExport": "4. QR & Exportación Postal"
   },
   "status": {
     "vacant": "VACANTE",
@@ -138,17 +137,6 @@
       "defaultHeadline": "Ahorre hasta $600/Año en Pólizas Combinadas | Cotización Rápida en 5 Minutos Sin Compromiso"
     }
   },
-  "architecture": {
-    "tag": "FULL-STACK ENTERPRISE SYSTEM ARCHITECTURE",
-    "title": "FastAPI Backend + React Frontend + SpatiaLite / PostGIS",
-    "description": "Arquitectura desacoplada de alto rendimiento. Diseñada para procesar matrices vectoriales con NumPy en milisegundos, orquestar APIs externas (Yelp, Geoapify, Data Axle, Llama.cpp) y exportar manifiestos conformes con las especificaciones técnicas postales.",
-    "stackBadge": "FastAPI 0.115 + Pydantic v2 + SQLAlchemy 2.0",
-    "treeTitle": "1. Estructura Completa de Directorios y Archivos",
-    "copyTree": "Copiar Árbol",
-    "codeTitle": "2. Código de Producción Backend (FastAPI / Python)",
-    "copyCode": "Copiar Código",
-    "copied": "Copiado"
-  },
   "footer": {
     "copyright": "Co-Op Direct Mail Platform • Operaciones de Correo Compartido en Inland Empire",
     "specs": "USPS Marketing Mail ECRWSS • Certificado CASS/NCOA • Especificación Action Mail"
@@ -168,13 +156,14 @@
     "newLabel": "Abrir impreso nuevo",
     "pickZone": "Elige una microzona…",
     "allZonesUsed": "Todas las microzonas ya tienen impreso",
+    "openInZone_one": "{{count}} abierta",
+    "openInZone_other": "{{count}} abiertas",
     "create": "Abrir impreso",
     "creating": "Abriendo…",
     "sectionsDone": "{{done}} de {{total}} secciones selladas",
     "loadError": "No se pudo leer el archivo: {{error}}",
-    "spec": "Especificación FastAPI & DB",
     "emptyLiveTitle": "Aquí empieza tu primera campaña real",
-    "emptyLiveBody": "El archivo en vivo está vacío a propósito. Elige una microzona abajo y abre el impreso: la campaña nace con sus 14 espacios vacíos y la app te dirá, paso a paso, qué hacer en cada momento.",
+    "emptyLiveBody": "El archivo en vivo no tiene campañas aún. Elige una microzona abajo para abrir el impreso e iniciar la prospección comercial, reservas y curación postal.",
     "emptyDemoTitle": "El archivo de práctica está vacío",
     "emptyDemoBody": "No queda ninguna campaña de simulación. Abre una nueva abajo para volver a practicar el proceso completo.",
     "createConflict": "Ya existe una campaña de este mes para {{zone}}. Ábrela desde el archivo o espera al mes siguiente.",
@@ -185,6 +174,7 @@
     "indexTitle": "Índice del archivo",
     "filters": {
       "active": "Activas",
+      "closed": "Cerradas",
       "archived": "Archivadas",
       "all": "Todas"
     },
@@ -200,11 +190,24 @@
     "confirmNo": "No",
     "emptyIndex": "El archivo activo está vacío.",
     "emptyArchived": "Nada archivado todavía.",
+    "searchPlaceholder": "Buscar código, ciudad o ZIP...",
+    "noSearchResults": "No se encontraron campañas que coincidan con la búsqueda.",
+    "showing": "Mostrando {{from}}-{{to}} de {{total}}",
+    "prevPage": "Anterior",
+    "nextPage": "Siguiente",
+    "colCampaign": "Campaña",
+    "colCity": "Ciudad",
+    "colZip": "ZIP",
+    "colSlots": "Casillas",
+    "colCreatedAt": "Creación",
+    "colProgress": "Progreso",
+    "colActions": "Acciones",
     "deleteFailed": "No se pudo eliminar: la campaña ya tiene cobros registrados o está en imprenta. Archívala en su lugar.",
     "leadTag": "En curso",
     "sizeHintFloor": "El cartero reparte rutas completas, no casas sueltas. En el {{zip}} la ruta más pequeña tiene {{floor}} buzones: ese es el envío más chico posible y el mínimo de esta casilla. De este número salen el precio de los 14 espacios y el costo de la tirada.",
     "sizeHintNoFloor": "No se pudo consultar las rutas del {{zip}} en el USPS, así que el mínimo real se desconoce. El sistema tomará rutas enteras hasta cubrir tu meta y te dirá cuántos buzones son de verdad.",
-    "sizeHintLoading": "Consultando en el USPS las rutas del {{zip}} para saber cuál es el envío más chico posible…"
+    "sizeHintLoading": "Consultando en el USPS las rutas del {{zip}} para saber cuál es el envío más chico posible…",
+    "emptyClosed": "Ninguna campaña cerrada todavía. Una campaña se cierra al sellar su depósito en USPS."
   },
   "form": {
     "backToFile": "Archivo",
@@ -292,7 +295,7 @@
     "partners": "Socios",
     "perPartner": "c/u al completar",
     "collectedSub": "Fondos recaudados",
-    "contractedSub": "Capacidad comercial (31 slots)",
+    "contractedSub": "Capacidad comercial ({{count}} espacios)",
     "netProfitTotalSub": "Total libre de costos",
     "fromRoutes": "Sobre {{households}} piezas reales de {{routes}} rutas",
     "floorMet": "Piso operativo alcanzado",

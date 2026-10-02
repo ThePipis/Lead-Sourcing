@@ -11,7 +11,6 @@ import { SlotCall, fetchSlotContacts } from './services/leadSourcingService.ts';
 import { SlotInspector } from './components/SlotInspector.tsx';
 import { CurationStudio } from './components/CurationStudio.tsx';
 import { PostalExportView } from './components/PostalExportView.tsx';
-import { ArchitectureViewer } from './components/ArchitectureViewer.tsx';
 import { GuidedTour, FILE_TOUR, FORM_TOUR, hasSeenTour } from './components/GuidedTour.tsx';
 import { CLOSED_CATEGORIES } from './data/categories.ts';
 import {
@@ -114,7 +113,9 @@ export default function App() {
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [showSpec, setShowSpec] = useState(false);
+  // Why the last slot change was refused (e.g. the business is held by another
+  // open campaign of the microzone). Cleared by the next change that succeeds.
+  const [slotError, setSlotError] = useState<string | null>(null);
   // Counts for the other world, so the switch says what it will reveal.
   const [otherModeCount, setOtherModeCount] = useState(0);
 
@@ -274,14 +275,19 @@ export default function App() {
         }, 0);
         const cost = dropCostUsd(c);
         const margin = revenue > 0 ? (revenue - cost) / revenue : 0;
-        const paidCount = nextSlots.filter((s) => s.status === 'PAID' && s.slotNumber !== 32).length;
+        const paidCount = nextSlots.filter(
+          (s) => s.status === 'PAID' && s.slotNumber !== 32 && !s.notes?.includes('Covered by'),
+        ).length;
         const totalCollected = nextSlots.reduce((acc, s) => {
           if (s.format === 'USPS' || s.slotNumber === 32 || s.notes?.includes('Covered by')) return acc;
           return s.status === 'PAID' ? acc + (s.amountCollectedUsd || s.priceUsd || 0) : acc;
         }, 0);
         const advCount = nextSlots.filter((s) => s.slotNumber !== 32 && !s.notes?.includes('Covered by')).length;
+        // Same rule as the backend: a drop at the printer or mailed keeps its stage.
         const nextStatus =
-          advCount > 0 && paidCount >= advCount
+          c.status === 'IN_PRODUCTION' || c.status === 'MAILED'
+            ? c.status
+            : advCount > 0 && paidCount >= advCount
             ? 'LOCKED_READY'
             : c.status === 'LOCKED_READY'
             ? 'PROSPECTING'
@@ -303,8 +309,8 @@ export default function App() {
   );
 
   const handleOpenCampaign = useCallback(
-    (id: string) => {
-      const next = campaigns.find((c) => String(c.id) === String(id));
+    (id: string, campaignObj?: Campaign) => {
+      const next = campaignObj ?? campaigns.find((c) => String(c.id) === String(id));
       setOpenCampaignId(String(id));
       setLastOpenedId(String(id));
       try {
@@ -313,9 +319,11 @@ export default function App() {
         // Not being able to remember is not a reason to fail to open.
       }
       setPendingPaymentSlot(null);
-      // Land the operator on the section that owes work, not on section 1.
+      // Land the operator on the section that owes work, defaulting to section 1.
       if (next) {
-        setActivePhase(computeProgress(next).current);
+        setActivePhase(computeProgress(next).current || 'slots');
+      } else {
+        setActivePhase('slots');
       }
       if (window.location.hash !== `#/c/${id}`) {
         window.location.hash = `#/c/${id}`;
@@ -327,6 +335,7 @@ export default function App() {
   const handleBackToFile = () => {
     setOpenCampaignId(null);
     setPendingPaymentSlot(null);
+    setActivePhase('slots');
     if (window.location.hash) window.location.hash = '';
     loadFile();
   };
@@ -349,7 +358,7 @@ export default function App() {
       return;
     }
     const matched = campaigns.find((c) => String(c.id) === String(id));
-    if (matched) handleOpenCampaign(String(matched.id));
+    if (matched) handleOpenCampaign(String(matched.id), matched);
   };
 
   useEffect(() => {
@@ -377,7 +386,8 @@ export default function App() {
     try {
       const created = await createCampaign(city, zip, mode, households);
       setCampaigns((prev) => [created, ...prev.filter((c) => c.id !== created.id)]);
-      handleOpenCampaign(created.id);
+      setActivePhase('slots');
+      handleOpenCampaign(created.id, created);
     } catch (err) {
       console.error('Failed to create campaign:', err);
       const raw = err instanceof Error ? err.message : String(err);
@@ -844,8 +854,12 @@ export default function App() {
       patchSlots(campaign.id, (slots) =>
         slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
       );
+      setSlotError(null);
     } catch (err) {
       console.error('Failed to persist slot business to SQLite:', err);
+      // Undo the optimistic write: the card must not show a business the file refused.
+      if (existing) patchSlots(campaign.id, (slots) => slots.map((s) => (s.slotNumber === slotNumber ? existing : s)));
+      setSlotError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSaving(false);
     }
@@ -968,13 +982,20 @@ export default function App() {
    * bills postage and printing on it, and the margin is measured against it.
    */
   const handleCoverageChange = useCallback(
-    (covered: number, routeCount: number) => {
+    (covered: number, routeCount: number, missing: string[], replanned = false) => {
       if (!openCampaignId) return;
-      patchCampaign(openCampaignId, (c) =>
-        c.coveredHouseholds === covered && c.selectedRoutes === routeCount
-          ? c
-          : { ...c, coveredHouseholds: covered, selectedRoutes: routeCount },
-      );
+      // The model state travels with the routes: left alone, the campaign kept
+      // the "no routes yet" flags and section 3 stayed blocked on a 6/6 score.
+      patchCampaign(openCampaignId, (c) => ({
+        ...c,
+        coveredHouseholds: covered,
+        selectedRoutes: routeCount,
+        modelMissing: missing,
+        modelVariables: 6 - missing.length,
+        modelComplete: routeCount > 0 && missing.length === 0,
+        // A re-run clears the acknowledgement on the backend too.
+        modelAck: replanned ? null : c.modelAck,
+      }));
     },
     [openCampaignId, patchCampaign],
   );
@@ -1147,10 +1168,29 @@ export default function App() {
         slots.map((s) => (s.slotNumber === slotNumber ? mergeSlotUpdate(s, updated) : s)),
       );
       setActivePhase('slots');
+      setSlotError(null);
     } catch (err) {
       console.error('Failed to persist lead assignment to SQLite:', err);
+      setSlotError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  /** Where a slot's QR forwards to after the scan is logged: the slot's website. */
+  const handleSetQrDestination = async (slotNumber: number, url: string) => {
+    if (!campaign) return;
+    const previous = campaign.slots.find((s) => s.slotNumber === slotNumber)?.website ?? '';
+    patchSlots(campaign.id, (slots) =>
+      slots.map((s) => (s.slotNumber === slotNumber ? { ...s, website: url } : s)),
+    );
+    try {
+      await updateCampaignSlot(campaign.id, slotNumber, { website: url });
+    } catch (err) {
+      patchSlots(campaign.id, (slots) =>
+        slots.map((s) => (s.slotNumber === slotNumber ? { ...s, website: previous } : s)),
+      );
+      setSlotError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -1316,6 +1356,8 @@ export default function App() {
                 open the inspector curtain at the exact height of the slots. */}
             <PostalCanvas
               slots={shown.slots}
+              targetCity={shown.targetCity}
+              households={billableHouseholds(shown)}
               onUpdateSlotStatus={handleUpdateSlotStatus}
               onUpdateSlotBusiness={handleUpdateSlotBusiness}
               onUpdateSlotPrice={handleUpdateSlotPrice}
@@ -1413,6 +1455,7 @@ export default function App() {
             campaign={campaign}
             slots={campaign.slots}
             onIncrementScan={handleIncrementScan}
+            onSetDestination={handleSetQrDestination}
             section="manifest"
             onDeliveredToPrinter={() => advanceStatus('IN_PRODUCTION')}
             isSaving={isSaving}
@@ -1432,6 +1475,7 @@ export default function App() {
                 campaign={campaign}
                 slots={campaign.slots}
                 onIncrementScan={handleIncrementScan}
+            onSetDestination={handleSetQrDestination}
                 section="telemetry"
               />
             </div>
@@ -1448,13 +1492,21 @@ export default function App() {
       <GuidedTour
         tourId={tour === 'form' ? 'form' : 'file'}
         steps={tour === 'form' ? FORM_TOUR : FILE_TOUR}
-        active={tour !== null && !showSpec}
+        active={tour !== null}
         onClose={() => setTour(null)}
       />
 
       {loadError && (
         <p className="border-b border-due bg-due/10 px-6 py-2 font-mono text-[0.69rem] text-due">
           {t('common:file.loadError', { error: loadError })}
+        </p>
+      )}
+      {slotError && (
+        <p role="alert" className="flex items-center justify-between gap-3 border-b border-due bg-due/10 px-6 py-2 font-mono text-[0.69rem] text-due">
+          <span>{slotError}</span>
+          <button type="button" onClick={() => setSlotError(null)} className="underline">
+            {t('common:actions.close', 'Cerrar')}
+          </button>
         </p>
       )}
 
@@ -1473,22 +1525,6 @@ export default function App() {
         >
           {chrome}
         </FormShell>
-      ) : showSpec ? (
-        <div className="mx-auto w-full max-w-6xl px-6 pb-20">
-          <div className="flex items-center justify-between gap-4 border-b border-rule-strong py-4">
-            <button
-              type="button"
-              onClick={() => setShowSpec(false)}
-              className="field-label transition-colors hover:text-ink"
-            >
-              ← {t('common:form.backToFile')}
-            </button>
-            <div className="flex items-center gap-2">{chrome}</div>
-          </div>
-          <div className="pt-6">
-            <ArchitectureViewer />
-          </div>
-        </div>
       ) : (
         <CampaignFile
           campaigns={campaigns}
@@ -1500,7 +1536,6 @@ export default function App() {
           onDeleteCampaign={handleDeleteCampaign}
           isCreating={isCreating}
           isFiling={isFiling}
-          onOpenSpec={() => setShowSpec(true)}
           chrome={chrome}
           onReplayTour={() => setTour('file')}
           modeSwitch={

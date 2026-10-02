@@ -60,6 +60,7 @@ import {
   getSlotDiscountedPrice,
   MODULAR_PRICES,
 } from '../utils/modularGrid.ts';
+import { slotTally } from '../workflow.ts';
 
 const USPS_DROP_ID = 'usps-technical-zone';
 
@@ -77,6 +78,10 @@ export interface PostalCanvasProps {
   onResetLayout?: (wipe: boolean) => void;
   coveredHouseholds?: number;
   selectedRoutes?: number;
+  /** Microzone the card is printed for; it names the edition on the banner. */
+  targetCity?: string;
+  /** Pieces this drop prints, as printed on the banner. */
+  households?: number;
   onAutofill?: () => void;
   onMarkAllPaid?: () => void;
   onUndoPayment?: (slotNumber: number, targetStatus?: SlotStatus, clearBusiness?: boolean) => void;
@@ -152,6 +157,8 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
   onResetLayout,
   coveredHouseholds = 0,
   selectedRoutes = 0,
+  targetCity = 'Eastvale',
+  households = 5000,
   onAutofill,
   onInspectSlot,
   slotContacts = {},
@@ -225,8 +232,8 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
     if (activeId !== overId) onSwapSlots(activeId, overId);
   };
 
-  const paidCount = slots.filter((s) => s.status === 'PAID' && s.format !== 'USPS').length;
-  const isMasterUnlocked = paidCount >= 10;
+  const tally = slotTally(slots);
+  const isMasterUnlocked = tally.paid >= tally.floor;
 
   const smallPrice = slots.find((s) => s.format === 'SMALL' && s.priceUsd && s.slotNumber !== 32 && s.status !== 'RESERVED')?.priceUsd || MODULAR_PRICES.SMALL;
   const mediumPrice = slots.find((s) => s.format === 'MEDIUM' && s.priceUsd && s.status !== 'RESERVED')?.priceUsd || MODULAR_PRICES.MEDIUM;
@@ -563,10 +570,10 @@ export const PostalCanvas: React.FC<PostalCanvasProps> = ({
                       </div>
                       <div className="text-center px-1">
                         <h2 className="text-xs sm:text-sm md:text-base font-black tracking-tight text-foreground uppercase leading-tight">
-                          ★ The Inland Spotlight · Eastvale Local Co-Op ★
+                          ★ The Inland Spotlight · {targetCity} Local Co-Op ★
                         </h2>
                         <p className="text-[0.65rem] sm:text-[0.68rem] text-muted-foreground leading-tight mt-0.5">
-                          Cupónera Comunitaria Directa a 5,000 Hogares Seleccionados · Co-Op Direct Mail
+                          Cupónera Comunitaria Directa a {households.toLocaleString('en-US')} Hogares Seleccionados · Co-Op Direct Mail
                         </p>
                       </div>
                       <div className="text-[0.65rem] font-mono uppercase tracking-widest text-muted-foreground text-right whitespace-nowrap">

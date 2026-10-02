@@ -1,4 +1,4 @@
-import { Campaign } from './types.ts';
+import { Campaign, SlotState } from './types.ts';
 
 /**
  * A campaign is one acceptance form with four numbered sections worked in
@@ -15,8 +15,8 @@ import { Campaign } from './types.ts';
  * 1. What has been collected covers the drop's own print and postage cost,
  *    which now follows the number of households rather than sitting at a flat
  *    $3,000.
- * 2. At least twelve of the fourteen slots are paid, so the card never goes
- *    out looking half empty.
+ * 2. About a third of the card's spaces are paid (see slotTally), so the card
+ *    never goes out looking half empty.
  */
 export const OPERATING_FLOOR = 10;
 export const TOTAL_SLOTS = 31;
@@ -27,6 +27,22 @@ export const BASELINE_HOUSEHOLDS = 5000;
  * Modular base weight per atomic small slot ($350 each).
  */
 export const SLOT_WEIGHTS = Array(31).fill(350);
+
+/**
+ * The spaces the card actually has, as designed: every visible box counts once
+ * whatever its format, so four Grandes on the front are four spaces. The floor
+ * scales with the design (10 of 31 boxes = about a third), so a card of 9 big
+ * spaces needs 3 paid, not 10 it can never have.
+ */
+export function slotTally(slots: SlotState[]): { paid: number; total: number; floor: number } {
+  const boxes = slots.filter(
+    (s) => s.format !== 'USPS' && s.slotNumber !== 32 && !s.notes?.includes('Covered by'),
+  );
+  const total = boxes.length;
+  const paid = boxes.filter((s) => s.status === 'PAID').length;
+  const floor = Math.max(1, Math.ceil((total * OPERATING_FLOOR) / TOTAL_SLOTS));
+  return { paid, total, floor };
+}
 
 export type PhaseId = 'slots' | 'curation' | 'manifest' | 'production';
 
@@ -63,13 +79,11 @@ export interface CampaignProgress {
 const isInProduction = (c: Campaign) => c.status === 'IN_PRODUCTION' || c.status === 'MAILED';
 
 export function computeProgress(campaign: Campaign): CampaignProgress {
-  const paid = campaign.slots.filter(
-    (s) => s.status === 'PAID' && s.slotNumber !== 32 && s.format !== 'USPS' && !s.notes?.startsWith('Covered by'),
-  ).length;
+  const { paid, total, floor } = slotTally(campaign.slots);
   const collected = collectedUsd(campaign);
   const cost = dropCostUsd(campaign);
   const costCovered = collected >= cost;
-  const slotsMet = paid >= OPERATING_FLOOR;
+  const slotsMet = paid >= floor;
   const floorMet = costCovered && slotsMet;
   // A saturation drop is bought by the route, so the section is done once
   // routes are selected. The backend recomputes this from CampaignRoute on
@@ -97,7 +111,7 @@ export function computeProgress(campaign: Campaign): CampaignProgress {
       done: floorMet,
       open: true,
       summaryKey: 'form.summary.slots',
-      summaryParams: { paid, total: TOTAL_SLOTS },
+      summaryParams: { paid, total },
     },
     {
       id: 'curation',
@@ -114,7 +128,7 @@ export function computeProgress(campaign: Campaign): CampaignProgress {
         ? undefined
         : !costCovered
           ? { missing: Math.ceil(cost - collected).toLocaleString('en-US') }
-          : { missing: OPERATING_FLOOR - paid, floor: OPERATING_FLOOR },
+          : { missing: floor - paid, floor },
       summaryKey: curated
         ? 'form.summary.curationDone'
         : modelShort

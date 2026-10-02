@@ -89,6 +89,21 @@ export const FormShell: React.FC<FormShellProps> = ({
     }
   }, [activePhase]);
 
+  // Guard against all sections being collapsed: if activePhase is not open (and not in expertMode),
+  // automatically fall back to the first open, unfinished section (defaulting to 'slots').
+  useEffect(() => {
+    const isCurrentActiveUnlocked = progress.phases.some(
+      (p) => p.id === activePhase && (p.open || expertMode),
+    );
+    if (!isCurrentActiveUnlocked) {
+      const fallback =
+        progress.phases.find((p) => p.open && !p.done)?.id ??
+        progress.phases.find((p) => p.open)?.id ??
+        'slots';
+      onSelectPhase(fallback);
+    }
+  }, [activePhase, progress.phases, expertMode, onSelectPhase]);
+
   const firstOpen = progress.phases.find((p) => p.open && !p.done)?.id;
   const firstLocked = progress.phases.find((p) => !p.open)?.id;
 

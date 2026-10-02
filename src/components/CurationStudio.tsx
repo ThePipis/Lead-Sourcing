@@ -8,7 +8,7 @@ interface CurationStudioProps {
   campaignId: string;
   targetHouseholds: number;
   /** Reports the routes' covered household count up to the ledger and the card. */
-  onCoverageChange: (covered: number, routeCount: number) => void;
+  onCoverageChange: (covered: number, routeCount: number, missing: string[], replanned?: boolean) => void;
   targetZip: string;
   onGoToExport: () => void;
   /** Written down when the operator continues on a model that scored short. */

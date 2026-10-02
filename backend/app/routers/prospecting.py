@@ -55,6 +55,22 @@ sourcing_service = LeadSourcingService()
 
 
 
+def _campaign_for(db: Session, campaign_id: Optional[str], zip_code: str) -> Optional[Campaign]:
+    """The campaign a search is for: the one named, else the zone's first (older clients)."""
+    if campaign_id:
+        camp = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+        if camp:
+            return camp
+    return db.query(Campaign).filter(Campaign.target_zip == zip_code).first()
+
+
+def _held_elsewhere(db: Session, camp: Optional[Campaign]) -> set:
+    if camp is None:
+        return set()
+    from .campaigns import businesses_held_elsewhere
+    return set(businesses_held_elsewhere(db, camp))
+
+
 @router.get("/search", response_model=List[LeadResponse])
 async def search_leads(
     city: str = Query("Eastvale"),
@@ -63,11 +79,12 @@ async def search_leads(
     mock_mode: Optional[bool] = Query(False),
     exclude_names: Optional[str] = Query(None),
     force_refresh: bool = Query(False, description="Ignora la caché y vuelve a preguntar a las fuentes"),
+    campaign_id: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     results = []
 
-    campaign_for_zip = db.query(Campaign).filter(Campaign.target_zip == zip_code).first()
+    campaign_for_zip = _campaign_for(db, campaign_id, zip_code)
     campaign_id_for_zip = campaign_for_zip.id if campaign_for_zip else None
 
     # Without a category, search the niches actually on this card (each costs
@@ -97,6 +114,8 @@ async def search_leads(
     )
     cooling = {r[0] for r in resting}
     blacklist |= cooling
+    # A business on another open campaign of this microzone is not on offer here.
+    blacklist |= _held_elsewhere(db, campaign_for_zip)
 
     if exclude_names:
         for en in exclude_names.split(","):
@@ -188,7 +207,7 @@ async def search_leads(
 
         for idx, cand in enumerate(candidates):
             norm_zip = cand.get("zip_code") or cand.get("zip") or zip_code
-            lead_id = f"lead_{cat_id}_{idx}_{norm_zip}"
+            lead_id = f"lead_{cat_id}_{idx}_{campaign_id_for_zip or zip_code}"
             lead_resp = LeadResponse(
                 id=lead_id,
                 category_id=cat_id,
@@ -225,7 +244,9 @@ async def search_leads(
             # so the CRM status the user sets survives a refetch; the id is
             # deterministic per category+zip, so re-searching finds the same row.
             row = db.query(Lead).filter(Lead.id == lead_id).first()
-            if row is None:
+            if campaign_id_for_zip is None:
+                pass  # no campaign in this microzone yet: nothing to file the lead under
+            elif row is None:
                 row = Lead(
                     id=lead_id,
                     campaign_id=campaign_id_for_zip,
@@ -266,6 +287,7 @@ async def search_leads(
                 # card at 13334 Limonite Ave, which belongs to Eastvale Smiles
                 # Dentistry. A wrong address on a prospect card is a partner
                 # driving to the wrong building.
+                row.campaign_id = campaign_id_for_zip
                 row.business_name = cand["business_name"]
                 row.address = cand.get("address")
                 row.category_name = taxonomy["name_es"]
@@ -302,13 +324,14 @@ async def get_replacement_lead(
     zip_code: str = Query("92880"),
     exclude_names: Optional[str] = Query(None),
     mock_mode: Optional[bool] = Query(False),
+    campaign_id: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """
     Busca un nuevo candidato calificado que no esté en la lista negra o descartado,
     genera su guion de prospección y lo entrega para reemplazo inmediato.
     """
-    campaign_for_zip = db.query(Campaign).filter(Campaign.target_zip == zip_code).first()
+    campaign_for_zip = _campaign_for(db, campaign_id, zip_code)
     campaign_id_for_zip = campaign_for_zip.id if campaign_for_zip else None
 
     # No permanent exclusion any more. A business set aside last month is a
@@ -327,6 +350,8 @@ async def get_replacement_lead(
         .all()
     }
     blacklist |= cooling
+    # A business on another open campaign of this microzone is not on offer here.
+    blacklist |= _held_elsewhere(db, campaign_for_zip)
 
     if exclude_names:
         for en in exclude_names.split(","):
@@ -365,7 +390,7 @@ async def get_replacement_lead(
     ticket = custom_ticket or TICKET_ESTIMATES.get(category_id, 500.0)
 
     norm_zip = cand.get("zip_code") or cand.get("zip") or zip_code
-    lead_id = f"lead_{category_id}_{abs(hash(cand['business_name'].lower())) % 10**6}_{norm_zip}"
+    lead_id = f"lead_{category_id}_{abs(hash(cand['business_name'].lower())) % 10**6}_{campaign_id_for_zip or zip_code}"
 
     lead_resp = LeadResponse(
         id=lead_id,
@@ -400,7 +425,7 @@ async def get_replacement_lead(
     )
 
     row = db.query(Lead).filter(Lead.id == lead_id).first()
-    if row is None:
+    if row is None and campaign_id_for_zip is not None:
         row = Lead(
             id=lead_id,
             campaign_id=campaign_id_for_zip,

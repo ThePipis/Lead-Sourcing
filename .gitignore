@@ -48,6 +48,7 @@ __pycache__/
 
 # Cloudflare & Wrangler
 .wrangler/
+.dev.vars
 
 # Temporary Test Artifacts & Screenshots
 *.png

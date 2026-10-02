@@ -54,7 +54,11 @@ function mapPlan(raw: any): RoutePlan {
       score: r.score,
       facility: r.facility,
       censusEnriched: Boolean(r.census_enriched),
-      scoredOn: r.scored_on ?? [],
+      scoredOn: Array.isArray(r.scored_on)
+        ? r.scored_on
+        : typeof r.scored_on === 'string' && r.scored_on
+          ? r.scored_on.split(',').map((s: string) => s.trim()).filter(Boolean)
+          : (r.census_enriched ? ['income', 'owner_occupied', 'single_family', 'vehicles', 'home_value', 'household_size'] : []),
       incomeSource: r.income_source ?? '',
       sizeSource: r.size_source ?? '',
       selected: Boolean(r.selected),

@@ -23,6 +23,8 @@ skills-lock.json
 scripts/*
 !scripts/dev.mjs
 !scripts/deploy.mjs
+!scripts/lead_manager.py
+!scripts/lead-sourcing-menu.bat
 
 # Process & Server PID Cache
 .server_pids.json

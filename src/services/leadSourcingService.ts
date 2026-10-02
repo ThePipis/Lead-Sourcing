@@ -96,6 +96,7 @@ export async function searchCategoryLeads(
   categoryId?: number,
   excludeNames: string[] = [],
   campaignId?: string,
+  limit = 3,
 ): Promise<LeadProspect[]> {
   const allExcluded = Array.from(
     new Set([
@@ -107,6 +108,7 @@ export async function searchCategoryLeads(
     const params = new URLSearchParams({
       city: targetCity,
       zip_code: targetZip,
+      limit: String(limit),
     });
     if (categoryId) {
       params.append('category_id', String(categoryId));
@@ -161,7 +163,7 @@ export async function searchCategoryLeads(
           };
         });
 
-        return mapped.filter((l) => !allExcluded.includes(l.businessName.toLowerCase()));
+        return mapped.filter((l) => !allExcluded.includes(l.businessName.toLowerCase())).slice(0, limit);
       }
     }
   } catch (err) {

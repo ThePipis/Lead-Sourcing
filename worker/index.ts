@@ -1915,6 +1915,9 @@ export default {
         const rawExclude = url.searchParams.get("exclude_names") || "";
         const excluded = rawExclude.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 
+        const limitStr = url.searchParams.get("limit");
+        const limit = limitStr ? parseInt(limitStr) : 3;
+
         const candidates = await getProspectsForCategory(env, catId, targetCity, targetZip);
         const filtered = candidates.filter(item => !excluded.includes(item.business_name.toLowerCase().trim()));
 
@@ -1929,7 +1932,7 @@ export default {
           return b.review_count - a.review_count;
         });
 
-        return json(filtered);
+        return json(filtered.slice(0, limit));
       }
 
       // Prospecting: /api/prospecting/replacement

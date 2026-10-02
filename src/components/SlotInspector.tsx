@@ -581,8 +581,8 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
       await releaseQuarantine(name);
       setQuarantineList((prev) => prev.filter((q) => q.business_key !== businessKey(name)));
       // Vuelve a la lista sin esperar a que caduque nada.
-      const fresh = await searchCategoryLeads(targetCity, targetZip, niche.id, [], campaignId);
-      setLeads(fresh);
+      const fresh = await searchCategoryLeads(targetCity, targetZip, niche.id, [], campaignId, 3);
+      setLeads(fresh.slice(0, 3));
     } catch {
       setLeadsError(t('prospecting:quarantine.failed'));
       window.setTimeout(() => setLeadsError(null), 6000);
@@ -599,12 +599,13 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
 
   // One request for the three cards on screen, not one per card.
   useEffect(() => {
-    if (leads.length === 0) return;
+    const topLeads = leads.slice(0, 3);
+    if (topLeads.length === 0) return;
     let alive = true;
-    fetchRegenerations(leads.map((l) => l.businessName))
+    fetchRegenerations(topLeads.map((l) => l.businessName))
       .then((r) => alive && setRegenerations(r))
       .catch(() => undefined);
-    fetchContacts(leads.map((l) => l.businessName))
+    fetchContacts(topLeads.map((l) => l.businessName))
       .then((c) => alive && setContacts(c))
       .catch(() => undefined);
     setOpenContactFor(null);
@@ -770,10 +771,10 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
   useEffect(() => {
     let alive = true;
     setLoadingLeads(true);
-    searchCategoryLeads(targetCity, targetZip, niche.id, [], campaignId)
+    searchCategoryLeads(targetCity, targetZip, niche.id, [], campaignId, 3)
       .then((data) => {
         if (!alive) return;
-        setLeads(data);
+        setLeads(data.slice(0, 3));
         setLoadingLeads(false);
       })
       .catch(() => alive && setLoadingLeads(false));
@@ -1225,7 +1226,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
               </div>
             ) : (
               <ul className="flex-1 flex flex-col gap-2.5 sm:gap-3 min-h-0 h-full">
-                {leads.map((lead, idx) => {
+                {leads.slice(0, 3).map((lead, idx) => {
                   const status = crm[lead.id] ?? lead.status;
                   const isHere = slot.businessName === lead.businessName;
                   // Only what was released a moment ago, and only until the

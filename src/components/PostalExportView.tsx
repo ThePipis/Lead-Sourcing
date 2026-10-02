@@ -310,7 +310,7 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
               <a
                 id="btn-download-route-manifest"
                 href={campaignRouteManifestUrl(campaign.id)}
-                download
+                download={`eddm_routes_${campaign.code}_${coveredHouseholds || campaign.totalTargetHouseholds}.csv`}
                 aria-disabled={selectedRoutes === 0}
                 className={`flex shrink-0 items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-opacity ${
                   selectedRoutes === 0
@@ -437,7 +437,19 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
               <div key={label} className="bg-card px-4 py-3">
                 <dt className="field-label">{t(`export:${label}`)}</dt>
                 <dd className="field-value mt-1 text-[0.69rem] leading-snug text-ink">
-                  {t(`export:${value}`, params)}
+                  {label === 'specs.suffix' ? (
+                    <a
+                      href={campaignRouteManifestUrl(campaign.id)}
+                      download={`eddm_routes_${campaign.code}_${coveredHouseholds || campaign.totalTargetHouseholds}.csv`}
+                      className="inline-flex items-center gap-1.5 font-mono font-bold text-live hover:underline"
+                      title={t('export:routeManifest.download')}
+                    >
+                      <Download className="h-3 w-3 shrink-0" />
+                      <span>{t(`export:${value}`, params)}</span>
+                    </a>
+                  ) : (
+                    t(`export:${value}`, params)
+                  )}
                 </dd>
               </div>
             ))}

@@ -741,26 +741,49 @@ async function d1GetCampaign(db: D1Database, id: string): Promise<any | null> {
 
 async function d1SaveCampaign(db: D1Database, c: any) {
   try {
-    await db.prepare(`
-      INSERT OR REPLACE INTO campaigns (
-        id, code, name, target_city, target_zip, radius_miles, target_households,
-        unit_cost_usd, target_gross_revenue, operating_cost_est, net_margin_est,
-        status, mode, production_at, mailed_at, archived_at, model_ack, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      c.id, c.code || "", c.name || "", c.target_city || "Eastvale", c.target_zip || "92880",
-      c.radius_miles || 5.0, c.target_households || 5000, c.unit_cost_usd || 0.60,
-      c.target_gross_revenue || 0, c.operating_cost_est || 0, c.net_margin_est || 0,
-      c.status || "PROSPECTING", c.mode || "DEMO", c.production_at || null, c.mailed_at || null,
-      c.archived_at || null, c.model_ack || null, c.created_at || new Date().toISOString(),
-      c.updated_at || new Date().toISOString()
-    ).run();
+    const stmts: D1PreparedStatement[] = [
+      db.prepare(`
+        INSERT OR REPLACE INTO campaigns (
+          id, code, name, target_city, target_zip, radius_miles, target_households,
+          unit_cost_usd, target_gross_revenue, operating_cost_est, net_margin_est,
+          status, mode, production_at, mailed_at, archived_at, model_ack, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        c.id, c.code || "", c.name || "", c.target_city || "Eastvale", c.target_zip || "92880",
+        c.radius_miles || 5.0, c.target_households || 5000, c.unit_cost_usd || 0.60,
+        c.target_gross_revenue || 0, c.operating_cost_est || 0, c.net_margin_est || 0,
+        c.status || "PROSPECTING", c.mode || "DEMO", c.production_at || null, c.mailed_at || null,
+        c.archived_at || null, c.model_ack || null, c.created_at || new Date().toISOString(),
+        c.updated_at || new Date().toISOString()
+      )
+    ];
 
-    if (Array.isArray(c.slots)) {
+    if (Array.isArray(c.slots) && c.slots.length > 0) {
+      stmts.push(db.prepare("DELETE FROM slots WHERE campaign_id = ?").bind(c.id));
       for (const s of c.slots) {
-        await d1SaveSlot(db, c.id, s);
+        stmts.push(db.prepare(`
+          INSERT INTO slots (
+            campaign_id, slot_number, category_id, category_name, side, slot_type,
+            width_inches, height_inches, price_usd, avg_ticket_usd, business_name,
+            contact_person, phone, email, website, business_address, status, logo_url,
+            offer_headline, qr_code_url, short_url, payment_ref, paid_at, reserved_at,
+            reservation_expires_at, amount_collected_usd, scan_count, qr_token, notes,
+            format, row_span, col_span
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          c.id, s.slot_number, s.category_id || s.slot_number, s.category_name || s.name || "",
+          s.side || "FRONT", s.slot_type || s.format || "SMALL", s.width_inches || s.width_in || 2.8,
+          s.height_inches || s.height_in || 1.8, s.price_usd !== undefined ? s.price_usd : 0, s.avg_ticket_usd || s.default_ticket || 0,
+          s.business_name || "", s.contact_person || "", s.phone || "", s.email || "", s.website || "",
+          s.business_address || "", s.status || "VACANT", s.logo_url || "", s.offer_headline || "",
+          s.qr_code_url || "", s.short_url || "", s.payment_ref || "", s.paid_at || null, s.reserved_at || null,
+          s.reservation_expires_at || null, s.amount_collected_usd !== undefined ? s.amount_collected_usd : null, s.scan_count || 0, s.qr_token || null,
+          s.notes || null, s.format || s.slot_type || "SMALL", s.row_span || 1, s.col_span || 1
+        ));
       }
     }
+
+    await db.batch(stmts);
   } catch (err) {
     console.error("D1 saveCampaign error:", err);
   }
@@ -768,26 +791,29 @@ async function d1SaveCampaign(db: D1Database, c: any) {
 
 async function d1SaveSlot(db: D1Database, campaignId: string, s: any) {
   try {
-    await db.prepare("DELETE FROM slots WHERE campaign_id = ? AND slot_number = ?").bind(campaignId, s.slot_number).run();
-    await db.prepare(`
-      INSERT INTO slots (
-        campaign_id, slot_number, category_id, category_name, side, slot_type,
-        width_inches, height_inches, price_usd, avg_ticket_usd, business_name,
-        contact_person, phone, email, website, business_address, status, logo_url,
-        offer_headline, qr_code_url, short_url, payment_ref, paid_at, reserved_at,
-        reservation_expires_at, amount_collected_usd, scan_count, qr_token, notes,
-        format, row_span, col_span
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      campaignId, s.slot_number, s.category_id || s.slot_number, s.category_name || s.name || "",
-      s.side || "FRONT", s.slot_type || s.format || "SMALL", s.width_inches || s.width_in || 2.8,
-      s.height_inches || s.height_in || 1.8, s.price_usd || 0, s.avg_ticket_usd || s.default_ticket || 0,
-      s.business_name || "", s.contact_person || "", s.phone || "", s.email || "", s.website || "",
-      s.business_address || "", s.status || "VACANT", s.logo_url || "", s.offer_headline || "",
-      s.qr_code_url || "", s.short_url || "", s.payment_ref || "", s.paid_at || null, s.reserved_at || null,
-      s.reservation_expires_at || null, s.amount_collected_usd || 0, s.scan_count || 0, s.qr_token || null,
-      s.notes || null, s.format || "SMALL", s.row_span || 1, s.col_span || 1
-    ).run();
+    const stmts: D1PreparedStatement[] = [
+      db.prepare("DELETE FROM slots WHERE campaign_id = ? AND slot_number = ?").bind(campaignId, s.slot_number),
+      db.prepare(`
+        INSERT INTO slots (
+          campaign_id, slot_number, category_id, category_name, side, slot_type,
+          width_inches, height_inches, price_usd, avg_ticket_usd, business_name,
+          contact_person, phone, email, website, business_address, status, logo_url,
+          offer_headline, qr_code_url, short_url, payment_ref, paid_at, reserved_at,
+          reservation_expires_at, amount_collected_usd, scan_count, qr_token, notes,
+          format, row_span, col_span
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        campaignId, s.slot_number, s.category_id || s.slot_number, s.category_name || s.name || "",
+        s.side || "FRONT", s.slot_type || s.format || "SMALL", s.width_inches || s.width_in || 2.8,
+        s.height_inches || s.height_in || 1.8, s.price_usd !== undefined ? s.price_usd : 0, s.avg_ticket_usd || s.default_ticket || 0,
+        s.business_name || "", s.contact_person || "", s.phone || "", s.email || "", s.website || "",
+        s.business_address || "", s.status || "VACANT", s.logo_url || "", s.offer_headline || "",
+        s.qr_code_url || "", s.short_url || "", s.payment_ref || "", s.paid_at || null, s.reserved_at || null,
+        s.reservation_expires_at || null, s.amount_collected_usd !== undefined ? s.amount_collected_usd : null, s.scan_count || 0, s.qr_token || null,
+        s.notes || null, s.format || s.slot_type || "SMALL", s.row_span || 1, s.col_span || 1
+      )
+    ];
+    await db.batch(stmts);
   } catch (err) {
     console.error("D1 saveSlot error:", err);
   }
@@ -1308,7 +1334,7 @@ export default {
       const planRoutesMatch = cleanPath.match(/^\/api\/campaigns\/([^/]+)\/routes\/plan$/);
       if (planRoutesMatch && request.method === "POST") {
         const campId = planRoutesMatch[1];
-        const c = campaignsStore.find(x => String(x.id) === campId);
+        const c = env.DB ? (await d1GetCampaign(env.DB, campId) || campaignsStore.find(x => String(x.id) === campId)) : campaignsStore.find(x => String(x.id) === campId);
         const target = parseInt(url.searchParams.get("target") || String(c?.target_households || 5000));
         const routes = [
           { route_id: "C001", zip_code: c?.target_zip || "92880", crid: "92880C001", type: "City delivery", city_state: "Eastvale, CA", residential: 520, business: 15, median_income: 104000, avg_household_size: 3.4, score: 95.2, facility: "EASTVALE CARRIER ANNEX", census_enriched: true, selected: true },
@@ -1744,13 +1770,23 @@ export default {
       if (batchMatch && (request.method === "POST" || request.method === "PUT")) {
         const campId = batchMatch[1];
         const body: any = await request.json();
-        const c = campaignsStore.find(x => String(x.id) === campId);
+        let c = env.DB ? (await d1GetCampaign(env.DB, campId) || campaignsStore.find(x => String(x.id) === campId)) : campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
         const updatesList = Array.isArray(body) ? body : (body.slots || []);
         for (const update of updatesList) {
           const s = c.slots.find((x: any) => x.slot_number === (update.slot_number ?? update.slotNumber));
           if (s) {
             Object.assign(s, update);
+            if (update.format !== undefined) s.format = update.format;
+            if (update.slot_type !== undefined) s.slot_type = update.slot_type;
+            if (update.row_span !== undefined) s.row_span = update.row_span;
+            if (update.rowSpan !== undefined) s.row_span = update.rowSpan;
+            if (update.col_span !== undefined) s.col_span = update.col_span;
+            if (update.colSpan !== undefined) s.col_span = update.colSpan;
+            if (update.price_usd !== undefined) s.price_usd = update.price_usd;
+            if (update.priceUsd !== undefined) s.price_usd = update.priceUsd;
+            if (update.notes !== undefined) s.notes = update.notes;
+
             if (s.notes?.includes('Covered by')) {
               s.price_usd = 0;
               s.amount_collected_usd = 0;
@@ -1794,6 +1830,14 @@ export default {
         } else if (c.status === "LOCKED_READY") {
           c.status = "PROSPECTING";
         }
+
+        if (env.DB) {
+          await d1SaveCampaign(env.DB, c);
+        }
+        const memIdx = campaignsStore.findIndex(x => String(x.id) === campId);
+        if (memIdx >= 0) campaignsStore[memIdx] = c;
+        else campaignsStore.push(c);
+
         return json(c.slots);
       }
 
@@ -1801,7 +1845,7 @@ export default {
       const resetMatch = cleanPath.match(/^\/api\/campaigns\/([^/]+)\/reset-slots$/);
       if (resetMatch && request.method === "POST") {
         const campId = resetMatch[1];
-        const c = campaignsStore.find(x => String(x.id) === campId);
+        let c = env.DB ? (await d1GetCampaign(env.DB, campId) || campaignsStore.find(x => String(x.id) === campId)) : campaignsStore.find(x => String(x.id) === campId);
         if (!c) return json({ detail: "Campaign not found" }, 404);
         if (c.mode === "LIVE") {
           return json({ detail: "Reset slots is only available in DEMO mode" }, 400);
@@ -1809,6 +1853,13 @@ export default {
         c.slots = createDefaultSlots(c.target_households || 5000);
         c.paid_count = 0;
         c.total_collected_usd = 0;
+        if (env.DB) {
+          await d1SaveCampaign(env.DB, c);
+        }
+        const memIdx = campaignsStore.findIndex(x => String(x.id) === campId);
+        if (memIdx >= 0) campaignsStore[memIdx] = c;
+        else campaignsStore.push(c);
+
         return json(c.slots);
       }
 

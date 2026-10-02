@@ -17,17 +17,17 @@ export default defineConfig(() => {
       allowedHosts: true as const,
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8000',
+          target: 'http://127.0.0.1:8787',
           changeOrigin: true,
         },
         // Printed short links, /q/<code>.
         '/q': {
-          target: 'http://127.0.0.1:8000',
+          target: 'http://127.0.0.1:8787',
           changeOrigin: true,
           xfwd: true,
         },
         '/r': {
-          target: 'http://127.0.0.1:8000',
+          target: 'http://127.0.0.1:8787',
           changeOrigin: true,
           // Pass the scanning phone's address on (X-Forwarded-For), or every
           // scan would be logged as coming from this PC.

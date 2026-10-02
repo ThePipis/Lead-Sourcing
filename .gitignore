@@ -20,7 +20,8 @@ tasks/
 skills-lock.json
 
 # Local Scripts & Utilities
-scripts/
+scripts/*
+!scripts/dev.mjs
 
 # Process & Server PID Cache
 .server_pids.json

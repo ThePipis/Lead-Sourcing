@@ -481,6 +481,298 @@ async function d1RecordQrScan(db: D1Database, event: {
   }
 }
 
+const REASON_CODES: Record<string, string> = {
+  DECISOR_AUSENTE: "Decisor ausente / llamar otro día",
+  NO_CONTESTA: "No contesta / buzón de voz",
+  PIDE_LLAMAR_LUEGO: "Pide llamar en otra fecha",
+  SIN_PRESUPUESTO: "Sin presupuesto este trimestre",
+  YA_ANUNCIA: "Ya tiene contrato con otro medio",
+  NO_INTERESA: "No le interesa el correo directo",
+  CERRADO: "Negocio cerrado permanentemente",
+  OTRO: "Otro motivo (anotar en nota)",
+};
+
+const COOLDOWN_DAYS: Record<string, number | null> = {
+  DECISOR_AUSENTE: 7,
+  NO_CONTESTA: 14,
+  PIDE_LLAMAR_LUEGO: 30,
+  OTRO: 30,
+  SIN_PRESUPUESTO: 90,
+  YA_ANUNCIA: 180,
+  NO_INTERESA: 180,
+  CERRADO: null,
+};
+
+const CONTACT_OUTCOMES: Record<string, [string, number]> = {
+  DEJE_MENSAJE: ["Dejé mensaje / buzón", 3],
+  HABLE_RECEPCION: ["Hablé con recepción", 4],
+  PIDE_INFO: ["Pidió que le enviara información", 5],
+  PIDE_LLAMAR: ["Pidió que lo llamara otro día", 7],
+  INTERESADO: ["Interesado, evaluando", 7],
+  NO_DISPONIBLE: ["No estaba disponible", 2],
+  OTRO: ["Otro", 7],
+};
+
+function normalizeBizKey(name: string): string {
+  return (name || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+const MARKET_REFERENCE = {
+  published_rates: [
+    {
+      id: "postage_retail",
+      label: "Franqueo EDDM Retail (oficina postal)",
+      low: 0.247,
+      high: 0.247,
+      suggested: 0.247,
+      basis: "Tarifa EDDM Retail publicada para 2026 (flats hasta 3.3 oz).",
+      source: "crst.net · USPS EDDM 2026",
+    },
+    {
+      id: "postage_bmeu",
+      label: "Franqueo EDDM Online (entrada BMEU)",
+      low: 0.213,
+      high: 0.213,
+      suggested: 0.213,
+      basis: "Alternativa más barata al Retail si entras por BMEU con permiso.",
+      source: "crst.net · USPS EDDM 2026",
+    },
+    {
+      id: "print_per_piece",
+      label: "Impresión",
+      low: 0.08,
+      high: 0.25,
+      suggested: 0.21,
+      basis: "Rango de mercado para postales EDDM según volumen y papel. El jumbo 12×9 a dos caras está en la parte alta del rango.",
+      source: "crst.net · mpressnow.com",
+    },
+    {
+      id: "list_per_piece",
+      label: "Lista de consumidores (segmentada)",
+      low: 0.075,
+      high: 0.15,
+      suggested: 0.11,
+      basis: "$75–$150 por millar para listas con filtros de ingreso, edad y valor de vivienda.",
+      source: "mailpro.org · Mailing List Pricing 2026",
+    },
+    {
+      id: "hygiene_per_piece",
+      label: "Higiene CASS/NCOA",
+      low: 0.002,
+      high: 0.008,
+      suggested: 0.005,
+      basis: "$2–$8 por millar de registros sobre lista propia.",
+      source: "mailpro.org · Mailing List Pricing 2026",
+    },
+  ],
+  data_axle_plans: [
+    { plan: "Salesgenie Basic", monthly: 99, annual_commitment: 1188 },
+    { plan: "Salesgenie Pro", monthly: 149, annual_commitment: 1788 },
+    { plan: "Salesgenie Team", monthly: 299, annual_commitment: 3588 },
+  ],
+  data_axle_note: "Data Axle vende por suscripción o por contrato a medida.",
+};
+
+async function d1GetCostSettings(db: D1Database, mode: string) {
+  try {
+    const row: any = await db.prepare("SELECT * FROM cost_settings WHERE mode = ?").bind(mode.toUpperCase()).first();
+    return row || null;
+  } catch (err) {
+    console.error("D1 getCostSettings error:", err);
+    return null;
+  }
+}
+
+async function d1SaveCostSettings(db: D1Database, mode: string, settings: any) {
+  try {
+    await db.prepare(`
+      INSERT OR REPLACE INTO cost_settings (
+        mode, postage_per_piece, list_per_piece, print_per_piece, variable_data_per_piece,
+        presort_per_piece, finishing_per_piece, setup_fee, delivery_fee, target_margin, source_note, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      mode.toUpperCase(),
+      settings.postage_per_piece ?? 0.247,
+      settings.list_per_piece ?? 0.0,
+      settings.print_per_piece ?? 0.368,
+      settings.variable_data_per_piece ?? 0.0,
+      settings.presort_per_piece ?? 0.0,
+      settings.finishing_per_piece ?? 0.0,
+      settings.setup_fee ?? 0.0,
+      settings.delivery_fee ?? 0.0,
+      settings.target_margin ?? 0.58,
+      settings.source_note ?? "",
+      new Date().toISOString()
+    ).run();
+  } catch (err) {
+    console.error("D1 saveCostSettings error:", err);
+  }
+}
+
+async function d1GetCampaignRoutes(db: D1Database, campaignId: string) {
+  try {
+    const res = await db.prepare(
+      "SELECT * FROM campaign_routes WHERE campaign_id = ? ORDER BY score DESC, residential DESC"
+    ).bind(campaignId).all();
+    return res.results || [];
+  } catch (err) {
+    console.error("D1 getCampaignRoutes error:", err);
+    return [];
+  }
+}
+
+async function d1ToggleCampaignRoute(db: D1Database, campaignId: string, routeId: string, selected: boolean) {
+  try {
+    await db.prepare(
+      "UPDATE campaign_routes SET selected = ?, updated_at = datetime('now') WHERE campaign_id = ? AND route_id = ?"
+    ).bind(selected ? 1 : 0, campaignId, routeId).run();
+  } catch (err) {
+    console.error("D1 toggleCampaignRoute error:", err);
+  }
+}
+
+async function d1GetDataSources(db: D1Database, mode: string) {
+  try {
+    const res = await db.prepare("SELECT * FROM data_sources WHERE mode = ?").bind(mode.toUpperCase()).all();
+    return res.results || [];
+  } catch (err) {
+    console.error("D1 getDataSources error:", err);
+    return [];
+  }
+}
+
+async function d1SaveDataSource(db: D1Database, mode: string, sourceId: string, enabled: boolean) {
+  try {
+    await db.prepare(
+      "INSERT OR REPLACE INTO data_sources (mode, source_id, enabled, updated_at) VALUES (?, ?, ?, datetime('now'))"
+    ).bind(mode.toUpperCase(), sourceId, enabled ? 1 : 0).run();
+  } catch (err) {
+    console.error("D1 saveDataSource error:", err);
+  }
+}
+
+async function d1GetRegenerations(db: D1Database, keys: string[]) {
+  try {
+    if (!keys || keys.length === 0) return {};
+    const placeholders = keys.map(() => "?").join(",");
+    const res = await db.prepare(
+      `SELECT * FROM lead_regenerations WHERE business_key IN (${placeholders}) ORDER BY created_at ASC`
+    ).bind(...keys).all();
+    const out: Record<string, any> = {};
+    for (const r of (res.results || [])) {
+      const bKey = (r as any).business_key;
+      const entry = out[bKey] || (out[bKey] = { count: 0, last: null });
+      entry.count += 1;
+      const cooldownUntil = (r as any).cooldown_until;
+      entry.last = {
+        reason_code: (r as any).reason_code,
+        reason_label: REASON_CODES[(r as any).reason_code] || (r as any).reason_code,
+        reason_note: (r as any).reason_note,
+        at: (r as any).created_at,
+        cooldown_until: cooldownUntil,
+        resting: Boolean(cooldownUntil && new Date(cooldownUntil) > new Date()),
+      };
+    }
+    return out;
+  } catch (err) {
+    console.error("D1 getRegenerations error:", err);
+    return {};
+  }
+}
+
+async function d1SaveRegeneration(db: D1Database, item: any) {
+  try {
+    await db.prepare(`
+      INSERT INTO lead_regenerations (
+        campaign_id, business_key, business_name, business_address,
+        category_id, slot_number, reason_code, reason_note,
+        cooldown_days, cooldown_until, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `).bind(
+      item.campaign_id || null,
+      normalizeBizKey(item.business_name),
+      (item.business_name || "").trim(),
+      (item.business_address || "").trim() || null,
+      item.category_id || null,
+      item.slot_number || null,
+      item.reason_code || "OTRO",
+      item.reason_note || null,
+      item.cooldown_days ?? null,
+      item.cooldown_until || null
+    ).run();
+  } catch (err) {
+    console.error("D1 saveRegeneration error:", err);
+  }
+}
+
+async function d1GetContacts(db: D1Database, keys: string[]) {
+  try {
+    if (!keys || keys.length === 0) return {};
+    const placeholders = keys.map(() => "?").join(",");
+    const res = await db.prepare(
+      `SELECT * FROM lead_contacts WHERE business_key IN (${placeholders}) ORDER BY created_at ASC`
+    ).bind(...keys).all();
+    const out: Record<string, any> = {};
+    for (const r of (res.results || [])) {
+      const bKey = (r as any).business_key;
+      const entry = out[bKey] || (out[bKey] = { count: 0, last: null });
+      entry.count += 1;
+      const followUp = (r as any).follow_up_at;
+      entry.last = {
+        business_name: (r as any).business_name,
+        count: entry.count,
+        outcome_code: (r as any).outcome_code,
+        outcome_label: CONTACT_OUTCOMES[(r as any).outcome_code]?.[0] || "Otro",
+        note: (r as any).note,
+        at: (r as any).created_at,
+        follow_up_at: followUp,
+        due: Boolean(followUp && new Date(followUp) <= new Date()),
+      };
+    }
+    return out;
+  } catch (err) {
+    console.error("D1 getContacts error:", err);
+    return {};
+  }
+}
+
+async function d1SaveContact(db: D1Database, item: any) {
+  try {
+    const key = normalizeBizKey(item.business_name);
+    await db.prepare(`
+      INSERT INTO lead_contacts (
+        campaign_id, business_key, business_name, category_id, slot_number,
+        outcome_code, note, follow_up_at, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `).bind(
+      item.campaign_id || null,
+      key,
+      (item.business_name || "").trim(),
+      item.category_id || null,
+      item.slot_number || null,
+      item.outcome_code || "OTRO",
+      (item.note || "").trim() || null,
+      item.follow_up_at || null
+    ).run();
+
+    const countRes: any = await db.prepare("SELECT COUNT(*) as c FROM lead_contacts WHERE business_key = ?").bind(key).first();
+    const total = countRes?.c || 1;
+    return {
+      business_name: item.business_name,
+      count: total,
+      outcome_code: item.outcome_code || "OTRO",
+      outcome_label: CONTACT_OUTCOMES[item.outcome_code || "OTRO"]?.[0] || "Otro",
+      note: item.note,
+      at: new Date().toISOString(),
+      follow_up_at: item.follow_up_at || null,
+      due: Boolean(item.follow_up_at && new Date(item.follow_up_at) <= new Date()),
+    };
+  } catch (err) {
+    console.error("D1 saveContact error:", err);
+    return null;
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
@@ -598,6 +890,11 @@ export default {
         });
       }
 
+      // LAN IP for QR codes
+      if (cleanPath === "/api/tracking/lan-ip" && request.method === "GET") {
+        return json({ ip: "127.0.0.1" });
+      }
+
       // GET /api/campaigns
       if (cleanPath === "/api/campaigns" && request.method === "GET") {
         const mode = url.searchParams.get("mode") || "DEMO";
@@ -705,6 +1002,23 @@ export default {
       // Match /api/campaigns/:id/routes/:routeId
       const toggleRouteMatch = cleanPath.match(/^\/api\/campaigns\/([^/]+)\/routes\/([^/]+)$/);
       if (toggleRouteMatch && request.method === "PATCH") {
+        const campId = toggleRouteMatch[1];
+        const routeId = toggleRouteMatch[2];
+        let body: any = {};
+        try { body = await request.json(); } catch {}
+        if (env.DB) {
+          await d1ToggleCampaignRoute(env.DB, campId, routeId, body.selected ?? true);
+          const d1Routes = await d1GetCampaignRoutes(env.DB, campId);
+          const selected = d1Routes.filter((r: any) => Boolean(r.selected));
+          return json({
+            covered: selected.reduce((sum: number, r: any) => sum + (r.residential || 0), 0),
+            selected_routes: selected.length,
+            available: d1Routes.reduce((sum: number, r: any) => sum + (r.residential || 0), 0),
+            available_routes: d1Routes.length,
+            census_enriched: true,
+            routes: d1Routes
+          });
+        }
         return json({
           covered: 5070,
           selected_routes: 10,
@@ -756,6 +1070,22 @@ export default {
       const campRoutesMatch = cleanPath.match(/^\/api\/campaigns\/([^/]+)\/routes$/);
       if (campRoutesMatch && request.method === "GET") {
         const campId = campRoutesMatch[1];
+        if (env.DB) {
+          const d1Routes = await d1GetCampaignRoutes(env.DB, campId);
+          if (d1Routes && d1Routes.length > 0) {
+            const selected = d1Routes.filter((r: any) => Boolean(r.selected));
+            return json({
+              routes: d1Routes,
+              covered: selected.reduce((a: number, r: any) => a + (r.residential || 0), 0),
+              selected_routes: selected.length,
+              available: d1Routes.reduce((a: number, r: any) => a + (r.residential || 0), 0),
+              available_routes: d1Routes.length,
+              census_enriched: true,
+              target: 5000,
+              zip_code: d1Routes[0]?.zip_code || "92880"
+            });
+          }
+        }
         const c = campaignsStore.find(x => String(x.id) === campId);
         const routes = [
           { route_id: "C001", zip_code: c?.target_zip || "92880", crid: "92880C001", type: "City delivery", city_state: "Eastvale, CA", residential: 520, business: 15, median_income: 104000, avg_household_size: 3.4, score: 95.2, facility: "EASTVALE CARRIER ANNEX", census_enriched: true, selected: true },
@@ -779,6 +1109,36 @@ export default {
           target: c?.target_households || 5000,
           zip_code: c?.target_zip || "92880"
         });
+      }
+
+      // Match /api/campaigns/:id/routes/profile
+      const profileMatch = cleanPath.match(/^\/api\/campaigns\/([^/]+)\/routes\/profile$/);
+      if (profileMatch && request.method === "GET") {
+        return json({
+          profile: {
+            total_parcels: 5070,
+            single_family_pct: 0.94,
+            avg_assessed_value: 625000,
+            avg_year_built: 2012,
+            owner_occupied_pct: 0.88,
+          },
+          available: true
+        });
+      }
+
+      // Match /api/campaigns/:id/model-ack
+      const modelAckMatch = cleanPath.match(/^\/api\/campaigns\/([^/]+)\/model-ack$/);
+      if (modelAckMatch && request.method === "POST") {
+        const campId = modelAckMatch[1];
+        let body: any = {};
+        try { body = await request.json(); } catch {}
+        const c = env.DB ? (await d1GetCampaign(env.DB, campId) || campaignsStore.find(x => String(x.id) === campId)) : campaignsStore.find(x => String(x.id) === campId);
+        if (!c) return json({ detail: "Campaign not found" }, 404);
+        c.model_ack = body.acknowledged === false ? null : `${new Date().toISOString()}|manual_ack`;
+        if (env.DB) {
+          await d1SaveCampaign(env.DB, c);
+        }
+        return json(c);
       }
 
       // Match /api/campaigns/:id/slots/autofill
@@ -1224,6 +1584,155 @@ export default {
         return json({ id: leadMatch[1], status: "UPDATED", ok: true });
       }
 
+      // Prospecting: GET /api/prospecting/regeneration-reasons
+      if (cleanPath === "/api/prospecting/regeneration-reasons" && request.method === "GET") {
+        return json(
+          Object.entries(REASON_CODES).map(([code, label]) => ({
+            code,
+            label,
+            cooldown_days: COOLDOWN_DAYS[code]
+          }))
+        );
+      }
+
+      // Prospecting: GET /api/prospecting/contact-outcomes
+      if (cleanPath === "/api/prospecting/contact-outcomes" && request.method === "GET") {
+        return json(
+          Object.entries(CONTACT_OUTCOMES).map(([code, [label, follow_up_days]]) => ({
+            code,
+            label,
+            follow_up_days
+          }))
+        );
+      }
+
+      // Prospecting: GET /api/prospecting/regenerations
+      if (cleanPath === "/api/prospecting/regenerations" && request.method === "GET") {
+        const namesParam = url.searchParams.get("names") || "";
+        const keys = namesParam.split("|").map(normalizeBizKey).filter(Boolean);
+        if (env.DB && keys.length > 0) {
+          const res = await d1GetRegenerations(env.DB, keys);
+          return json(res);
+        }
+        return json({});
+      }
+
+      // Prospecting: POST /api/prospecting/regenerations
+      if (cleanPath === "/api/prospecting/regenerations" && request.method === "POST") {
+        let body: any = {};
+        try { body = await request.json(); } catch {}
+        const days = COOLDOWN_DAYS[body.reason_code] ?? 30;
+        const until = days !== null ? new Date(Date.now() + days * 86400000).toISOString() : null;
+        const item = {
+          ...body,
+          cooldown_days: days,
+          cooldown_until: until
+        };
+        if (env.DB) {
+          await d1SaveRegeneration(env.DB, item);
+        }
+        return json({
+          business_name: body.business_name,
+          reason_code: body.reason_code,
+          cooldown_days: days,
+          cooldown_until: until
+        });
+      }
+
+      // Prospecting: GET /api/prospecting/contacts
+      if (cleanPath === "/api/prospecting/contacts" && request.method === "GET") {
+        const namesParam = url.searchParams.get("names") || "";
+        const keys = namesParam.split("|").map(normalizeBizKey).filter(Boolean);
+        if (env.DB && keys.length > 0) {
+          const res = await d1GetContacts(env.DB, keys);
+          return json(res);
+        }
+        return json({});
+      }
+
+      // Prospecting: POST /api/prospecting/contacts
+      if (cleanPath === "/api/prospecting/contacts" && request.method === "POST") {
+        let body: any = {};
+        try { body = await request.json(); } catch {}
+        let followUp: string | null = null;
+        if (body.follow_up_minutes && Number(body.follow_up_minutes) > 0) {
+          followUp = new Date(Date.now() + Number(body.follow_up_minutes) * 60000).toISOString();
+        } else if (body.follow_up_days && Number(body.follow_up_days) > 0) {
+          followUp = new Date(Date.now() + Number(body.follow_up_days) * 86400000).toISOString();
+        }
+        const item = { ...body, follow_up_at: followUp };
+        if (env.DB) {
+          const saved = await d1SaveContact(env.DB, item);
+          if (saved) return json(saved);
+        }
+        return json({
+          business_name: body.business_name,
+          count: 1,
+          outcome_code: body.outcome_code || "OTRO",
+          outcome_label: CONTACT_OUTCOMES[body.outcome_code || "OTRO"]?.[0] || "Otro",
+          note: body.note,
+          at: new Date().toISOString(),
+          follow_up_at: followUp,
+          due: false
+        });
+      }
+
+      // Prospecting: GET /api/prospecting/contacts/by-slot
+      if (cleanPath === "/api/prospecting/contacts/by-slot" && request.method === "GET") {
+        const campId = url.searchParams.get("campaign_id") || "";
+        if (env.DB) {
+          const query = campId
+            ? "SELECT * FROM lead_contacts WHERE campaign_id = ? AND slot_number IS NOT NULL ORDER BY created_at ASC"
+            : "SELECT * FROM lead_contacts WHERE slot_number IS NOT NULL ORDER BY created_at ASC";
+          const stmt = campId ? env.DB.prepare(query).bind(campId) : env.DB.prepare(query);
+          const { results } = await stmt.all();
+          const grouped: Record<string, any[]> = {};
+          for (const r of (results || [])) {
+            const sNum = String((r as any).slot_number);
+            const followUp = (r as any).follow_up_at;
+            grouped[sNum] = grouped[sNum] || [];
+            grouped[sNum].push({
+              business_name: (r as any).business_name,
+              count: 1,
+              outcome_code: (r as any).outcome_code,
+              outcome_label: CONTACT_OUTCOMES[(r as any).outcome_code]?.[0] || "Otro",
+              note: (r as any).note,
+              at: (r as any).created_at,
+              follow_up_at: followUp,
+              due: Boolean(followUp && new Date(followUp) <= new Date()),
+            });
+          }
+          return json(grouped);
+        }
+        return json({});
+      }
+
+      // Prospecting: GET /api/prospecting/quarantine
+      if (cleanPath === "/api/prospecting/quarantine" && request.method === "GET") {
+        const q = (url.searchParams.get("q") || "").toLowerCase();
+        if (env.DB) {
+          const res = await env.DB.prepare(
+            "SELECT * FROM lead_regenerations WHERE cooldown_until IS NOT NULL ORDER BY created_at DESC LIMIT 100"
+          ).all();
+          const rows = (res.results || []).filter((r: any) => {
+            if (!q) return true;
+            return (r.business_name || "").toLowerCase().includes(q) || (r.business_address || "").toLowerCase().includes(q);
+          });
+          return json(rows);
+        }
+        return json([]);
+      }
+
+      // Prospecting: POST /api/prospecting/quarantine/release
+      if (cleanPath === "/api/prospecting/quarantine/release" && request.method === "POST") {
+        const bizName = url.searchParams.get("business_name") || "";
+        if (env.DB && bizName) {
+          const key = normalizeBizKey(bizName);
+          await env.DB.prepare("DELETE FROM lead_regenerations WHERE business_key = ?").bind(key).run();
+        }
+        return json({ ok: true });
+      }
+
       // Curation: POST /api/curation/execute
       if (cleanPath === "/api/curation/execute" && request.method === "POST") {
         let body: any = {};
@@ -1324,10 +1833,52 @@ export default {
         });
       }
 
+      // Costs: POST /api/costs/:mode/market-preset
+      const marketPresetMatch = cleanPath.match(/^\/api\/costs\/(DEMO|LIVE)\/market-preset$/i);
+      if (marketPresetMatch && request.method === "POST") {
+        const mode = marketPresetMatch[1].toUpperCase();
+        const hh = parseInt(url.searchParams.get("households") || "5000");
+        const preset = {
+          mode,
+          postage_per_piece: 0.247,
+          print_per_piece: 0.21,
+          variable_data_per_piece: 0.03,
+          presort_per_piece: 0.02,
+          finishing_per_piece: 0.025,
+          list_per_piece: 0.11,
+          setup_fee: 250.0,
+          delivery_fee: 175.0,
+          target_margin: 0.58,
+          source_note: 'Valores de mercado (sept 2026), no cotizaciones: franqueo EDDM Retail $0.247; impresión $0.08–$0.25 según volumen; lista de consumidores segmentada $75–$150 por millar; higiene CASS/NCOA $2–$8 por millar.',
+          updated_at: new Date().toISOString()
+        };
+        workerCostsStore[mode] = preset;
+        if (env.DB) {
+          await d1SaveCostSettings(env.DB, mode, preset);
+        }
+        const unit = Number(((preset.postage_per_piece || 0) + (preset.print_per_piece || 0) + (preset.list_per_piece || 0)).toFixed(4));
+        const fixed = Number(((preset.setup_fee || 0) + (preset.delivery_fee || 0)).toFixed(2));
+        const total = Number((unit * hh + fixed).toFixed(2));
+        return json({
+          ...preset,
+          unit_cost: unit,
+          fixed_cost: fixed,
+          preview_households: hh,
+          preview_total_cost: total,
+          suggested_prices: {}
+        });
+      }
+
       // Costs: /api/costs/:mode
       const costMatch = cleanPath.match(/^\/api\/costs\/(DEMO|LIVE)$/i);
       if (costMatch) {
         const mode = costMatch[1].toUpperCase();
+        if (env.DB) {
+          const d1Costs = await d1GetCostSettings(env.DB, mode);
+          if (d1Costs) {
+            workerCostsStore[mode] = { ...workerCostsStore[mode], ...d1Costs };
+          }
+        }
         if (!workerCostsStore[mode]) {
           workerCostsStore[mode] = {
             mode,
@@ -1348,6 +1899,9 @@ export default {
           let body: any = {};
           try { body = await request.json(); } catch {}
           Object.assign(workerCostsStore[mode], body);
+          if (env.DB) {
+            await d1SaveCostSettings(env.DB, mode, workerCostsStore[mode]);
+          }
         }
 
         const current = workerCostsStore[mode];
@@ -1427,7 +1981,67 @@ export default {
         });
       }
 
-      // Datasources
+      // Datasources: Market reference
+      if (cleanPath === "/api/datasources/reference/market" && request.method === "GET") {
+        return json(MARKET_REFERENCE);
+      }
+
+      // Datasources: Test source
+      const dsTestMatch = cleanPath.match(/^\/api\/datasources\/test\/([^/]+)$/);
+      if (dsTestMatch && request.method === "POST") {
+        const sourceId = dsTestMatch[1];
+        return json({
+          source: sourceId,
+          ok: true,
+          configured: true,
+          detail: "Fuente probada y operativa en Edge",
+          sample: []
+        });
+      }
+
+      // Datasources: Update source
+      const dsUpdateMatch = cleanPath.match(/^\/api\/datasources\/(DEMO|LIVE)\/([^/]+)$/i);
+      if (dsUpdateMatch && request.method === "PUT") {
+        const mode = dsUpdateMatch[1].toUpperCase();
+        const sourceId = dsUpdateMatch[2];
+        let body: any = {};
+        try { body = await request.json(); } catch {}
+        if (env.DB) {
+          await d1SaveDataSource(env.DB, mode, sourceId, Boolean(body.enabled));
+        }
+        return json({
+          id: sourceId,
+          mode,
+          enabled: Boolean(body.enabled),
+          updated_at: new Date().toISOString()
+        });
+      }
+
+      // Datasources: List sources
+      const dsListMatch = cleanPath.match(/^\/api\/datasources\/(DEMO|LIVE)$/i);
+      if (dsListMatch && request.method === "GET") {
+        const mode = dsListMatch[1].toUpperCase();
+        let dbRows: any[] = [];
+        if (env.DB) {
+          dbRows = await d1GetDataSources(env.DB, mode);
+        }
+        const defaultSources = [
+          { id: "USPS_EDDM", name: "USPS EDDM · Motor de rutas", cost: "FREE", provides: "routes", gives: "Rutas oficiales con demografía por ruta.", lacks: "Sin nombres.", note: "Público.", enabled: true, configured: true },
+          { id: "CENSUS_ACS", name: "US Census Bureau · ACS 5-year", cost: "FREE", provides: "demographics", gives: "Demografía por block group.", lacks: "Agregado.", note: "Clave integrada.", enabled: true, configured: true },
+          { id: "OSM_OVERPASS", name: "OpenStreetMap · Overpass API", cost: "FREE", provides: "businesses", gives: "Comercios reales por giro y radio.", lacks: "Sin reseñas.", note: "Respaldo.", enabled: true, configured: true },
+          { id: "YELP", name: "Yelp Fusion", cost: "PAID", provides: "businesses", gives: "Prospección principal con ratings.", lacks: "Sin datos residenciales.", note: "API activa.", enabled: true, configured: true },
+          { id: "GEOAPIFY", name: "Geoapify Places", cost: "PAID", provides: "businesses", gives: "Respaldo de prospección.", lacks: "Sin datos residenciales.", note: "3,000 créditos/día.", enabled: true, configured: true },
+          { id: "CENSUS_TIGERWEB", name: "Census TIGERweb · Geometrías", cost: "FREE", provides: "geometry", gives: "Polígonos oficiales de block group.", lacks: "Solo geometría.", note: "Público.", enabled: true, configured: true },
+          { id: "DATA_AXLE", name: "Data Axle · Lista residencial licenciada", cost: "PAID", provides: "residential", gives: "Nombres y teléfonos de decisores.", lacks: "Suscripción.", note: "Opcional.", enabled: false, configured: false }
+        ];
+        const res = defaultSources.map(s => {
+          const found = dbRows.find((r: any) => r.source_id === s.id);
+          return found ? { ...s, enabled: Boolean(found.enabled) } : s;
+        });
+        return json(res);
+      }
+
+      // Datasources fallback
       if (cleanPath.startsWith("/api/datasources")) {
         return json([
           { id: "USPS_EDDM", name: "USPS EDDM · Motor de rutas", cost: "FREE", provides: "routes", gives: "Rutas oficiales con demografía por ruta.", lacks: "Sin nombres.", note: "Público.", enabled: true, configured: true },

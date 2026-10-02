@@ -4,8 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port=3001 --host=0.0.0.0",
+    "dev": "node scripts/dev.mjs",
+    "dev:frontend": "vite --port=3001 --host=0.0.0.0",
+    "dev:worker": "wrangler dev --port 8787 --ip 127.0.0.1",
     "build": "vite build",
+    "deploy": "vite build && wrangler deploy",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"

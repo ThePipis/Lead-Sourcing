@@ -957,7 +957,7 @@ export const SlotInspector: React.FC<SlotInspectorProps> = ({
                       <span>Comentarios de la Separación</span>
                     </label>
                     <span className="text-[0.62rem] text-muted-foreground font-mono shrink-0">
-                      (Opcional · Conversación)
+                      (Opcional)
                     </span>
                   </div>
                   <textarea

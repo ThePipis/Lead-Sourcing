@@ -22,6 +22,7 @@ import {
   getCampaignRoutes,
   RouteProfile,
 } from '../services/routeService.ts';
+import { getCosts, DIRECT_MAIL_PARTNERS } from '../services/costService.ts';
 
 interface PostalExportViewProps {
   campaign: Campaign;
@@ -170,6 +171,30 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
   const [selectedRoutes, setSelectedRoutes] = useState(0);
   const [coveredHouseholds, setCoveredHouseholds] = useState(0);
   const [routesLoading, setRoutesLoading] = useState(true);
+  const [partnerName, setPartnerName] = useState<string>('Zoom Mailing');
+
+  useEffect(() => {
+    let alive = true;
+    getCosts(campaign.mode, campaign.totalTargetHouseholds, campaign.id)
+      .then((c) => {
+        if (!alive) return;
+        const matched = DIRECT_MAIL_PARTNERS.find(
+          (p) =>
+            Math.abs(p.costPerPiece - c.unitCost) < 0.005 ||
+            (c.sourceNote && c.sourceNote.toLowerCase().includes(p.name.toLowerCase())),
+        );
+        if (matched && matched.id !== 'custom') {
+          setPartnerName(matched.name);
+        } else if (c.sourceNote) {
+          const customName = c.sourceNote.split(/[-·(]/)[0].trim();
+          setPartnerName(customName || 'Zoom Mailing');
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [campaign.mode, campaign.totalTargetHouseholds, campaign.id]);
 
   // Generate QR codes on mount or when slots change
   useEffect(() => {
@@ -459,7 +484,7 @@ export const PostalExportView: React.FC<PostalExportViewProps> = ({
             <div className="border border-live/50 bg-background p-5">
               <p className="field-label text-live">{t('export:printer.label')}</p>
               <p className="mt-2 max-w-[68ch] text-xs leading-relaxed text-muted-foreground">
-                {t('export:printer.body')}
+                {t('export:printer.body', { partner: partnerName })}
               </p>
               <button
                 id="btn-delivered-to-printer"

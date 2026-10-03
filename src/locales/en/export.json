@@ -2,14 +2,14 @@
   "header": {
     "moduleTag": "MODULE D • EXPORT INFRASTRUCTURE & TRACEABILITY",
     "title": "Postal Export & QR Campaign Telemetry",
-    "description": "Download the CASS-sorted postal manifest ready for printer injection (Action Mail / Inland Valley) and manage dynamic QR codes with redirects and real-time analytics.",
+    "description": "Download the official EDDM Route Manifest ready for injection at your partner mail house (Zoom Mailing or allied Inland Empire printer) and manage dynamic QR codes with redirects and real-time telemetry.",
     "downloadCsv": "Download Manifest CSV (5,000 Homes)",
     "generating": "Downloading…",
     "showPreview": "Preview Manifest (10 rows)",
     "hidePreview": "Hide Preview"
   },
   "preview": {
-    "title": "Action Mail Production Manifest Specifications",
+    "title": "EDDM Production Manifest Specifications",
     "badge": "CASS / NCOA",
     "subtitle": "Campaign {{id}}",
     "totalDataset": "Total dataset:",
@@ -87,10 +87,10 @@
   },
   "printer": {
     "label": "Delivery to printer",
-    "body": "Download the CSV and send it to Action Mail / Inland Valley. Once they have it, stamp the delivery: section 4 opens and the campaign moves into production.",
+    "body": "Download the EDDM Route Manifest and send it to your partner mail house ({{partner}}). Once they confirm receipt and production setup, stamp the delivery: section 4 opens and the campaign moves into production.",
     "action": "Stamp delivery to printer",
-    "done": "Delivered",
-    "needDownload": "Run the curation and download the manifest before stamping."
+    "done": "Delivered to printer",
+    "needDownload": "Download the route manifest before stamping delivery."
   },
   "routeManifest": {
     "title": "Route Manifest (EDDM)",

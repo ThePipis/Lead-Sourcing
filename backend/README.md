@@ -18,7 +18,7 @@ backend/
 │   │   ├── campaigns.py            # Slot management, operational cash rule enforcement
 │   │   ├── prospecting.py          # Lead sourcing (Yelp, Geoapify, local LLM)
 │   │   ├── curation.py             # Algorithmic propensity engine execution
-│   │   └── export.py               # QR code generation & Action Mail CSV export
+│   │   └── export.py               # Dynamic QR tracking & EDDM Route Manifest export
 │   └── services/
 │       ├── lead_sourcing_service.py # Yelp Fusion + Geoapify + Llama.cpp LLM client
 │       ├── propensity_engine.py    # Vectorized matrix math (NumPy) & 15k synthetic data pool

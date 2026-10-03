@@ -139,7 +139,7 @@
   },
   "footer": {
     "copyright": "Co-Op Direct Mail Platform • Inland Empire Shared Direct Mail Operations",
-    "specs": "USPS Marketing Mail ECRWSS • CASS/NCOA Certified • Action Mail Spec"
+    "specs": "USPS Marketing Mail ECRWSS • EDDM Saturation • Jumbo Postcard 12\"×9\""
   },
   "file": {
     "title": "Campaign file",
@@ -276,7 +276,7 @@
     "mailedOn": "Deposited with USPS",
     "households": "Households in the drop",
     "awaitingLabel": "Drop at the printer",
-    "awaitingBody": "The printer has the manifest. When Action Mail confirms the USPS deposit, stamp it here: from that moment every QR scan that arrives is a result of this drop.",
+    "awaitingBody": "The partner print shop ({{partner}}) has the EDDM Route Manifest. Once they confirm USPS deposit and postage at the Carrier Annex, stamp it here: from that moment every QR scan that arrives is a result of this drop.",
     "markMailed": "Stamp USPS deposit",
     "resultsTitle": "Scans per business",
     "totalScans": "{{count}} scans total",

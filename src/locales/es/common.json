@@ -139,7 +139,7 @@
   },
   "footer": {
     "copyright": "Co-Op Direct Mail Platform • Operaciones de Correo Compartido en Inland Empire",
-    "specs": "USPS Marketing Mail ECRWSS • Certificado CASS/NCOA • Especificación Action Mail"
+    "specs": "USPS Marketing Mail ECRWSS • Saturación EDDM • Postal Jumbo 12\"×9\""
   },
   "file": {
     "title": "Archivo de campañas",
@@ -276,7 +276,7 @@
     "mailedOn": "Depositado en USPS",
     "households": "Hogares en la tirada",
     "awaitingLabel": "Tirada en imprenta",
-    "awaitingBody": "La imprenta tiene el manifiesto. Cuando Action Mail confirme el depósito en USPS, séllalo aquí: a partir de ese momento los escaneos QR que lleguen son resultado de esta tirada.",
+    "awaitingBody": "La imprenta aliada ({{partner}}) tiene el Manifiesto de Rutas EDDM. Cuando confirmen el depósito y franqueo en el Carrier Annex de USPS, séllalo aquí: a partir de ese momento los escaneos QR que lleguen son resultado de esta tirada.",
     "markMailed": "Sellar depósito en USPS",
     "resultsTitle": "Escaneos por comercio",
     "totalScans": "{{count}} escaneos totales",

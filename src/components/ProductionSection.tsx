@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Campaign } from '../types.ts';
+import { getCosts, DIRECT_MAIL_PARTNERS } from '../services/costService.ts';
 
 interface ProductionSectionProps {
   campaign: Campaign;
@@ -35,6 +36,30 @@ export const ProductionSection: React.FC<ProductionSectionProps> = ({
 }) => {
   const { t, i18n } = useTranslation(['common']);
   const mailed = campaign.status === 'MAILED';
+  const [partnerName, setPartnerName] = useState<string>('Zoom Mailing');
+
+  useEffect(() => {
+    let alive = true;
+    getCosts(campaign.mode, campaign.totalTargetHouseholds, campaign.id)
+      .then((c) => {
+        if (!alive) return;
+        const matched = DIRECT_MAIL_PARTNERS.find(
+          (p) =>
+            Math.abs(p.costPerPiece - c.unitCost) < 0.005 ||
+            (c.sourceNote && c.sourceNote.toLowerCase().includes(p.name.toLowerCase())),
+        );
+        if (matched && matched.id !== 'custom') {
+          setPartnerName(matched.name);
+        } else if (c.sourceNote) {
+          const customName = c.sourceNote.split(/[-·(]/)[0].trim();
+          setPartnerName(customName || 'Zoom Mailing');
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [campaign.mode, campaign.totalTargetHouseholds, campaign.id]);
 
   const ranked = [...campaign.slots]
     .filter((s) => s.status !== 'VACANT')
@@ -61,7 +86,7 @@ export const ProductionSection: React.FC<ProductionSectionProps> = ({
         <div className="border border-live/50 bg-background p-5">
           <p className="field-label text-live">{t('common:production.awaitingLabel')}</p>
           <p className="mt-2 max-w-[68ch] text-xs leading-relaxed text-ink-dim">
-            {t('common:production.awaitingBody')}
+            {t('common:production.awaitingBody', { partner: partnerName })}
           </p>
           <button
             id="btn-mark-mailed"

@@ -2,14 +2,14 @@
   "header": {
     "moduleTag": "MÓDULO D • INFRAESTRUCTURA DE EXPORTACIÓN & TRAZABILIDAD",
     "title": "Postal Export & QR Campaign Telemetry",
-    "description": "Descarga el manifiesto postal CASS-ordenado listo para enviar a imprenta (Action Mail / Inland Valley) y gestiona los códigos QR dinámicos con redirección y analítica en tiempo real.",
+    "description": "Descarga el Manifiesto de Rutas EDDM oficial listo para enviar a imprenta (Zoom Mailing u otra imprenta aliada del Inland Empire) y gestiona los códigos QR dinámicos con redirección y analítica en tiempo real.",
     "downloadCsv": "Descargar Manifiesto CSV (5,000 Hogares)",
     "generating": "Descargando…",
     "showPreview": "Previsualizar Manifiesto (10 filas)",
     "hidePreview": "Ocultar Previsualización"
   },
   "preview": {
-    "title": "Especificaciones de Manifiesto de Producción Action Mail",
+    "title": "Especificaciones del Manifiesto de Producción EDDM",
     "badge": "CASS / NCOA",
     "subtitle": "Campaña {{id}}",
     "totalDataset": "Dataset total:",
@@ -87,10 +87,10 @@
   },
   "printer": {
     "label": "Entrega a imprenta",
-    "body": "Descarga el CSV y envíalo a Action Mail / Inland Valley. Cuando lo tengan, sella la entrega: la sección 4 se abre y la campaña pasa a producción.",
+    "body": "Descarga el Manifiesto de Rutas EDDM y envíalo a tu imprenta aliada ({{partner}}). Cuando confirmen la recepción y montaje del pedido, sella la entrega: la sección 4 se abrirá y la campaña pasará a producción.",
     "action": "Sellar entrega a imprenta",
-    "done": "Entregado",
-    "needDownload": "Ejecuta la curación y descarga el manifiesto antes de sellar."
+    "done": "Entregado a imprenta",
+    "needDownload": "Descarga el manifiesto de rutas antes de sellar la entrega."
   },
   "routeManifest": {
     "title": "Manifiesto de Rutas (EDDM)",
